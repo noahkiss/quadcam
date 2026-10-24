@@ -7,7 +7,7 @@ use quadcam_lib::core::{
     BackupFilter, BackupParams, ChangeUpdateParams, Core, Hooks, NoHooks, RestoreParams,
     StageParams,
 };
-use quadcam_lib::gear::apply::{ApplyPlanParams, ApplyRequest};
+use quadcam_lib::gear::apply::{ApplyPlanParams, ApplyRequest, StepState};
 use quadcam_lib::gear::bf::cli::Timing;
 use quadcam_lib::gear::bf::fake::FakeFc;
 use quadcam_lib::gear::changes::ChangeFilter;
@@ -575,6 +575,30 @@ fn an_error_before_save_discards_everything() {
         .steps
         .iter()
         .any(|s| s.name == "Write" && s.detail.is_some()));
+    assert!(released(&b));
+}
+
+#[test]
+fn a_save_whose_fc_does_not_come_back_is_recorded_as_saved() {
+    let fc = FakeFc::new(G473).with_uid(UID);
+    let b = bench(&fc);
+    let c = stage(&b, vec![set("osd_cap_alarm", "1500")]);
+    let p = plan(&b, &c);
+    let fc = fc.gone_after_save();
+    let r = b.core.gear_apply(&req(&c, &p)).unwrap();
+    assert_eq!(fc.saves(), 1);
+    assert!(r.saved, "{}", r.message);
+    assert_eq!(r.status, ChangeStatus::Failed);
+    assert!(r.message.starts_with("Saved, but"), "{}", r.message);
+    assert!(r
+        .steps
+        .iter()
+        .any(|s| s.name == "Read back" && s.state == StepState::Failed));
+    assert_eq!(
+        status(&b, &c.id),
+        ChangeStatus::Failed,
+        "the change is not left Ready"
+    );
     assert!(released(&b));
 }
 

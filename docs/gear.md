@@ -1142,7 +1142,10 @@ value outside the allowed range or list is refused before any line is sent.
 **If it fails.** A line the FC refuses stops the apply: QuadCam sends `exit`, nothing is saved,
 and the FC is as it was. The sheet names the line. If the FC saves but a line does not read back
 as written, the sheet lists those lines and offers **Restore backup**, which stages the backup
-taken before the write as a new change and opens it in the same sheet. A restore sets back
+taken before the write as a new change and opens it in the same sheet. If the FC saves but does
+not come back after its reboot, or the read back fails, the change is marked failed with "Saved,
+but nothing was verified": back up the FC to see what it holds, and restore the backup taken
+before the write to undo it. A restore sets back
 every setting, mode, adjustment and feature that differs, and the active PID and rate profile
 the backup had; it leaves resources, serial ports and timers alone.
 

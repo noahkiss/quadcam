@@ -38,6 +38,8 @@ struct State {
     generation: u64,
     gone_opens: u32,
     reboot_opens: u32,
+    /// The port does not come back after a save.
+    gone_after_save: bool,
     uid: [u8; 12],
     /// Centivolts on the battery lead; 0 with no battery.
     vbat_cv: u16,
@@ -111,6 +113,7 @@ impl FakeFc {
                 generation: 0,
                 gone_opens: 0,
                 reboot_opens: 2,
+                gone_after_save: false,
                 uid: [0x11; 12],
                 vbat_cv: 0,
                 build_key: None,
@@ -154,6 +157,11 @@ impl FakeFc {
     /// Opens refused while the FC reboots.
     pub fn with_reboot_opens(self, n: u32) -> Self {
         self.st().reboot_opens = n;
+        self
+    }
+    /// The FC saves, reboots and never comes back on its port.
+    pub fn gone_after_save(self) -> Self {
+        self.st().gone_after_save = true;
         self
     }
     /// The line gets `###ERROR`.
@@ -464,9 +472,10 @@ impl FakeLink {
         match line.as_str() {
             "save" => {
                 s.saves += 1;
+                let gone = s.gone_after_save.then_some(u32::MAX);
                 drop(s);
                 self.send(&format!("{echo}Saving\r\nRebooting"), 1);
-                self.reboot(true, None);
+                self.reboot(true, gone);
                 return;
             }
             "bl" => {
@@ -887,6 +896,19 @@ mod tests {
         let want = AFTER.replace(&"0".repeat(24), &fc.uid_hex());
         let want: Vec<&str> = want.lines().filter(|l| *l != "dump all").collect();
         assert_eq!(got.lines().collect::<Vec<_>>(), want);
+    }
+
+    #[test]
+    fn a_save_whose_fc_does_not_come_back_is_reported_saved() {
+        let fc = FakeFc::new(DUMP).gone_after_save();
+        let ports = fc.ports(PORT, None);
+        let (s, _) = CliSession::enter(ports.open(PORT, 115200).unwrap(), Timing::fast()).unwrap();
+        let r = run_lines(s, &ports, &battery_lines(), Timing::fast()).unwrap();
+        assert!(r.saved && r.failed.is_none());
+        assert_eq!(fc.saves(), 1);
+        assert!(r.after_dump.is_none());
+        let e = r.after_error.unwrap();
+        assert!(e.contains("did not come back"), "{e}");
     }
 
     #[test]

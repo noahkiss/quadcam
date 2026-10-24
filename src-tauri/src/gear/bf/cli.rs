@@ -301,6 +301,10 @@ pub struct RunReport {
     /// the after dump (`version`, `status`, `diff all`).
     #[serde(skip)]
     pub after_replies: Vec<Reply>,
+    /// Saved, but the FC did not come back or the read back failed: why. There is no
+    /// after dump and nothing was verified.
+    #[serde(skip)]
+    pub after_error: Option<String>,
 }
 
 /// Sends `lines` in an open session. On the first error: `exit` (nothing saved). Else
@@ -337,6 +341,7 @@ pub fn run_lines_with(
         after_dump: None,
         verify: Vec::new(),
         after_replies: Vec::new(),
+        after_error: None,
     };
     for l in &lines {
         let r = match session.command(l) {
@@ -355,7 +360,26 @@ pub fn run_lines_with(
     }
     session.save()?;
     report.saved = true;
-    let link = wait_for_port(ports, &port, timing)?;
+    // The FC holds the lines now: a failure past here goes in the report, not an error.
+    match read_after(ports, &port, timing, after) {
+        Ok((extra, d)) => {
+            report.after_replies = extra;
+            report.verify = dump::verify_lines(&Config::parse(&d), &lines);
+            report.after_dump = Some(d);
+        }
+        Err(e) => report.after_error = Some(format!("{e:#}")),
+    }
+    Ok(report)
+}
+
+/// After a save: waits through the reboot, reads `after` and `dump all`, and exits.
+fn read_after(
+    ports: &dyn Ports,
+    port: &str,
+    timing: Timing,
+    after: &[&str],
+) -> Result<(Vec<Reply>, String)> {
+    let link = wait_for_port(ports, port, timing)?;
     let (mut s, _) = CliSession::enter(link, timing)?;
     let mut extra = Vec::new();
     for c in after {
@@ -366,11 +390,8 @@ pub fn run_lines_with(
     }
     let d = s.command("dump all");
     s.exit();
-    let d = d.map_err(|e| anyhow!("Saved, but the read back failed: {e:#}"))?;
-    report.after_replies = extra;
-    report.verify = dump::verify_lines(&Config::parse(&d.text), &lines);
-    report.after_dump = Some(d.text);
-    Ok(report)
+    let d = d.map_err(|e| anyhow!("The read back failed: {e:#}"))?;
+    Ok((extra, d.text))
 }
 
 #[cfg(test)]

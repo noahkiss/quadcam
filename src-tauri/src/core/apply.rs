@@ -572,6 +572,23 @@ impl Core {
                 "The FC refused `{}`. Nothing was saved; the FC is as it was.",
                 f.line
             );
+        } else if let Some(e) = &run.after_error {
+            steps.push(StepReport {
+                name: "Write".into(),
+                state: StepState::Done,
+                detail: None,
+            });
+            steps.push(StepReport {
+                name: "Read back".into(),
+                state: StepState::Failed,
+                detail: Some(e.clone()),
+            });
+            steps.push(skipped("Verify"));
+            report.message = format!(
+                "Saved, but nothing was verified: {}. Back up the FC to see what it holds; \
+                 restore the backup to undo.",
+                e.trim_end_matches('.')
+            );
         } else {
             steps.push(StepReport {
                 name: "Write".into(),
