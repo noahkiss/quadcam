@@ -98,12 +98,13 @@ pub struct SimDefaultsParams {
     pub fc: Vec<std::path::PathBuf>,
 }
 
-/// `gear_sim_validate`: a sim profile against a folder of decoded blackbox logs.
+/// `gear_sim_validate`: a sim profile against a quad's blackbox logs.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, Type)]
 pub struct SimValidateParams {
-    /// A built-in sim profile: `meteor75`, `air65ii`, `five_inch` or `seven_inch`.
+    /// A sim profile: a built-in one (`meteor75`, `air65ii`, `five_inch`, `seven_inch`) or a
+    /// fitted one's id.
     pub aircraft: String,
-    /// A folder of CSV files `blackbox_decode` wrote (one per flight).
+    /// A blackbox file (`.bbl`), a flash image, a decoded CSV, or a folder of them.
     pub logs: std::path::PathBuf,
     /// The motors' pole count, for eRPM to rpm; default: the profile's.
     #[serde(default)]
@@ -339,18 +340,11 @@ impl Core {
         }
     }
 
-    /// Validates a sim profile against a quad's decoded blackbox logs: each check of the
+    /// Validates a sim profile against a quad's blackbox logs: each check of the
     /// validation harness (hover, punch, sag, roll, pitch and yaw response, coast-down,
-    /// fall recovery) with its band and result. Reads only.
+    /// fall recovery, attitude replay) with its band and result. Reads only.
     pub fn gear_sim_validate(&self, p: &SimValidateParams) -> Result<ValidationReport> {
-        let id = p.aircraft.trim();
-        let Some(profile) = quadcam_sim::preset(id) else {
-            let ids: Vec<String> = quadcam_sim::presets().into_iter().map(|p| p.id).collect();
-            bail!(
-                "No sim profile {id:?}. Built-in profiles: {}.",
-                ids.join(", ")
-            );
-        };
+        let profile = self.sim_profile(&p.aircraft)?;
         let scales = quadcam_sim::log::Scales {
             motor_poles: p
                 .motor_poles
@@ -358,9 +352,12 @@ impl Core {
                 .unwrap_or(profile.motor.poles.value),
             ..Default::default()
         };
-        let logs = quadcam_sim::log::read_folder(&p.logs, scales).map_err(anyhow::Error::msg)?;
+        let logs = quadcam_sim::log::read_path(&p.logs, scales).map_err(anyhow::Error::msg)?;
         if logs.is_empty() {
-            bail!("{} holds no decoded logs (*.csv).", p.logs.display());
+            bail!(
+                "{} holds no blackbox logs (.bbl, a flash image, or decoded .csv).",
+                p.logs.display()
+            );
         }
         Ok(quadcam_sim::validate::validate(&profile, &logs))
     }

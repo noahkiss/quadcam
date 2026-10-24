@@ -321,8 +321,18 @@ pub fn read_bbl(path: &Path, scales: Scales, min_seconds: f64) -> Result<Vec<Log
         .file_name()
         .map(|n| n.to_string_lossy().to_string())
         .unwrap_or_default();
+    from_image(&file, &bytes, scales, min_seconds)
+}
+
+/// Every log in a blackbox image already in memory, named `<file>#<n>`, as `read_bbl`.
+pub fn from_image(
+    file: &str,
+    bytes: &[u8],
+    scales: Scales,
+    min_seconds: f64,
+) -> Result<Vec<LogData>, String> {
     let mut out = Vec::new();
-    for l in crate::bbl::decode_image(&bytes) {
+    for l in crate::bbl::decode_image(bytes) {
         let l = l.map_err(|e| format!("{file}: {e}"))?;
         if l.duration() < min_seconds {
             continue;

@@ -47,6 +47,7 @@ mod setup;
 mod shift;
 mod sim;
 mod sim_host;
+mod sim_profiles;
 mod sim_restore;
 mod sim_sync;
 mod switchmap;
@@ -130,6 +131,7 @@ pub use sim_host::{
     arm_block_text, SimBox, SimCamera, SimFrame, SimHud, SimPose, SimPreset, SimStartInfo,
     SimStartParams, SimSticks, SimStopInfo, SimUiSettings, DEFAULT_PRESET,
 };
+pub use sim_profiles::{SimFit, SimFitParams, SimFitSaveParams, SimProfileDeleteParams};
 pub use sim_restore::{SimRestoreParams, SimRestoreRequest};
 pub use switchmap::{RadioParams, RadioWatchParams, SwitchMapParams};
 pub use update::{is_newer, notes_url, restart_blocker, weigh, Found, UpdatePhase, UpdateStatus};

@@ -243,7 +243,10 @@ quadcam-cli --json gear map --aircraft NAME | --device ID [--device ID]   # from
 quadcam-cli --json gear radio [--wait-ms 500]                    # the radio in USB Joystick mode
 quadcam-cli --json gear sim calibration [RADIO] [--set FILE.json [--product NAME]]   # the sim's radio calibration
 quadcam-cli --json gear sim defaults [--aircraft NAME | --radio CARD --fc FILE]     # what the sim pre-fills
-quadcam-cli --json gear sim validate PROFILE --logs DIR [--poles N] [--text]      # a sim profile against decoded blackbox logs
+quadcam-cli --json gear sim validate PROFILE --logs PATH [--poles N] [--text]     # a sim profile against blackbox logs (.bbl, flash image, CSV, or a folder)
+quadcam-cli --json gear sim profiles [--delete ID --yes]                          # built-in and fitted sim profiles
+quadcam-cli --json gear sim fit --base PRESET [--aircraft NAME] [--logs PATH]... [--fc FILE]... [--mass-g N] [--pack-g N] [--id ID] [--label L] [--text]   # fit a profile; prints its digest
+quadcam-cli --json gear sim fit ... --digest D --yes                              # the same fit, saved
 quadcam-cli --json gear flights [--day D] [--aircraft A] [--pack L] [--place P] [--logs DIR] [set <flight> --pack L --place P | folders --add DIR | folders --remove DIR]
 quadcam-cli gear report [--day D] --markdown                     # the session report
 quadcam-cli --json gear report [--day D] --summarize             # with a paragraph from the on-device model

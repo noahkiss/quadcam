@@ -68,6 +68,7 @@ pub mod rates;
 pub mod report;
 pub mod serial;
 pub mod sim_cal;
+pub mod sim_profiles;
 pub mod sims;
 pub mod splash;
 pub mod store;

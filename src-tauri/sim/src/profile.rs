@@ -11,7 +11,7 @@ use crate::diff::FcConfig;
 /// Where a value came from (sim-design 6.1).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "lowercase")]
-pub enum Source {
+pub enum ValueSource {
     /// From logs, by the fit (S3); carries the log ids and residual.
     Fitted,
     /// Manufacturer's number.
@@ -28,7 +28,7 @@ pub enum Source {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Sv {
     pub value: f64,
-    pub source: Source,
+    pub source: ValueSource,
     /// Fitted values: the log ids the fit used.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub logs: Vec<String>,
@@ -40,7 +40,7 @@ pub struct Sv {
 }
 
 impl Sv {
-    pub fn new(value: f64, source: Source) -> Sv {
+    pub fn new(value: f64, source: ValueSource) -> Sv {
         Sv {
             value,
             source,

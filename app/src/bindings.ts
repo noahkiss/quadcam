@@ -527,10 +527,22 @@ export const commands = {
 	 */
 	gearSimDefaults: (params: SimDefaultsParams) => typedError<SimDefaults, string>(__TAURI_INVOKE("gear_sim_defaults", { params })),
 	/**
-	 *  A sim profile checked against a folder of decoded blackbox logs: each check's
-	 *  band and result (sim-design 6.4). Reads only.
+	 *  A sim profile checked against a quad's blackbox logs: each check's band and
+	 *  result (sim-design 6.4). Reads only.
 	 */
 	gearSimValidate: (params: SimValidateParams) => typedError<ValidationReport, string>(__TAURI_INVOKE("gear_sim_validate", { params })),
+	/**  The sim's profiles: the built-in presets, then the ones fitted from logs. */
+	gearSimProfiles: () => typedError<SimProfileInfo[], string>(__TAURI_INVOKE("gear_sim_profiles")),
+	/**
+	 *  A sim profile fitted from a quad's blackbox logs, its diff all and its weight,
+	 *  validated with its base on the same logs, and the digest a save needs. Writes
+	 *  nothing.
+	 */
+	gearSimFit: (params: SimFitParams) => typedError<SimFit, string>(__TAURI_INVOKE("gear_sim_fit", { params })),
+	/**  Fits again and saves the profile, with `confirm` and the fit's digest. */
+	gearSimFitSave: (params: SimFitSaveParams) => typedError<SimProfileInfo, string>(__TAURI_INVOKE("gear_sim_fit_save", { params })),
+	/**  Removes a fitted sim profile (never a built-in one), with `confirm`. */
+	gearSimProfileDelete: (params: SimProfileDeleteParams) => typedError<boolean, string>(__TAURI_INVOKE("gear_sim_profile_delete", { params })),
 	/**  Drives the sim's calibration session (`sim-calibration-event` events). */
 	gearSimCalibrate: (params: CalibrateParams) => typedError<CalibrateView, string>(__TAURI_INVOKE("gear_sim_calibrate", { params })),
 	/**
@@ -1791,7 +1803,10 @@ export type CheckOutcome = "pass" | "fail" |
 "not_in_log";
 
 export type CheckResult = {
-	/**  `hover`, `punch`, `sag`, `roll`, `pitch`, `yaw`, `coast_down`, `fall_recovery`. */
+	/**
+	 *  `hover`, `punch`, `sag`, `roll`, `pitch`, `yaw`, `coast_down`, `fall_recovery`,
+	 *  `replay`.
+	 */
 	check: string,
 	/**  What is compared: `command`, `speed`, `peak_accel`, `rise_90`, ... */
 	measure: string,
@@ -3307,6 +3322,42 @@ export type FirmwareView = {
 	latest: Latest,
 	/**  The `firmwareCheck` setting: `manual` or `daily`. */
 	mode: string,
+};
+
+/**
+ *  The fit's result: the profile, every value with its source, the measures, the thrust
+ *  curve and what is still an estimate.
+ */
+export type FitReport = {
+	profile_id: string,
+	base: string,
+	logs: string[],
+	/**  Values the fit set in the profile. */
+	values: FitValue[],
+	/**  Measured from the logs, for reference (not profile values). */
+	measured: FitValue[],
+	/**  Static thrust against command at 3.9 V per cell (the sim's pack with sag off). */
+	thrust_curve: ThrustPoint[],
+	/**  Profile values that stay estimates or the base profile's, and why. */
+	estimates: string[],
+	notes: string[],
+};
+
+/**  One value the fit set, or measured for reference. */
+export type FitValue = {
+	/**  The profile path (`prop.kt`, `motor.r_winding`, `fc.gains.roll`), or a measure. */
+	name: string,
+	unit: string,
+	/**  The base profile's value. */
+	before: number | null,
+	value: number | null,
+	source: ValueSource,
+	/**  The fit's residual in `residual_unit`. */
+	residual: number | null,
+	residual_unit: string,
+	/**  Samples or windows the value came from. */
+	samples: number,
+	note: string | null,
 };
 
 export type Flag = "none" | "pick" | "reject";
@@ -7570,6 +7621,55 @@ export type SimFileView = {
 	profiles: SimProfileView[],
 };
 
+/**  The fit, and how the fitted profile and its base do on the same logs. */
+export type SimFit = {
+	report: FitReport,
+	validation: ValidationReport,
+	base_validation: ValidationReport,
+	/**  The pulls and files the fit read. */
+	sources: string[],
+	/**  A fitted profile with this id exists; a save replaces it. */
+	replaces: boolean,
+	/**  What `gear_sim_fit_save` needs. */
+	digest: string,
+};
+
+/**  `gear_sim_fit`: what the fit reads. */
+export type SimFitParams = {
+	/**
+	 *  The built-in profile the fit starts from and keeps what the logs cannot give:
+	 *  `meteor75`, `air65ii`, `five_inch` or `seven_inch`.
+	 */
+	base: string,
+	/**  An aircraft profile: its FC's blackbox pulls and the settings of its latest backup. */
+	aircraft?: string | null,
+	/**
+	 *  Blackbox files (`.bbl`), flash images, decoded CSV, or folders of them, read besides
+	 *  the aircraft's pulls.
+	 */
+	logs?: string[],
+	/**
+	 *  Betaflight diff or dump files (a later file's lines win); default: the aircraft's FC's
+	 *  latest backup.
+	 */
+	fc?: string[],
+	/**  The quad weighed with a pack (g); default: the base profile's. */
+	mass_g?: number | null,
+	/**  The pack's weight (g). */
+	pack_g?: number | null,
+	/**  The new profile's id; default: from the aircraft's name, else `<base>-fitted`. */
+	id?: string | null,
+	/**  Its label; default: the aircraft's name, else the base's label with "(fitted)". */
+	label?: string | null,
+};
+
+/**  `gear_sim_fit_save`: the same fit, the digest `gear_sim_fit` gave, and `confirm`. */
+export type SimFitSaveParams = {
+	fit: SimFitParams,
+	digest: string,
+	confirm?: boolean,
+};
+
 /**  The page's read each frame. */
 export type SimFrame = {
 	/**  The host clock when this was read (ns). */
@@ -7624,6 +7724,26 @@ export type SimPreset = {
 	wheelbase_mm: number | null,
 	/**  All-up mass (g). */
 	mass_g: number | null,
+};
+
+/**  `gear_sim_profile_delete`. */
+export type SimProfileDeleteParams = {
+	id: string,
+	confirm?: boolean,
+};
+
+/**  One row of the profile list: a built-in preset or a fitted profile. */
+export type SimProfileInfo = {
+	id: string,
+	label: string,
+	/**  `preset` (ships with QuadCam) or `fitted` (from this person's logs). */
+	kind: string,
+	/**  A fitted profile's preset. */
+	base?: string | null,
+	aircraft?: string | null,
+	fitted_at?: string | null,
+	mass_g: number | null,
+	wheelbase_mm: number | null,
 };
 
 /**  One sim profile as the Rates segment shows it. */
@@ -7683,7 +7803,7 @@ export type SimStartInfo = {
 
 /**  `sim_start`. */
 export type SimStartParams = {
-	/**  A built-in profile id; default `meteor75`. */
+	/**  A profile id, built-in or fitted (`gear_sim_profiles`); default `meteor75`. */
 	profile?: string | null,
 	/**  The radio's saved calibration (`gear_sim_calibration`); None: sticks only, in AETR. */
 	calibration?: Calibration | null,
@@ -7761,11 +7881,14 @@ export type SimTarget = {
 	profile?: string | null,
 };
 
-/**  `gear_sim_validate`: a sim profile against a folder of decoded blackbox logs. */
+/**  `gear_sim_validate`: a sim profile against a quad's blackbox logs. */
 export type SimValidateParams = {
-	/**  A built-in sim profile: `meteor75`, `air65ii`, `five_inch` or `seven_inch`. */
+	/**
+	 *  A sim profile: a built-in one (`meteor75`, `air65ii`, `five_inch`, `seven_inch`) or a
+	 *  fitted one's id.
+	 */
 	aircraft: string,
-	/**  A folder of CSV files `blackbox_decode` wrote (one per flight). */
+	/**  A blackbox file (`.bbl`), a flash image, a decoded CSV, or a folder of them. */
 	logs: string,
 	/**  The motors' pole count, for eRPM to rpm; default: the profile's. */
 	motor_poles?: number | null,
@@ -8279,6 +8402,16 @@ export type ThrottleView = {
 	curve: (number | null)[],
 };
 
+/**  Thrust at one motor command, steady state, at a pack voltage. */
+export type ThrustPoint = {
+	/**  Mixer output 0..1 (the ESC duty runs from idle to full over it). */
+	command: number | null,
+	rpm: number | null,
+	/**  Total static thrust (g-force grams) and thrust over weight. */
+	thrust_g: number | null,
+	tw: number | null,
+};
+
 export type Timer = {
 	/**  0 is Timer 1. */
 	index: number,
@@ -8489,6 +8622,19 @@ export type ValidationReport = {
 	logs: string[],
 	checks: CheckResult[],
 };
+
+/**  Where a value came from (sim-design 6.1). */
+export type ValueSource = 
+/**  From logs, by the fit (S3); carries the log ids and residual. */
+"fitted" | 
+/**  Manufacturer's number. */
+"spec" | 
+/**  From the quad's `diff all`. */
+"diff" | 
+/**  Geometry or a typical value. */
+"estimate" | 
+/**  The sim's default. */
+"default";
 
 /**  A maker's article as last read: its `.txt` files with their builds. */
 export type VendorFeed = {

@@ -11,7 +11,7 @@
 
 use super::Core;
 use crate::gear::radio_hid::{Feed, Subscription};
-use anyhow::{bail, Context, Result};
+use anyhow::{bail, Result};
 use quadcam_sim::fc::{ArmBlock, FlightMode};
 use quadcam_sim::input::{now_ns, Calibration, InputRing, LinkConfig, LinkModel};
 use quadcam_sim::ring::{RadioSource, RcFrame, RcSource, FLAG_LINK_LOST};
@@ -116,7 +116,7 @@ impl SimUiSettings {
 /// `sim_start`.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, Type)]
 pub struct SimStartParams {
-    /// A built-in profile id; default `meteor75`.
+    /// A profile id, built-in or fitted (`gear_sim_profiles`); default `meteor75`.
     #[serde(default)]
     pub profile: Option<String>,
     /// The radio's saved calibration (`gear_sim_calibration`); None: sticks only, in AETR.
@@ -261,20 +261,14 @@ impl Core {
             .collect()
     }
 
-    /// Starts the sim on a built-in profile in the plain room. A sim already running stops
+    /// Starts the sim on a profile (built-in or fitted) in the plain room. A sim already running stops
     /// first.
     pub fn sim_start(&self, p: &SimStartParams) -> Result<SimStartInfo> {
         let mut slot = self.sim.host.lock().unwrap();
         // The old runner (and its radio subscription) go before the new ones start.
         *slot = None;
         let id = p.profile.as_deref().unwrap_or(DEFAULT_PRESET);
-        let profile = quadcam_sim::preset(id).with_context(|| {
-            let ids: Vec<String> = quadcam_sim::presets().into_iter().map(|p| p.id).collect();
-            format!(
-                "No sim profile {id:?}. Built-in profiles: {}.",
-                ids.join(", ")
-            )
-        })?;
+        let profile = self.sim_profile(id)?;
         let cal = p.calibration.clone();
         if let Some(c) = &cal {
             super::sim::check(c)?;

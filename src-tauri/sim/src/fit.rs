@@ -23,7 +23,7 @@ use specta::Type;
 use crate::diff::FcConfig;
 use crate::log::LogData;
 use crate::motor::Motors;
-use crate::profile::{fm_from_kq, MotorModel, SimProfile, Source, Sv, G, RPM_TO_RADS};
+use crate::profile::{fm_from_kq, MotorModel, SimProfile, Sv, ValueSource, G, RPM_TO_RADS};
 use crate::validate::{
     find_punches, group_score, lag, median, moving_avg, overshoot, rate_windows, rise_90, tilt_deg,
     Group,
@@ -62,7 +62,7 @@ pub struct FitValue {
     /// The base profile's value.
     pub before: Option<f64>,
     pub value: f64,
-    pub source: Source,
+    pub source: ValueSource,
     /// The fit's residual in `residual_unit`.
     pub residual: Option<f64>,
     pub residual_unit: String,
@@ -175,7 +175,7 @@ const POWER_VALUES: &[&str] = &[
 fn fitted(value: f64, logs: &[String], residual: Option<f64>, note: &str) -> Sv {
     Sv {
         value,
-        source: Source::Fitted,
+        source: ValueSource::Fitted,
         logs: logs.to_vec(),
         residual,
         note: Some(note.to_string()),
@@ -346,7 +346,7 @@ pub fn fit(base: &SimProfile, inputs: &FitInputs, logs: &[LogData]) -> Result<Fi
         unit: unit.into(),
         before: None,
         value,
-        source: Source::Fitted,
+        source: ValueSource::Fitted,
         residual: None,
         residual_unit: String::new(),
         samples: n,
@@ -356,7 +356,7 @@ pub fn fit(base: &SimProfile, inputs: &FitInputs, logs: &[LogData]) -> Result<Fi
     // ----- the diff and the mass -----
     if let Some(d) = &inputs.diff {
         p.diff = FcConfig::from_diff(d);
-        p.motor.poles = Sv::new(p.diff.motor_poles as f64, Source::Diff);
+        p.motor.poles = Sv::new(p.diff.motor_poles as f64, ValueSource::Diff);
     } else {
         estimates.push(
             "rates, throttle curve and modes: no diff all given, Betaflight defaults kept".into(),
@@ -366,7 +366,7 @@ pub fn fit(base: &SimProfile, inputs: &FitInputs, logs: &[LogData]) -> Result<Fi
         let before = p.frame.mass.value;
         p.frame.mass = Sv {
             note: Some("weighed, with a pack".into()),
-            ..Sv::new(m, Source::Spec)
+            ..Sv::new(m, ValueSource::Spec)
         };
         values.push(val("frame.mass", "kg", Some(before), &p.frame.mass, "", 0));
     } else {
@@ -376,7 +376,7 @@ pub fn fit(base: &SimProfile, inputs: &FitInputs, logs: &[LogData]) -> Result<Fi
         ));
     }
     if let Some(m) = inputs.pack_mass {
-        p.frame.pack_mass = Sv::new(m, Source::Spec);
+        p.frame.pack_mass = Sv::new(m, ValueSource::Spec);
     }
     let mass = p.frame.mass.value;
     let pr0 = p.params();
@@ -786,7 +786,7 @@ pub fn fit(base: &SimProfile, inputs: &FitInputs, logs: &[LogData]) -> Result<Fi
     let fm_before = p.prop.fm.value;
     p.prop.fm = Sv {
         note: Some("follows from kt and kq".into()),
-        ..Sv::new(fm, Source::Fitted)
+        ..Sv::new(fm, ValueSource::Fitted)
     };
     values.push(val(
         "prop.fm",
@@ -889,7 +889,7 @@ pub fn fit(base: &SimProfile, inputs: &FitInputs, logs: &[LogData]) -> Result<Fi
         (_, Some((rr, n))) if rr > 0.0 => {
             p.battery.resistance = Sv {
                 note: Some("radio-log RxBt against Curr".into()),
-                ..Sv::new(rr, Source::Fitted)
+                ..Sv::new(rr, ValueSource::Fitted)
             };
             values.push(val(
                 "battery.resistance",
@@ -1022,7 +1022,7 @@ pub fn fit(base: &SimProfile, inputs: &FitInputs, logs: &[LogData]) -> Result<Fi
         let before = g.p.value;
         for sv in [&mut g.p, &mut g.d, &mut g.ff] {
             sv.value *= scale;
-            sv.source = Source::Fitted;
+            sv.source = ValueSource::Fitted;
             sv.logs = names.clone();
             sv.residual = Some(lag_sim - lag_log);
             sv.note = Some(format!(
@@ -1068,7 +1068,7 @@ pub fn fit(base: &SimProfile, inputs: &FitInputs, logs: &[LogData]) -> Result<Fi
         }
     }
     for (axis, name) in [(0, "roll"), (1, "pitch"), (2, "yaw")] {
-        if p.fc.gains[axis].p.source != Source::Fitted {
+        if p.fc.gains[axis].p.source != ValueSource::Fitted {
             continue;
         }
         let mut q = p.clone();

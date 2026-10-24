@@ -566,10 +566,10 @@ What blackbox cannot give, and what fills it:
 - **Blackbox dates**: FC logs carry no real date (no RTC). Logs are dated by matching blackbox
   stick traces to the radio's logs, the same shape matching as `logmatch`.
 
-Decoding is QuadCam's own reader, written from the documented blackbox format.
-`blackbox_decode` is GPL: look, never copy, and never bundle it. Until QuadCam's reader exists,
-fixtures come from CSV that `blackbox_decode`, run as a separate program, produced. Its output is
-data, not code.
+Decoding is QuadCam's own reader (`sim/src/bbl.rs`), written from the documented blackbox
+format. `blackbox_decode` is GPL: look, never copy, and never bundle it. The CI fixtures are CSV
+that `blackbox_decode`, run as a separate program, produced before the reader existed. Its output
+is data, not code.
 
 ### 6.3 Fitting
 
@@ -613,6 +613,7 @@ with the log. It runs in CI on fixtures and on demand on a user's own logs (`gea
 | Yaw steps | Closed loop | Lag ±5 ms |
 | Coast-down | Closed loop | Deceleration ±15 % (when the log has one) |
 | Fall recovery | Closed loop | Height lost ±20 % (when the log has one) |
+| Replay | Closed loop from the log's attitude, 1 s windows with no rate over 360°/s | Attitude error RMS ≤ 10° |
 
 Known gaps from the spike's replay, which the bands must close: peak thrust on a punch 3.0 g in
 the sim against 3.7 g logged; speed reaching 90 % in 70 ms against 85-93 ms logged.
@@ -643,6 +644,43 @@ CI fixtures:
   presets hold the corrected values (`reference` in each preset).
 - The example logs hold no ground speed and no clean fall recovery, so coast-down and fall
   recovery run only on the harness's own sim-written log in CI.
+
+### 6.6 Built (S3)
+
+- `bbl.rs` decodes `.bbl` files and pulled flash images (every frame type, predictor and
+  encoding; it picks up again at the next I frame after corruption). On the 2026-10-07 pulls of
+  the two example whoops it matches `blackbox_decode`'s CSV field by field on all ten fixtures,
+  with one difference: in the 65 mm whoop's punch excerpt `blackbox_decode` dropped 13 P frames
+  before an I frame, which QuadCam keeps (their loop iterations and values run straight into
+  that I frame). The comparison is a test that runs only when `QUADCAM_BBL_DIR` points at the
+  pulls; raw logs never go into the repo.
+- Frames: Betaflight logs its body frame as x forward, y right, z down, and its quaternion in
+  the matching z-down earth frame; the sim is z up. The harness flips y and z (pitch and yaw
+  rates, and the quaternion's y and z). Rate checks did not notice (they are symmetric); the
+  replay check did, at about 60° median error, now 1 to 5°.
+- `fit.rs` runs the steps of 6.3: hover (kT from weight over Σω²), motor load (pack current
+  against Σ duty and Σ duty·ω², which gives the electronics current), the motor (winding
+  resistance by search, with kQ tied to hover's torque balance so hover stays where the log has
+  it, then rotor inertia, each scored on logged steps and punches replayed through the motor
+  model), pack resistance (vbat against current in 1 s stretches), and a gain scale per axis so
+  the replayed lag matches. Drag and frame inertia stay estimates: the logs hold no ground
+  speed.
+- The guard: the harness scores each fitted group (hover, punch and sag for the motor and pack;
+  each axis's rate checks for its gains) against the base profile's values on the same logs,
+  and a group that scores worse is dropped, with a note. On the example whoops' full pulls the
+  base presets already hold hand-corrected values from the same logs, so the fit keeps their
+  motors and most gains, refits kT, and keeps a better roll gain for the 65 mm whoop. On a quad
+  with no preset of its own, the fitted values are what it gets.
+- Storage and rows: `<gear>/sim/profiles/<id>.json` (`gear::sim_profiles`), `gear_sim_profiles`,
+  `gear_sim_fit` (writes nothing; answers a digest), `gear_sim_fit_save` (the same fit again,
+  saved only with `confirm` and that digest), `gear_sim_profile_delete`. The sim and
+  `gear_sim_validate` take a fitted profile by its id. CLI `gear sim fit` and `gear sim
+  profiles`; MCP `sim_profiles`, `sim_fit`, `sim_fit_save`, `sim_profile_delete`.
+- A fit reads an aircraft's FC: each erased pull and the newest pull, and the newest backup's
+  `diff all` (else `dump all`) for rates, throttle curve, modes, idle and pole count. Radio
+  logs are not read yet (the crate's fit takes them for pack resistance).
+- Not built: the Fit and profile views (the Sim page lists fitted profiles on a separate
+  branch for review), the fit flight routine of 12.6.
 
 ---
 
@@ -944,7 +982,7 @@ its rows in `api`, CLI and MCP.
 |---|---|---|---|---|
 | S1 | Physics crate. Built (5.6) | `src-tauri/sim/`: rigid body, motors, props, ducts, drag, ground effect, prop wash, VRS, battery, Rapier collisions, FC (rates, smoothing, PID, angle, horizon, airmode, turtle, arming), the stepping thread, snapshots, recordings; built-in presets | – | 1 |
 | S2 | Validation harness. Built (6.5) | `sim/src/validate.rs`, `sim/tests/`, fixtures and their scrubber, the headless bench | S1 | 1 |
-| S3 | Profile fitting | `sim/src/fit.rs`, profile storage under `<gear>/sim/`, `gear_sim_fit` / `profile(s)` rows, Fit and profile views | S1, S2; task BB for native decoding | 2 |
+| S3 | Profile fitting. Built (6.6) but the views | `sim/src/fit.rs`, profile storage under `<gear>/sim/`, `gear_sim_fit` / `profile(s)` rows, Fit and profile views | S1, S2; task BB for native decoding | 2 |
 | S4 | Input and calibration. Built (7.8) | `radio_hid` unthrottled subscriber, `sim/src/input.rs` (map, ends, deadzone, Reverse, link model), calibration storage keyed by radio id, the calibration screen | WP6 | 1 |
 | S5 | Minimal renderer and in-process host. Built (9.5) | Sim window (WebView, three.js), pose stream and interpolation, FPV camera, the plain room, basic OSD, stick display, Sim page, launch, settings popover | S1, S4 | 1 |
 | S6 | Engine prototypes and report | The four prototypes (3.2), the measurement scripts, the report | S1, S5 | 2 |
@@ -952,7 +990,7 @@ its rows in `api`, CLI and MCP.
 | S8 | Worlds | The five worlds, the asset manifest and its check, world modules, the box-room builder | S7 | 3 |
 | S9 | Audio | The Rust synth, beeps, the swish option | S1 | 2 |
 | S10 | Polish | Settings clean-up across hosts, session summary, MCP and CLI completeness, `docs/sim.md` complete | S5, S7 | 3 |
-| BB | Blackbox pull and reader | Task outside the sim: pull on connect, verify, erase (a setting), QuadCam's own decoder. The pull, verify, store and erase are built (gear-design 7.12); the decoder is not | WP2, WP4 | 2 |
+| BB | Blackbox pull and reader | Task outside the sim: pull on connect, verify, erase (a setting), QuadCam's own decoder. The pull, verify, store and erase are built (gear-design 7.12); the decoder is built (6.6) | WP2, WP4 | 2 |
 
 **Phase 1** (fly through a minimal renderer): S1, S2, S4, S5. Profiles start from the built-in
 presets with the example fits (6.3) entered by hand.

@@ -48,6 +48,7 @@ mod secrets;
 mod settings;
 mod sim_host;
 mod sim_input;
+mod sim_profiles;
 mod sim_validate;
 mod snapshots;
 mod surface;

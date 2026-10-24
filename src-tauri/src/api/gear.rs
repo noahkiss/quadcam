@@ -23,7 +23,8 @@ pub use crate::core::{
 };
 pub use crate::core::{
     CalibrateParams, CalibrateView, SimCalibration, SimCalibrationParams, SimCalibrationSaveParams,
-    SimDefaultsParams, SimValidateParams,
+    SimDefaultsParams, SimFit, SimFitParams, SimFitSaveParams, SimProfileDeleteParams,
+    SimValidateParams,
 };
 pub use crate::core::{
     CardMountParams, CardMounted, ChangeUpdateParams, CopyParams, DfuLinkParams, DfuLinked,
@@ -85,10 +86,12 @@ pub use crate::gear::radios::RadioBoard;
 pub use crate::gear::rates::RatesView;
 pub use crate::gear::report::SessionReport;
 pub use crate::gear::sim_cal::{SavedCalibration, SimDefaults};
+pub use crate::gear::sim_profiles::SimProfileInfo;
 pub use crate::gear::sims::SimStatus;
 pub use crate::gear::splash::{SplashParams, SplashPreview};
 pub use crate::gear::switchmap::SwitchMap;
 pub use crate::gear::voice::reuse::ImportReport;
+pub use quadcam_sim::fit::{FitReport, FitValue, ThrustPoint};
 pub use quadcam_sim::validate::{CheckOutcome, CheckResult, ValidationReport};
 use serde::{Deserialize, Serialize};
 use specta::Type;
@@ -353,9 +356,19 @@ macro_rules! with_gear_rows {
             /// What the sim pre-fills for an aircraft: stick channels, arm, angle, horizon,
             /// turtle and air mode switches, a reset control, each with its source. Reads only.
             gear_sim_defaults(params: SimDefaultsParams) -> SimDefaults = |c| c.gear_sim_defaults(&params);
-            /// A sim profile checked against a folder of decoded blackbox logs: each check's
-            /// band and result (sim-design 6.4). Reads only.
+            /// A sim profile checked against a quad's blackbox logs: each check's band and
+            /// result (sim-design 6.4). Reads only.
             gear_sim_validate(params: SimValidateParams) -> ValidationReport = |c| c.gear_sim_validate(&params);
+            /// The sim's profiles: the built-in presets, then the ones fitted from logs.
+            gear_sim_profiles() -> Vec<SimProfileInfo> = |c| c.gear_sim_profiles();
+            /// A sim profile fitted from a quad's blackbox logs, its diff all and its weight,
+            /// validated with its base on the same logs, and the digest a save needs. Writes
+            /// nothing.
+            gear_sim_fit(params: SimFitParams) -> SimFit = |c| c.gear_sim_fit(&params);
+            /// Fits again and saves the profile, with `confirm` and the fit's digest.
+            gear_sim_fit_save(params: SimFitSaveParams) -> SimProfileInfo = |c| c.gear_sim_fit_save(&params);
+            /// Removes a fitted sim profile (never a built-in one), with `confirm`.
+            gear_sim_profile_delete(params: SimProfileDeleteParams) -> bool = |c| c.gear_sim_profile_delete(&params);
             /// Drives the sim's calibration session (`sim-calibration-event` events).
             gear_sim_calibrate(params: CalibrateParams) -> CalibrateView = |c| c.gear_sim_calibrate(&params);
             /// Flights from the radio logs: hover, sag, resting voltage, mAh, the threshold,

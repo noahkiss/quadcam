@@ -175,6 +175,8 @@ cli.command gear setup-edit
 cli.command gear sim
 cli.command gear sim calibration
 cli.command gear sim defaults
+cli.command gear sim fit
+cli.command gear sim profiles
 cli.command gear sim validate
 cli.command gear sims
 cli.command gear splash
@@ -476,6 +478,19 @@ cli.flag gear sim calibration --set VALUE
 cli.flag gear sim defaults --aircraft VALUE
 cli.flag gear sim defaults --fc VALUE
 cli.flag gear sim defaults --radio VALUE
+cli.flag gear sim fit --aircraft VALUE
+cli.flag gear sim fit --base VALUE
+cli.flag gear sim fit --digest VALUE
+cli.flag gear sim fit --fc VALUE
+cli.flag gear sim fit --id VALUE
+cli.flag gear sim fit --label VALUE
+cli.flag gear sim fit --logs VALUE
+cli.flag gear sim fit --mass-g VALUE
+cli.flag gear sim fit --pack-g VALUE
+cli.flag gear sim fit --text
+cli.flag gear sim fit --yes
+cli.flag gear sim profiles --delete VALUE
+cli.flag gear sim profiles --yes
 cli.flag gear sim validate --logs VALUE
 cli.flag gear sim validate --poles VALUE
 cli.flag gear sim validate --text
@@ -514,6 +529,7 @@ cli.flag gear voice add --name VALUE
 cli.flag gear voice add --yes
 cli.flag gear voice build-pack --attribution VALUE
 cli.flag gear voice build-pack --confirm
+cli.flag gear voice build-pack --digest VALUE
 cli.flag gear voice build-pack --dry-run
 cli.flag gear voice build-pack --fade-out-ms VALUE
 cli.flag gear voice build-pack --id VALUE

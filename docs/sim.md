@@ -112,13 +112,44 @@ Built-in profiles:
 
 The two whoops are fitted to example blackbox logs; the 5-inch and 7-inch are estimates.
 
-## Checking a profile against your logs
+## Fitting a profile to your quad
 
-Decode the quad's blackbox logs to CSV with `blackbox_decode` (a separate program QuadCam
-does not ship), put them in a folder, and run:
+QuadCam fits a profile to your own quad from its blackbox logs. It starts from the built-in
+profile closest to your quad and replaces what the logs measure:
+
+| Step | From the logs | Gives |
+|---|---|---|
+| Hover | Level, still, 1 g moments | Hover throttle and motor speed; thrust per motor |
+| Motor | Steady flight, throttle steps and punches | Winding resistance, prop torque, rotor inertia, electronics current |
+| Pack | Voltage against current | Pack and wiring resistance (sag) |
+| Rates | Roll, pitch and yaw moves | How fast the quad follows the sticks |
+
+The quad's `diff all` gives its rates, throttle curve, modes, motor idle and pole count. Weigh
+the quad with a pack and pass the weight: the logs give thrust over weight, not weight. Drag
+stays an estimate.
+
+The fit then checks each group against the same logs and keeps the built-in profile's values
+for any group that does worse, so a fitted profile never flies worse than its base on your
+logs. It changes nothing until you save it:
 
 ```bash
-quadcam-cli gear sim validate meteor75 --logs ~/Desktop/decoded --text
+quadcam-cli gear sim fit --base meteor75 --aircraft "My Whoop" --mass-g 58 --text
+quadcam-cli gear sim fit --base meteor75 --aircraft "My Whoop" --mass-g 58 --digest D --yes
+quadcam-cli --json gear sim profiles
+```
+
+`--aircraft` reads the blackbox pulls of the aircraft's FC and its latest backup. Without one,
+pass `--logs` (a `.bbl` file, a pulled flash image, or a folder) and `--fc` (a `diff all`
+file). The saved profile takes its id from the aircraft's name (`--id` sets another) and
+flies like any other: `gear sim validate <id>`, or pick it in the sim.
+
+## Checking a profile against your logs
+
+Pass the quad's blackbox logs: a `.bbl` file, a flash image QuadCam pulled (`gear blackbox
+export`), CSV that `blackbox_decode` wrote, or a folder of them:
+
+```bash
+quadcam-cli gear sim validate meteor75 --logs ~/Desktop/blackbox --text
 ```
 
 QuadCam replays the logged sticks and motor commands through the sim and compares:
@@ -132,6 +163,7 @@ QuadCam replays the logged sticks and motor commands through the sim and compare
 | Yaw | Lag within 5 ms |
 | Coast-down | Deceleration within 15 % (needs a ground-speed column) |
 | Fall recovery | Height lost within 20 % |
+| Replay | Attitude within 10° RMS over 1 s of flying without flips, from the log's attitude |
 
 A check with no matching moment in the logs reads **not in log**. `--poles` sets the motor
 pole count when it differs from the profile's.
@@ -143,8 +175,11 @@ quadcam-cli --json gear sim calibration                 # the joystick now: whic
 quadcam-cli --json gear sim calibration radio-0123…     # a saved radio's
 quadcam-cli gear sim calibration radio-0123… --set cal.json [--product "Radio Joystick"]
 quadcam-cli --json gear sim defaults --aircraft Whoop   # or --radio CARD|MODEL.yml --fc DUMP
-quadcam-cli --json gear sim validate air65ii --logs DIR  # a profile against decoded logs
+quadcam-cli --json gear sim validate air65ii --logs PATH # a profile against blackbox logs
+quadcam-cli --json gear sim profiles                    # built-in and fitted profiles
+quadcam-cli --json gear sim fit --base air65ii --aircraft NAME --mass-g 26   # a fit and its digest
 ```
 
-MCP: `quadcam_gear` `sim_calibration`, `sim_defaults` and `sim_validate`; `quadcam_gear_edit`
-`sim_calibration_save`. See [mcp.md](mcp.md).
+MCP: `quadcam_gear` `sim_calibration`, `sim_defaults`, `sim_validate`, `sim_profiles` and
+`sim_fit`; `quadcam_gear_edit` `sim_calibration_save`, `sim_fit_save` and
+`sim_profile_delete`. See [mcp.md](mcp.md).
