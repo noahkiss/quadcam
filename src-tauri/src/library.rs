@@ -520,7 +520,7 @@ fn is_media(p: &Path) -> bool {
 }
 
 /// The `_cutN` suffix of a stem: (the clip's stem, N).
-fn cut_stem(stem: &str) -> Option<(&str, u32)> {
+pub fn cut_stem(stem: &str) -> Option<(&str, u32)> {
     let at = stem.rfind("_cut")?;
     let n: u32 = stem[at + 4..].split('-').next()?.parse().ok()?;
     Some((&stem[..at], n))

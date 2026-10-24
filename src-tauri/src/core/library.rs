@@ -8,7 +8,7 @@ use crate::media;
 use crate::pipeline::Outcome;
 use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 /// A clip as the front ends see it: the index entry plus absolute paths.
@@ -160,7 +160,10 @@ impl Core {
                 .and_then(|m| m.modified())
                 .ok()
         };
-        let mut guard = self.library.lock().unwrap();
+        let mut guard = self
+            .library
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let on_disk = mtime(&root);
         if guard
             .as_ref()
@@ -239,7 +242,7 @@ impl Core {
     pub fn library(&self, filter: &Filter) -> Result<LibraryView> {
         let d = self.defaults();
         self.with_index(|root, ix| {
-            let indexed: std::collections::HashSet<&Path> = ix
+            let indexed: HashSet<&Path> = ix
                 .clips
                 .iter()
                 .flat_map(|c| {
@@ -585,12 +588,37 @@ impl Core {
         for f in std::iter::once(c.path.clone()).chain(c.cuts.iter().map(|x| x.path.clone())) {
             lib::write_keys(&root.join(f), &set)?;
         }
+        // The day folder follows the place the edit sets, not the one the clip had.
+        let mut placed = c.clone();
+        if let Some(l) = &location {
+            placed.place = l.as_ref().and_then(|l| l.name.clone());
+        }
         if e.date.is_some() || time.is_some() {
-            self.redate(&root, &c, &items, e.date, *time, false)?;
+            self.redate(&root, &placed, &items, e.date, *time, false)?;
         } else {
             self.reread_clips(&[id.to_string()])?;
         }
+        if location.is_some() && d.place_folders {
+            self.refile_by_place(id)?;
+        }
         Ok(self.clip(id)?.1)
+    }
+
+    /// Moves a clip to the day folder its saved place names, when that is not where it is.
+    fn refile_by_place(&self, id: &str) -> Result<()> {
+        let d = self.defaults();
+        let (root, c) = self.clip(id)?;
+        let file = root.join(&c.path);
+        let dir = lib::day_dir(&root, d.layout, c.date, c.place.as_deref());
+        if file.parent() == Some(dir.as_path()) {
+            return Ok(());
+        }
+        let stem = file
+            .file_stem()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string();
+        self.relocate(&root, &c, &dir, &stem).map(|_| ())
     }
 
     /// Changes stars, flag, name and details of library clips in one call. Every value and
@@ -739,7 +767,12 @@ impl Core {
         for cut in &c.cuts {
             let p = root.join(&cut.path);
             let cs = stem_of(&p);
-            let suffix = cs.strip_prefix(&old_stem).unwrap_or("_cut");
+            // A cut whose name does not start with the clip's (the clip was renamed in
+            // Finder) keeps its own `_cutN`.
+            let suffix = cs
+                .strip_prefix(&old_stem)
+                .or_else(|| lib::cut_stem(&cs).map(|(parent, _)| &cs[parent.len()..]))
+                .with_context(|| format!("{} is not named as a cut", p.display()))?;
             moves.push((
                 p.clone(),
                 dir.join(format!("{new_stem}{suffix}.{}", ext(&p))),
@@ -769,23 +802,48 @@ impl Core {
                 moves.push((side, to));
             }
         }
-        if let Some((_, to)) = moves
-            .iter()
-            .skip(1)
-            .find(|(from, to)| from != to && to.exists())
-        {
-            bail!("{} exists already; not moving.", to.display());
+        let mut targets = HashSet::new();
+        for (from, to) in &moves {
+            if !targets.insert(to) {
+                bail!("two files would move to {}; not moving.", to.display());
+            }
+            if from != to && to.exists() {
+                bail!("{} exists already; not moving.", to.display());
+            }
         }
         std::fs::create_dir_all(dir).with_context(|| format!("creating {}", dir.display()))?;
+        let mut done: Vec<(&Path, &Path)> = Vec::new();
         for (from, to) in &moves {
             if from == to {
                 continue;
             }
-            if let Some(p) = to.parent() {
-                std::fs::create_dir_all(p)?;
+            let moved = to
+                .parent()
+                .map_or(Ok(()), std::fs::create_dir_all)
+                .and_then(|_| {
+                    if to.exists() {
+                        Err(std::io::Error::from(std::io::ErrorKind::AlreadyExists))
+                    } else {
+                        std::fs::rename(from, to)
+                    }
+                })
+                .with_context(|| format!("moving {} to {}", from.display(), to.display()));
+            if let Err(e) = moved {
+                // Put back what already moved, so the index still names every file. A place
+                // that something took meanwhile is left alone: the file stays moved.
+                for (from, to) in done.into_iter().rev() {
+                    if !from.exists() {
+                        let _ = std::fs::rename(to, from);
+                    }
+                }
+                for d in [dir.join(lib::ORIGINALS), dir.to_path_buf()] {
+                    if d != old_dir && d.starts_with(root) && d != root {
+                        let _ = std::fs::remove_dir(&d);
+                    }
+                }
+                return Err(e);
             }
-            std::fs::rename(from, to)
-                .with_context(|| format!("moving {} to {}", from.display(), to.display()))?;
+            done.push((from, to));
         }
         if old_dir != dir {
             // Remove what the move emptied: originals/, the day folder, the year folder.
@@ -803,9 +861,15 @@ impl Core {
             let Some(e) = ix.get_mut(&id) else {
                 return Ok(((), false));
             };
-            let cut_rels: Vec<PathBuf> = moves[1..1 + e.cuts.len()]
+            // The entry's cuts at their new places; a cut made since `c` was read stays put.
+            let cut_rels: Vec<PathBuf> = e
+                .cuts
                 .iter()
-                .map(|(_, to)| rel_to(root, to))
+                .map(|cut| {
+                    let from = root.join(&cut.path);
+                    let to = moves.iter().find(|(f, _)| *f == from).map(|(_, t)| t);
+                    rel_to(root, to.unwrap_or(&from))
+                })
                 .collect();
             let mut fresh = lib::reread(root, &rel_to(root, &new), &cut_rels)?;
             fresh.pending_cuts = e.pending_cuts.clone();

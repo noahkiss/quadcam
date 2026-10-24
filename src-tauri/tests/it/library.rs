@@ -1105,3 +1105,108 @@ fn a_time_shift_moves_the_batch_and_a_log_wins() {
         "{again:?}"
     );
 }
+
+/// Cuts whose names do not start with the clip's (the clip was renamed in Finder, then the
+/// library rebuilt) keep their own `_cutN` through a rename: no two land on one name.
+#[test]
+fn a_rename_keeps_each_cut_whose_name_differs_from_the_clip() {
+    let l = lab(Layout::YearDay, false, false);
+    import(&l);
+    let id = by_name(&l, "backyard loops").clip.id;
+    let dir = l.root.join("2026/2026-09-27");
+    let cut1 = dir.join("2026-09-27_backyard_loops_cut1.mp4");
+    let cut2 = dir.join("2026-09-27_backyard_loops_cut2.mp4");
+    std::fs::copy(&cut1, &cut2).unwrap();
+    std::fs::rename(
+        dir.join("2026-09-27_backyard_loops.mp4"),
+        dir.join("2026-09-27_yard.mp4"),
+    )
+    .unwrap();
+    l.core.library_rebuild().unwrap();
+    let a = all(&l).into_iter().find(|c| c.clip.id == id).unwrap();
+    assert_eq!(a.clip.cuts.len(), 2, "{:?}", a.clip.cuts);
+
+    l.core.library_rename(&id, "fence").unwrap();
+    assert!(dir.join("2026-09-27_fence_cut1.mp4").is_file());
+    assert!(dir.join("2026-09-27_fence_cut2.mp4").is_file());
+    assert!(!cut1.exists() && !cut2.exists());
+    assert_eq!(by_name(&l, "fence").clip.cuts.len(), 2);
+}
+
+/// A move that fails partway (here the new day's `originals` is a file) puts back what
+/// already moved: the clip, its cut and its original stay where the index says.
+#[test]
+fn a_move_that_fails_partway_puts_everything_back() {
+    let l = lab(Layout::YearDay, false, true);
+    import(&l);
+    let a = by_name(&l, "backyard loops");
+    let new_dir = l.root.join("2026/2026-09-30");
+    std::fs::create_dir_all(&new_dir).unwrap();
+    std::fs::write(new_dir.join("originals"), b"not a folder").unwrap();
+    let e = l
+        .core
+        .library_edit(
+            &a.clip.id,
+            &LibEdit {
+                date: Some(NaiveDate::from_ymd_opt(2026, 9, 30).unwrap()),
+                ..Default::default()
+            },
+        )
+        .unwrap_err();
+    assert!(format!("{e:#}").contains("moving"), "{e:#}");
+    let dir = l.root.join("2026/2026-09-27");
+    assert!(a.file.is_file());
+    assert!(dir.join("2026-09-27_backyard_loops_cut1.mp4").is_file());
+    assert!(dir
+        .join("originals/2026-09-27_backyard_loops.avi")
+        .is_file());
+    assert!(!new_dir.join("2026-09-30_backyard_loops.mp4").exists());
+    let b = by_name(&l, "backyard loops");
+    assert_eq!(b.file, a.file);
+    assert_eq!(b.clip.cuts.len(), 1);
+    l.core
+        .library_rate(std::slice::from_ref(&b.clip.id), Some(2), None)
+        .unwrap();
+}
+
+/// With place folders on, an edit that sets a place and a date files the clip under the new
+/// place's folder, and a place edit alone moves it too.
+#[test]
+fn a_place_edit_moves_the_clip_to_that_places_day_folder() {
+    let l = lab(Layout::YearDay, true, true);
+    import(&l);
+    let gap = by_name(&l, "gap run");
+    l.core
+        .library_edit(
+            &gap.clip.id,
+            &LibEdit {
+                place: Some("Home field".into()),
+                date: Some(NaiveDate::from_ymd_opt(2026, 9, 28).unwrap()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    let to = l.root.join("2026/2026-09-28 Home field/2026-09-28_gap_run.mp4");
+    assert!(to.is_file());
+    assert_eq!(by_name(&l, "gap run").file, to);
+
+    let a = by_name(&l, "backyard loops");
+    l.core
+        .library_edit(
+            &a.clip.id,
+            &LibEdit {
+                place: Some(String::new()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    let dir = l.root.join("2026/2026-09-27");
+    let b = by_name(&l, "backyard loops");
+    assert_eq!(b.file, dir.join("2026-09-27_backyard_loops.mp4"));
+    assert!(b.file.is_file());
+    assert!(dir.join("2026-09-27_backyard_loops_cut1.mp4").is_file());
+    assert!(dir
+        .join("originals/2026-09-27_backyard_loops.avi")
+        .is_file());
+    assert!(!l.root.join("2026/2026-09-27 Home field").exists());
+}

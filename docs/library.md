@@ -16,7 +16,7 @@ Settings > Library sets how QuadCam files the clips:
 | Day only | `2026-09-27/2026-09-27_<name>.mp4` |
 | Flat | `2026-09-27_<name>.mp4` |
 
-- **Add the place to day folders** names the day folder after the clip's saved place: `2026-09-27 Home field/`.
+- **Add the place to day folders** names the day folder after the clip's saved place: `2026-09-27 Home field/`. A new place on a library clip moves the clip, its cuts and its original to that place's folder.
 - **Keep originals** copies the source file (the DVR's AVI or the DJI MP4) into `originals/` in the day folder, named like the clip. A DJI clip's `.SRT` file goes next to its original, with the same name. It moves with the original on a rename, a new date or a move to the Trash.
 - Cuts go next to their clip as `_cut1`, `_cut2`. See [Moments and cuts](moments-and-cuts.md).
 
@@ -155,6 +155,8 @@ Move to Trash takes the clip's cuts and kept original with it.
 Open a clip, then use the **Details** tab. It changes the name, date, time of day, aircraft, place, keywords, author and note. The **Flight** tab shows the radio log's numbers for the clip.
 
 - A new date moves the clip, its cuts and its kept original to that day's folder. If the file name starts with the date, QuadCam renames them too.
+- With **Add the place to day folders** on, a new place moves them to the folder of that place and day.
+- A move that fails partway puts back the files it already moved. A rename never lets two files take one name.
 - A new time of day rewrites the QuickTime creation date and the file times of the clip, its cuts and its original.
 - A new aircraft rewrites the camera make and model, the aircraft, the video system and the profile's keywords in the file and its cuts.
 
