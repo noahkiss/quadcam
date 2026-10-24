@@ -746,7 +746,8 @@ current fit, so a link whose type no longer fits is not a default.
 `Edit::ModelImport` copies a model from another board: each control reference is rewritten
 through `ControlLink`s (the boards' defaults, then the caller's), an unmapped control refuses
 (`incompatible`), the source board's model-only keys go and the target's come from a model on
-the card. Row `gear_model_import` (reads the source, previews, returns the edit to stage); CLI
+the card. Row `gear_model_import` (reads the source, previews, returns the edit to stage; a file
+source must be a `.yml` model with a header name, since its text comes back in the answer); CLI
 `gear card import`; MCP `quadcam_gear model_import`. Tests: `tests/it/gx12_card.rs`,
 `gear_apply_card::a_gx12_card_takes_a_model_from_a_pocket_end_to_end`.
 

@@ -6,7 +6,7 @@
 use super::Core;
 use crate::gear::edgetx::card::{AppleDoubleFile, Card, CardView, WriteOptions};
 use crate::gear::model::{Check, Connected, DiffItem, Edit, Identity, Link};
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
@@ -150,6 +150,9 @@ struct CardTarget {
     /// This request mounted it.
     here: bool,
 }
+
+/// The largest model file `gear_model_import` reads (EdgeTX models are tens of KB).
+const MODEL_FILE_MAX: u64 = 1024 * 1024;
 
 impl Core {
     /// The card a request names: `mount`, a device id, or the one radio plugged in. A card
@@ -321,6 +324,11 @@ impl Core {
                 .file_name()
                 .map(|n| n.to_string_lossy().into_owned())
                 .unwrap_or_default();
+            // Only a model file is read: its text comes back in the answer.
+            let size = std::fs::metadata(&path)?.len();
+            if !name.to_ascii_lowercase().ends_with(".yml") || size > MODEL_FILE_MAX {
+                bail!("{from:?} is not an EdgeTX model file (a .yml file in MODELS/).");
+            }
             let bytes = std::fs::read(&path)?;
             // MODELS/modelNN.yml on a card copy: radio.yml is two folders up.
             let root = path
@@ -369,7 +377,9 @@ impl Core {
         let src = Doc::parse(&file, &bytes).map_err(anyhow::Error::new)?;
         let src_name = em::model_name(&src)
             .map_err(anyhow::Error::new)?
-            .unwrap_or_default();
+            .with_context(|| {
+                format!("{file} is not an EdgeTX model file: it has no header name.")
+            })?;
 
         let t = self.gear_card_target(p.mount.as_ref(), p.device.as_deref())?;
         let out = (|| {

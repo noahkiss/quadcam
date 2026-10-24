@@ -746,6 +746,27 @@ fn model_import_through_core_and_mcp() {
         .unwrap();
     assert!(r.links.iter().any(|l| l.from == "SB" && l.to == "SF"));
     assert!(r.preview.files.contains(&"MODELS/model09.yml".to_string()));
+    // A file that is not a model is refused, and its text never comes back.
+    let notes = dir.path().join("notes.txt");
+    std::fs::write(&notes, "token: secret\n").unwrap();
+    let yml = dir.path().join("MODELS/config.yml");
+    std::fs::create_dir_all(yml.parent().unwrap()).unwrap();
+    std::fs::write(&yml, "token: secret\n").unwrap();
+    for f in [&notes, &yml] {
+        let e = core
+            .gear_model_import(&ModelImportParams {
+                mount: Some(gx.clone()),
+                from: f.display().to_string(),
+                from_board: Some("pocket".into()),
+                ..Default::default()
+            })
+            .unwrap_err();
+        assert!(
+            format!("{e:#}").contains("not an EdgeTX model file"),
+            "{e:#}"
+        );
+        assert!(!format!("{e:#}").contains("secret"), "{e:#}");
+    }
     // Not a card, a file or a backup.
     assert!(core
         .gear_model_import(&ModelImportParams {
