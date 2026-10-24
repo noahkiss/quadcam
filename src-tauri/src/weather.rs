@@ -245,10 +245,13 @@ pub fn lookup(
             Some(b) => b.clone(),
             None => {
                 std::fs::create_dir_all(tmp)?;
-                let dest = tmp.join("open-meteo.json");
-                fetch.download(&u, &dest)?;
-                let b = std::fs::read(&dest)?;
+                // One name per process: the app and a CLI run may ask at once.
+                let dest = tmp.join(format!("open-meteo-{}.json", std::process::id()));
+                let got = fetch
+                    .download(&u, &dest)
+                    .and_then(|()| Ok(std::fs::read(&dest)?));
                 let _ = std::fs::remove_file(&dest);
+                let b = got?;
                 memo.insert(u.clone(), b.clone());
                 b
             }
