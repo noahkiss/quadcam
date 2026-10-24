@@ -1057,7 +1057,7 @@ fn check_sf(doc: &Doc, sf: &SfDef) -> Result<(), Refusal> {
     Ok(())
 }
 
-fn sf_lines(doc: &Doc, node: Option<&Node>, items: &[Vec<Field>]) -> Vec<String> {
+fn sf_lines(node: Option<&Node>, items: &[Vec<Field>]) -> Vec<String> {
     let (ipad, fpad) = node
         .and_then(|n| n.children.first())
         .map(|c| {
@@ -1067,7 +1067,6 @@ fn sf_lines(doc: &Doc, node: Option<&Node>, items: &[Vec<Field>]) -> Vec<String>
             )
         })
         .unwrap_or((3, 6));
-    let _ = doc;
     let mut out = Vec::new();
     for (i, it) in items.iter().enumerate() {
         out.push(format!("{}{i}:", " ".repeat(ipad)));
@@ -1118,7 +1117,7 @@ pub(super) fn write_sfs(
     node: Option<Node>,
     items: &[Vec<Field>],
 ) -> Result<(), Refusal> {
-    let body = sf_lines(doc, node.as_ref(), items);
+    let body = sf_lines(node.as_ref(), items);
     match node {
         Some(n) => {
             if doc.slice(n.body()) != body.as_slice() {

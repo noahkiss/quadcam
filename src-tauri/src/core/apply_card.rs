@@ -537,7 +537,6 @@ impl Core {
         change: &StagedChange,
         planned: CardPlanned,
         l: Located,
-        stash: &std::sync::Mutex<Option<ApplyReport>>,
     ) -> Result<ApplyReport> {
         let c = l.connected.clone();
         let handle = link_handle(&c.link);
@@ -550,7 +549,7 @@ impl Core {
             }
         };
         let _hold = self.gear_hold(&handle);
-        let (out, still_writing) = match self.apply_card_inner(change, planned, &l, &stop, stash) {
+        let (out, still_writing) = match self.apply_card_inner(change, planned, &l, &stop) {
             Ok((r, w)) => (Ok(r), w),
             Err(e) => (Err(e), false),
         };
@@ -597,9 +596,7 @@ impl Core {
         planned: CardPlanned,
         l: &Located,
         stop: &std::sync::Arc<std::sync::atomic::AtomicBool>,
-        stash: &std::sync::Mutex<Option<ApplyReport>>,
     ) -> Result<(ApplyReport, bool)> {
-        let _ = stash;
         let handle = link_handle(&l.connected.link);
         let step = |s: &str| self.job_step(&handle, s);
         let snaps = self.snapshots();
@@ -915,8 +912,7 @@ impl Core {
                 return Err(e);
             }
         }
-        let stash = std::sync::Mutex::new(None);
-        self.apply_card(&change, planned, l, &stash)
+        self.apply_card(&change, planned, l)
     }
 }
 
