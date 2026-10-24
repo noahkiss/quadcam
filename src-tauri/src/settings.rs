@@ -65,6 +65,33 @@ fn typed<T: serde::de::DeserializeOwned>(v: &Value, what: &str) -> Result<()> {
         .with_context(|| what.to_string())
 }
 
+/// `tunables`: the shape, and each value in range. A gap of 0 or less would make every row
+/// its own segment.
+fn tunables(v: &Value) -> Result<()> {
+    let what = "an object with segment_gap_s, session_gap_min, tolerance_s, max_log_age_days and clock_skew_s";
+    typed::<crate::logs::Tunables>(v, what)?;
+    let t: crate::logs::Tunables = serde_json::from_value(v.clone())?;
+    for (name, x, min_exclusive) in [
+        ("segment_gap_s", t.segment_gap_s, true),
+        ("session_gap_min", t.session_gap_min, true),
+        ("tolerance_s", t.tolerance_s, false),
+        ("clock_skew_s", t.clock_skew_s, false),
+    ] {
+        if !x.is_finite() || x < 0.0 || (min_exclusive && x == 0.0) {
+            let at_least = if min_exclusive {
+                "more than 0"
+            } else {
+                "0 or more"
+            };
+            bail!("{what}; {name} must be {at_least}");
+        }
+    }
+    if t.max_log_age_days < 0 {
+        bail!("{what}; max_log_age_days must be 0 or more");
+    }
+    Ok(())
+}
+
 /// `modules`: a tool name (`ffmpeg`, `ffprobe`, `esptool`) to the absolute path of an
 /// executable that QuadCam uses instead of its own module or Homebrew.
 fn tool_paths(v: &Value) -> Result<()> {
@@ -190,12 +217,7 @@ pub const KEYS: &[Key] = &[
         file: "tunables",
         name: Some("tunables"),
         about: "an object with segment_gap_s, session_gap_min, tolerance_s, max_log_age_days and clock_skew_s",
-        check: |v| {
-            typed::<crate::logs::Tunables>(
-                v,
-                "an object with segment_gap_s, session_gap_min, tolerance_s, max_log_age_days and clock_skew_s",
-            )
-        },
+        check: tunables,
     },
     Key {
         file: "nameDateFormat",
@@ -522,10 +544,16 @@ pub fn update<T>(path: &Path, edit: impl FnOnce(&mut Values) -> Result<T>) -> Re
     let out = edit(&mut values)?;
     if values != before {
         let tmp = path.with_extension("json.tmp");
-        let mut f = std::fs::File::create(&tmp)?;
-        f.write_all(&serde_json::to_vec_pretty(&values)?)?;
-        f.sync_all()?;
-        std::fs::rename(&tmp, path).with_context(|| format!("writing {}", path.display()))?;
+        let written = (|| -> Result<()> {
+            let mut f = std::fs::File::create(&tmp)?;
+            f.write_all(&serde_json::to_vec_pretty(&values)?)?;
+            f.sync_all()?;
+            std::fs::rename(&tmp, path).with_context(|| format!("writing {}", path.display()))
+        })();
+        if written.is_err() {
+            let _ = std::fs::remove_file(&tmp);
+        }
+        written?;
     }
     drop(lock);
     Ok((out, values))
@@ -719,9 +747,14 @@ impl Default for Defaults {
 impl Defaults {
     /// Defaults with the app's saved settings on top (the Tauri store file the GUI writes,
     /// `settings.json` in the app's support folder), so a headless CLI or MCP run exports
-    /// where the person told the app to. Missing or unreadable keys keep the default.
+    /// where the person told the app to. Missing or unreadable keys keep the default. A file
+    /// that does not parse gives every default, and says so on stderr.
     pub fn with_app_settings(path: &Path) -> Defaults {
-        Defaults::from_values(&read(path).unwrap_or_default())
+        let values = read(path).unwrap_or_else(|e| {
+            eprintln!("quadcam: {e:#}; using the default settings");
+            Values::new()
+        });
+        Defaults::from_values(&values)
     }
 
     /// Defaults with the settings file's values on top.
@@ -917,6 +950,35 @@ mod tests {
         assert!(v.get("format").is_none(), "null removes a key");
         assert_eq!(v["outputDir"], "/tmp/lib");
         assert_eq!(v["fromTheFuture"]["a"], 1);
+    }
+
+    #[test]
+    fn tunables_out_of_range_are_refused() {
+        let d = tempfile::tempdir().unwrap();
+        let f = d.path().join("settings.json");
+        let t = |extra: serde_json::Value| {
+            let mut v = serde_json::to_value(Tunables::default()).unwrap();
+            v.as_object_mut()
+                .unwrap()
+                .extend(extra.as_object().unwrap().clone());
+            serde_json::from_value::<Values>(serde_json::json!({ "tunables": v })).unwrap()
+        };
+        assert!(set(&f, &t(serde_json::json!({}))).is_ok());
+        for (bad, says) in [
+            (serde_json::json!({"segment_gap_s": -1.0}), "segment_gap_s"),
+            (serde_json::json!({"segment_gap_s": 0.0}), "segment_gap_s"),
+            (serde_json::json!({"session_gap_min": 0}), "session_gap_min"),
+            (serde_json::json!({"tolerance_s": -0.5}), "tolerance_s"),
+            (serde_json::json!({"clock_skew_s": -1}), "clock_skew_s"),
+            (
+                serde_json::json!({"max_log_age_days": -1}),
+                "max_log_age_days",
+            ),
+        ] {
+            let e = set(&f, &t(bad.clone())).unwrap_err();
+            assert!(format!("{e:#}").contains(says), "{bad} -> {e:#}");
+        }
+        assert!(set(&f, &t(serde_json::json!({"tolerance_s": 0}))).is_ok());
     }
 
     #[test]
