@@ -216,6 +216,9 @@ enum Cmd {
         /// Keep every clip on the card this run, even when delete_clips_after_import is on.
         #[arg(long)]
         keep_clips: bool,
+        /// Convert clips that are in the library already (by content) again.
+        #[arg(long)]
+        force: bool,
     },
     /// Re-verify outputs: the session's (default) or one file against its source.
     Verify {
@@ -1082,6 +1085,7 @@ fn run(cmd: Cmd, session: Option<PathBuf>) -> Result<Value> {
             add_to_photos,
             album,
             keep_clips,
+            force,
         } => {
             let mut patches = Vec::new();
             let mut opts = ImportOptions::default();
@@ -1184,6 +1188,7 @@ fn run(cmd: Cmd, session: Option<PathBuf>) -> Result<Value> {
             opts.add_to_photos |= add_to_photos;
             opts.album = album.or(opts.album);
             opts.keep_clips |= keep_clips;
+            opts.force |= force;
             serde_json::to_value(via::<_, quadcam_lib::core::ImportOutcome>(
                 &core,
                 "import",

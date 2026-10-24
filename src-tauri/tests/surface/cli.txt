@@ -687,6 +687,7 @@ cli.flag import --album VALUE
 cli.flag import --cut VALUE
 cli.flag import --date VALUE
 cli.flag import --encoder VALUE
+cli.flag import --force
 cli.flag import --format VALUE
 cli.flag import --join VALUE
 cli.flag import --keep-clips

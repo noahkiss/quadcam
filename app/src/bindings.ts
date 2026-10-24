@@ -2043,6 +2043,11 @@ export type ClipResult = {
 	cuts?: CutResult[],
 	/**  The QuickTime items written (see `qtmeta`), so a later verify checks them too. */
 	qt?: ([string, string])[],
+	/**
+	 *  Skipped because the clip is in the library already (by content). An import with
+	 *  `force` converts it again.
+	 */
+	in_library?: boolean,
 };
 
 export type ClipStatus = "ok" | "incomplete" | "empty";
@@ -3929,6 +3934,11 @@ export type ImportOptions = {
 	 *  setting is the only consent.
 	 */
 	keep_clips?: boolean,
+	/**
+	 *  Convert clips that are in the library already (by content) again. Without it they
+	 *  are skipped and named in `Summary::in_library`.
+	 */
+	force?: boolean,
 };
 
 export type ImportOutcome = {
@@ -8410,6 +8420,11 @@ export type Summary = {
 	imported: number,
 	skipped: number,
 	failed: number,
+	/**
+	 *  Ids of the clips skipped because they are in the library already (by content).
+	 *  They count in `skipped` too.
+	 */
+	in_library?: number[],
 	total_bytes: number,
 	output_dir: string | null,
 	/**  Ok when the format step may unlock, else the reason it stays locked. */

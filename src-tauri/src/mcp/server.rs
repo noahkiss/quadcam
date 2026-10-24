@@ -1157,6 +1157,7 @@ impl<B: Backend> Server<B> {
                     ("add_time", x.add_time),
                     ("add_to_photos", x.add_to_photos),
                     ("keep_clips", x.keep_clips),
+                    ("force", x.force),
                 ] {
                     if let Some(v) = v {
                         opts[k] = json!(v);
@@ -1179,6 +1180,13 @@ impl<B: Backend> Server<B> {
                         )
                     }
                 );
+                if let Some(ids) = sum["in_library"].as_array().filter(|a| !a.is_empty()) {
+                    let ids: Vec<String> = ids.iter().map(|i| i.to_string()).collect();
+                    line.push_str(&format!(
+                        "\nAlready in the library, skipped: clip {}. force=true imports them again.",
+                        ids.join(", ")
+                    ));
+                }
                 for r in sum["results"].as_array().into_iter().flatten() {
                     if r["outcome"] == "failed" {
                         line.push_str(&format!(

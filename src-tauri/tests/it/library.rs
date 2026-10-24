@@ -147,6 +147,44 @@ fn imports_land_in_year_and_day_folders_with_place_and_originals() {
     assert_eq!(a.clip.id, s.clips[0].key);
 }
 
+/// A card imported twice gives no second copies; `force` converts its clips again.
+#[test]
+fn a_reimport_skips_clips_in_the_library_unless_forced() {
+    let l = lab(Layout::Flat, false, false);
+    import(&l);
+    let files = |l: &Lab| {
+        std::fs::read_dir(&l.root)
+            .unwrap()
+            .filter(|e| e.as_ref().unwrap().path().extension().is_some())
+            .count()
+    };
+    let before = files(&l);
+
+    let again = |force| {
+        l.core.stage(Some(&l.src)).unwrap();
+        l.core.analyse().unwrap();
+        l.core.plan_dates(LogChoice::None, None).unwrap();
+        l.core
+            .import(&ImportOptions {
+                force,
+                ..Default::default()
+            })
+            .unwrap()
+    };
+    let out = again(false);
+    assert_eq!(out.summary.imported, 0, "{:?}", out.summary.results);
+    assert_eq!(out.summary.skipped, 2);
+    assert_eq!(out.summary.in_library, vec![0, 1]);
+    assert!(out.summary.results.iter().all(|r| r.in_library));
+    assert_eq!(files(&l), before);
+    assert_eq!(all(&l).len(), 2);
+
+    let out = again(true);
+    assert_eq!(out.summary.imported, 2, "{:?}", out.summary.results);
+    assert!(out.summary.in_library.is_empty());
+    assert!(files(&l) > before);
+}
+
 #[test]
 fn flat_and_day_layouts() {
     let l = lab(Layout::Flat, true, false);

@@ -46,7 +46,7 @@ The server has 19 tools.
 | `quadcam_read_clips` | Reads the clips, their source, plans, moments, keep ranges and cuts. Returns thumbnails as images. The date source reads `radio log`, `clip clock`, `import` or `edited` |
 | `quadcam_match_logs` | Dates the clips from EdgeTX logs |
 | `quadcam_suggest` | Suggests names, dates, times, notes, skips, cuts, the log offset, or metadata (profile, place or location, keywords, author). `split_by_flight` adds one cut per radio-log flight; `joined` joins or parts a split recording. `on_device` asks Apple's on-device model for names, keywords and notes first (empty fields only) |
-| `quadcam_export` | Converts and verifies clips and cuts. Can also add them to Photos. When the `delete_clips_after_import` setting is on, deletes the clips that verified from the card; `keep_clips=true` keeps them for that run. See [Settings](settings.md#delete-clips-after-import) |
+| `quadcam_export` | Converts and verifies clips and cuts. Can also add them to Photos. When the `delete_clips_after_import` setting is on, deletes the clips that verified from the card; `keep_clips=true` keeps them for that run. See [Settings](settings.md#delete-clips-after-import). Skips clips already in the library (`summary.in_library`); `force=true` converts them again |
 | `quadcam_verify` | Checks the outputs again |
 | `quadcam_add_to_photos` | Adds verified outputs to Photos |
 | `quadcam_eject` | Makes the card safe to remove (unmounts it) |

@@ -379,6 +379,7 @@ fn unreadable_file_blocks_format() {
             meta: None,
             cuts: Vec::new(),
             qt: Vec::new(),
+            in_library: false,
         })
         .collect();
     assert!(pipeline::can_format(&clips, &results).is_err());
@@ -403,6 +404,7 @@ fn format_gate_needs_every_clip_verified_or_skipped() {
                 meta: None,
                 cuts: Vec::new(),
                 qt: Vec::new(),
+                in_library: false,
             })
             .collect()
     };
@@ -446,6 +448,7 @@ fn format_gate_stays_locked_over_a_clip_it_could_not_read() {
             meta: None,
             cuts: Vec::new(),
             qt: Vec::new(),
+            in_library: false,
         })
         .collect();
     let e = pipeline::can_format(&clips, &results)

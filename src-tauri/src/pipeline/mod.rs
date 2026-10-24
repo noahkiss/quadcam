@@ -752,6 +752,10 @@ pub struct ClipResult {
     /// The QuickTime items written (see `qtmeta`), so a later verify checks them too.
     #[serde(default)]
     pub qt: Vec<(String, String)>,
+    /// Skipped because the clip is in the library already (by content). An import with
+    /// `force` converts it again.
+    #[serde(default)]
+    pub in_library: bool,
 }
 
 /// One cut range written as its own file next to the clip's output.
@@ -852,6 +856,7 @@ pub fn import_clip(
         meta: None,
         cuts: Vec::new(),
         qt: Vec::new(),
+        in_library: false,
     };
     let fail = |mut r: ClipResult, e: String| {
         r.error = Some(e);

@@ -35,6 +35,7 @@ quadcam-cli import --cut 0=20-26          # add a cut, then import
 quadcam-cli import --time 0=18:30         # clip 0 was flown at 18:30 (the default is noon)
 quadcam-cli import --keep-originals --add-to-photos --album Drone   # also --encoder, --output, --add-time, --note, --date
 quadcam-cli import --keep-clips           # keep the clips on the card this run
+quadcam-cli import --force                # also convert clips already in the library
 quadcam-cli stage /Volumes/DVR --no-join  # keep split DVR recordings as separate clips this run
 quadcam-cli stage --card <device id>       # a card that is unmounted but still in: QuadCam mounts it
 quadcam-cli import --separate 0           # import clip 0's files (a split recording) one by one
@@ -59,6 +60,8 @@ quadcam-cli format --prep --device /dev/diskN --volume-uuid <uuid> --yes
 `eject` makes the card safe to remove. For a card it runs `diskutil unmountDisk`: every volume unmounts, and the card stays listed until you pull it. A target you name must be a card or a DJI device: `eject` refuses any other disk and changes nothing.
 
 When the `delete_clips_after_import` setting is on, `import` deletes each clip that verified from the card or folder, and its result lists every clip under `clip_deletion` as `deleted`, or `kept` with a `reason`. `--keep-clips` keeps them for that run. No flag turns the delete on. See [Settings](settings.md#delete-clips-after-import).
+
+`import` skips each clip that is in the library already (by content) and lists its id under `summary.in_library`; that clip's result has `in_library: true`. `--force` converts those clips again. See [Clip identity](library.md#clip-identity).
 
 `cards` and `scan` name each source: `analog` or `dji`.
 

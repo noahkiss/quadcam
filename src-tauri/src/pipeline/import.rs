@@ -70,11 +70,13 @@ fn name_unnamed(jobs: &mut [ClipJob], settings: &ImportSettings, verified: &dyn 
 }
 
 /// Converts and verifies every non-skipped clip. A clip that already
-/// verified earlier keeps that result, so a re-run never writes a second copy.
+/// verified earlier keeps that result, so a re-run never writes a second copy. A clip for
+/// which `in_library` is true is skipped with `ClipResult::in_library` set.
 pub fn run_import(
     tools: &Tools,
     session: &Session,
     settings: &ImportSettings,
+    in_library: &dyn Fn(&Clip) -> bool,
     on_progress: &mut dyn FnMut(usize, f64, f64),
     on_result: &mut dyn FnMut(&ClipResult),
 ) -> Result<Vec<ClipResult>> {
@@ -162,6 +164,7 @@ pub fn run_import(
         .iter()
         .filter(|j| !j.skip && done(j.id).is_none())
         .filter_map(|j| session.clips.iter().find(|c| c.id == j.id))
+        .filter(|c| !in_library(c))
         .collect();
     pipeline::preflight(settings, &todo)?;
     let mut planner = NamePlanner::new();
@@ -170,21 +173,25 @@ pub fn run_import(
         let Some(clip) = session.clips.iter().find(|c| c.id == job.id) else {
             continue;
         };
+        let skipped = |in_library| ClipResult {
+            id: clip.id,
+            outcome: Outcome::Skipped,
+            output: None,
+            original: None,
+            size: 0,
+            error: None,
+            encoder: None,
+            meta: None,
+            cuts: Vec::new(),
+            qt: Vec::new(),
+            in_library,
+        };
         let r = if job.skip {
-            ClipResult {
-                id: clip.id,
-                outcome: Outcome::Skipped,
-                output: None,
-                original: None,
-                size: 0,
-                error: None,
-                encoder: None,
-                meta: None,
-                cuts: Vec::new(),
-                qt: Vec::new(),
-            }
+            skipped(false)
         } else if let Some(prev) = done(clip.id) {
             prev
+        } else if in_library(clip) {
+            skipped(true)
         } else {
             let dur = clip.duration;
             pipeline::import_clip(tools, clip, job, settings, &mut planner, &mut |secs| {

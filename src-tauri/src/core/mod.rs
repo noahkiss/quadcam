@@ -281,6 +281,10 @@ pub struct ImportOptions {
     /// setting is the only consent.
     #[serde(default)]
     pub keep_clips: bool,
+    /// Convert clips that are in the library already (by content) again. Without it they
+    /// are skipped and named in `Summary::in_library`.
+    #[serde(default)]
+    pub force: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]

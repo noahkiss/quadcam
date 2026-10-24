@@ -154,6 +154,7 @@ mcp.param quadcam_eject.target string
 mcp.param quadcam_export.add_time boolean
 mcp.param quadcam_export.add_to_photos boolean
 mcp.param quadcam_export.album string
+mcp.param quadcam_export.force boolean
 mcp.param quadcam_export.format string
 mcp.param quadcam_export.keep_clips boolean
 mcp.param quadcam_export.keep_originals boolean

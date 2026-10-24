@@ -16,6 +16,7 @@ use crate::session::{self, Editor, PlanPatch, Session};
 use anyhow::{anyhow, bail, Context, Result};
 use chrono::NaiveDate;
 use serde::Serialize;
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Serialize, specta::Type)]
@@ -329,10 +330,12 @@ impl Core {
             let s = self.current()?;
             let hooks = self.hooks.clone();
             let hooks2 = self.hooks.clone();
+            let known = self.known_for_import(&settings.output_dir, o.force);
             let results = session::run_import(
                 &tools,
                 &s,
                 &settings,
+                &|c| in_library(&known, c),
                 &mut |id, seconds, duration| {
                     hooks.event(Event::ImportProgress(ImportProgress {
                         id,
@@ -618,6 +621,16 @@ impl Core {
         }
     }
 
+    /// The library's clip ids, for an import into the library folder that does not
+    /// `force`; empty otherwise.
+    fn known_for_import(&self, output_dir: &Path, force: bool) -> HashSet<String> {
+        if force || self.library_root().ok().as_deref() != Some(output_dir) {
+            return HashSet::new();
+        }
+        self.with_index(|_, ix| Ok((lib::known_sources(ix), false)))
+            .unwrap_or_default()
+    }
+
     /// Clips on a card, and how many of them are not in the library yet (by content).
     pub fn card_status(&self, mount: &Path) -> Result<CardStatus> {
         let found = crate::sources::for_root(mount).list(mount);
@@ -652,6 +665,22 @@ impl Core {
             size,
         })
     }
+}
+
+/// True when the library knows the clip by its fingerprint, or, in a library that still
+/// holds 0.4 ids, by its 0.4 fingerprint.
+fn in_library(known: &HashSet<String>, c: &Clip) -> bool {
+    if known.is_empty() {
+        return false;
+    }
+    if known.contains(&c.key) {
+        return true;
+    }
+    known.iter().any(|k| crate::identity::is_legacy(k))
+        && c.staged
+            .as_deref()
+            .and_then(|p| crate::identity::fingerprints(p).ok())
+            .is_some_and(|(_, old)| known.contains(&old))
 }
 
 /// "Delete clips after import": deletes the card or folder file of every clip whose output

@@ -204,6 +204,8 @@ pub struct ExportArgs {
     pub add_to_photos: Option<bool>,
     /// true: keep every clip on the card or folder this run, even when the delete_clips_after_import setting is on. There is no way to turn deletion on here.
     pub keep_clips: Option<bool>,
+    /// true: convert clips that are in the library already (by content) again. Without it they are skipped and listed as in the library.
+    pub force: Option<bool>,
     /// Photos album; empty string for the library only.
     pub album: Option<String>,
 }

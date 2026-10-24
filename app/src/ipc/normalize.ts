@@ -146,6 +146,7 @@ export function result(r: G.ClipResult): ClipResult {
     ...r,
     meta: r.meta ?? null,
     qt: r.qt ?? [],
+    in_library: r.in_library ?? false,
     cuts: (r.cuts || []).filter((k) => has(k.start) && has(k.end)).map((k) => ({ ...k, start: k.start!, end: k.end! })),
   };
 }

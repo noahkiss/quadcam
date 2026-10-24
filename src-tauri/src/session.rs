@@ -214,6 +214,10 @@ pub struct Summary {
     pub imported: usize,
     pub skipped: usize,
     pub failed: usize,
+    /// Ids of the clips skipped because they are in the library already (by content).
+    /// They count in `skipped` too.
+    #[serde(default)]
+    pub in_library: Vec<usize>,
     pub total_bytes: u64,
     pub output_dir: Option<PathBuf>,
     /// Ok when the format step may unlock, else the reason it stays locked.
@@ -720,6 +724,12 @@ impl Session {
             imported: count(Outcome::Verified),
             skipped: count(Outcome::Skipped),
             failed: count(Outcome::Failed),
+            in_library: self
+                .results
+                .iter()
+                .filter(|r| r.in_library)
+                .map(|r| r.id)
+                .collect(),
             total_bytes: self
                 .results
                 .iter()
@@ -1296,6 +1306,7 @@ mod tests {
             meta: None,
             cuts: Vec::new(),
             qt: Vec::new(),
+            in_library: false,
         });
         assert!(s.set_joined(0, true).is_err());
     }

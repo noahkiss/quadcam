@@ -1442,7 +1442,7 @@ export class MockCore {
       const c = s.clips.find((x) => x.id === p.id)!;
       if (c.part_of != null) continue;
       if (p.skip || c.status === "empty") {
-        const r: ClipResult = { id: p.id, outcome: "skipped", output: null, original: null, size: 0, error: null, encoder: null, meta: null, cuts: [], qt: [] };
+        const r: ClipResult = { id: p.id, outcome: "skipped", output: null, original: null, size: 0, error: null, encoder: null, meta: null, cuts: [], qt: [], in_library: false };
         results.push(r);
         this.emit("import-result", r);
         continue;
@@ -1453,7 +1453,7 @@ export class MockCore {
       const dir = `${opts.output_dir}/${p.date.slice(0, 4)}/${p.date}`;
       const output = `${dir}/${p.date}_${name}.${opts.format}`;
       const cuts = p.cuts.map((k, i) => ({ start: k.start, end: k.end, outcome: "verified" as const, output: `${dir}/${p.date}_${name}_cut${i + 1}.${opts.format}`, size: Math.round((k.end - k.start) * 46_000), error: null }));
-      const r: ClipResult = { id: p.id, outcome: "verified", output, original: null, size: Math.round(c.duration * 46_000), error: null, encoder: "videotoolbox", meta: null, cuts, qt: [] };
+      const r: ClipResult = { id: p.id, outcome: "verified", output, original: null, size: Math.round(c.duration * 46_000), error: null, encoder: "videotoolbox", meta: null, cuts, qt: [], in_library: false };
       results.push(r);
       this.emit("import-result", r);
       imported++;
@@ -1470,7 +1470,7 @@ export class MockCore {
     s.output_dir = opts.output_dir;
     this.libraryChanged();
     this.sessionChanged();
-    const summary = { results, imported, skipped: results.length - imported, failed: 0, total_bytes: results.reduce((a, r) => a + r.size, 0), output_dir: opts.output_dir, format_ready: s.kind === "dji" ? { Err: "QuadCam does not format DJI cards after an import. Card prep can erase a removable card once every clip is in the library." } : s.card ? { Ok: null } : { Err: "Clips came from a folder, not a card." } };
+    const summary = { results, imported, skipped: results.length - imported, failed: 0, in_library: [] as number[], total_bytes: results.reduce((a, r) => a + r.size, 0), output_dir: opts.output_dir, format_ready: s.kind === "dji" ? { Err: "QuadCam does not format DJI cards after an import. Card prep can erase a removable card once every clip is in the library." } : s.card ? { Ok: null } : { Err: "Clips came from a folder, not a card." } };
     // "Delete clips after import": only the setting turns it on; a run may turn it off.
     const clip_deletion =
       this.settings.values.deleteClipsAfterImport && !opts.keep_clips
