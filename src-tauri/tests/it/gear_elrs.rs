@@ -1443,3 +1443,80 @@ fn the_cli_flash_needs_yes_and_the_preview() {
     assert_ne!(code, 0, "{v}");
     assert_eq!(v["ok"], false, "{v}");
 }
+
+/// Both of the owner's radios, with modules that behave as ExpressLRS 4.1 does on the wire:
+/// a frame must start with `0xC8` or `0xEE`, answers wait for the next frame, and the first
+/// frames after power-up are missed. The read, an options plan and a flash plan all pass.
+#[test]
+fn both_radios_modules_read_stage_and_plan_like_real_ones() {
+    for (board, name, target) in [
+        ("pocket", "RM Pocket", "RadioMaster Pocket Internal 2.4GHz TX"),
+        ("gx12", "RM GX12 X-Band", "RadioMaster GX12 2.4/900 TX"),
+    ] {
+        let (b, tx, _) = bench_with(true, true, board, name);
+        tx.replace_device(FakeElrs::tx(name, "4.1.0").with_boot_frames(4));
+        let r = read(&b, &b.radio).unwrap();
+        assert_eq!(r.snapshot.name, name);
+        assert_eq!(r.snapshot.host_board.as_deref(), Some(board));
+        assert_eq!(r.snapshot.version.as_deref(), Some("4.1.0"));
+        let seen = tx.device().received();
+        assert!(
+            seen.iter().all(|(first, _)| [0xC8, 0xEE].contains(first)),
+            "{board}: {seen:?}"
+        );
+        assert!(seen.iter().any(|(_, kind)| *kind == 0x0B), "heartbeats");
+        tx.restart();
+        let (_, plan) = stage_and_plan(&b, &r.device, &[("packet_rate", "250Hz")]);
+        assert!(failed(&plan).is_empty(), "{board}: {:?}", plan.checks);
+        assert!(!plan.digest.is_empty());
+        let (_, plan) = planned(&b, &r.device);
+        assert!(failed(&plan).is_empty(), "{board}: {:?}", plan.checks);
+        let text = serde_json::to_string(&plan.diff).unwrap();
+        assert!(text.contains(target), "{board}: {text}");
+        assert!(
+            plan.warnings.iter().any(|w| w.contains("look frozen")),
+            "{board}: {:?}",
+            plan.warnings
+        );
+    }
+}
+
+/// The Air65 II and the Meteor75 Pro II O4 carry the same receiver (`betafpv.rx_2400.aio`,
+/// read from the Meteor75's 2026-10-05 flash log). It reports its Lua name, and in its
+/// bootloader it prints its unified firmware name.
+#[test]
+fn both_quads_receivers_plan_the_betafpv_aio_target() {
+    for quad in ["Air65 II", "Meteor75 Pro II O4"] {
+        let (b, _, rx) = bench(true, true);
+        rx.replace_device(
+            FakeElrs::rx("BFPV AIO 2G4RX", "4.1.0").with_bootloader_text("UNIFIED_ESP8285_2400_RX"),
+        );
+        let id = rx_device(&b);
+        let (p, plan) = planned(&b, &id);
+        assert!(failed(&plan).is_empty(), "{quad}: {:?}", plan.checks);
+        let text = serde_json::to_string(&plan.diff).unwrap();
+        assert!(
+            text.contains("BETAFPV 2.4GHz AIO RX (Unified_ESP8285_2400_RX on esp8285)"),
+            "{quad}: {text}"
+        );
+        rx.restart();
+        let report = flash(&b, &p, &plan.digest).unwrap();
+        assert_eq!(report.status, ChangeStatus::Verified, "{quad}: {}", report.message);
+        assert_eq!(rx.device().bootloader_requests(), 1);
+    }
+}
+
+#[test]
+fn a_ping_that_starts_with_zero_is_not_answered() {
+    // The regression: a ping whose first byte is 0x00 is dropped by every ELRS device.
+    let dev = FakeElrs::rx("BFPV AIO 2G4RX", "4.1.0");
+    let host = FakeHost::fc(dev.clone());
+    let ports = host.ports("/dev/x");
+    let mut link = ports.open("/dev/x", 420_000).unwrap();
+    link.write_all(b"serialpassthrough 2 420000\n").unwrap();
+    let mut old = quadcam_lib::gear::elrs::crsf::ping();
+    old[0] = 0x00;
+    link.write_all(&old).unwrap();
+    assert!(link.read_some(std::time::Duration::from_millis(5)).unwrap().iter().all(|b| *b != 0x29));
+    assert_eq!(dev.received().len(), 1);
+}

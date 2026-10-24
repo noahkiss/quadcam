@@ -240,8 +240,8 @@ the app checks. Where QuadCam already does the step for the Pocket, the table sa
 |---|---|---|---|
 | 1 | The radio's `serialPort: VCP: mode: CLI` was already set at the factory | Read it from the backup's `radio.yml`. If it is not `CLI`, stage that `radio.yml` change first | Missing as a check |
 | 2 | The owner replugged with the radio on and chose USB Serial (VCP) | Wait for one `0483:5740` port whose product names the radio | Done |
-| 3 | Picked the target `radiomaster.tx_dual.gx12` from the release's `hardware/targets.json` | Target from the profile; product `RadioMaster GX12 2.4/900 TX`; firmware `Unified_ESP32_LR1121_TX`; upload methods include `etx` | Missing: `elrs/flash.rs` knows `Unified_ESP32_2400_TX` and `Unified_ESP8285_2400_RX` only |
-| 4 | Built the image with the binding phrase and auto-WiFi 60 s; read the options block back: UID = MD5 of the phrase, first 6 bytes | `elrs/image.rs` writes and reads the block. Check that the LR1121 target's layout has no `logo_file` (a logo refuses today) | Done for the 2.4 GHz TX target |
+| 3 | Picked the target `radiomaster.tx_dual.gx12` from the release's `hardware/targets.json` | Target from the profile; product `RadioMaster GX12 2.4/900 TX`; firmware `Unified_ESP32_LR1121_TX`; upload methods include `etx` | Done: `elrs/flash.rs` lists `Unified_ESP32_LR1121_TX`; the profile picks the target |
+| 4 | Built the image with the binding phrase and auto-WiFi 60 s; read the options block back: UID = MD5 of the phrase, first 6 bytes | `elrs/image.rs` writes and reads the block. Check that the LR1121 target's layout has no `logo_file` (a logo refuses today) | Done. The 4.1.0 GX12 target has no `logo_file` |
 | 5 | The script did not check the board | `ver` names `gx12` before the pulses stop | Done |
 | 6 | Sent `serialpassthrough rfmod 0 460800` | The module path at 460800 | Done |
 | 7 | esptool with `--before no-reset` wrote four segments (bootloader, partitions, boot_app0, firmware) to the ESP32-PICO-D4, each hash-verified. The old flash was not read | Read the chip's 4 MB first and keep it. Every segment verified | Done for the 2.4 GHz TX target |

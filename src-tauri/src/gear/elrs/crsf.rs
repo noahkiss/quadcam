@@ -5,6 +5,9 @@
 //!
 //! A frame is `[address] [length] [type] [payload...] [crc]`. The length counts the type, the
 //! payload and the crc. The crc is CRC-8 with polynomial `0xD5` over the type and the payload.
+//! On a serial line the first byte is the sync byte `0xC8` or the receiving device's address:
+//! an ExpressLRS module takes a frame that starts with `0xC8` or `0xEE`, a receiver one that
+//! starts with `0xC8`, `0xEE` or `0xEC`, and both drop any other frame unread.
 //! The device messages (type `0x28` and up) start their payload with the destination and the
 //! origin address:
 //!
@@ -22,10 +25,13 @@
 use anyhow::{bail, Result};
 
 pub const ADDR_BROADCAST: u8 = 0x00;
+/// The sync byte every ExpressLRS device takes as the start of a frame.
+pub const ADDR_SYNC: u8 = 0xC8;
 pub const ADDR_RADIO: u8 = 0xEA;
 pub const ADDR_RX: u8 = 0xEC;
 pub const ADDR_TX: u8 = 0xEE;
 
+pub const T_HEARTBEAT: u8 = 0x0B;
 pub const T_PING: u8 = 0x28;
 pub const T_DEVICE_INFO: u8 = 0x29;
 pub const T_ENTRY: u8 = 0x2B;
@@ -78,9 +84,17 @@ pub fn encode_ext(addr: u8, kind: u8, dest: u8, origin: u8, body: &[u8]) -> Vec<
     encode(addr, kind, &p)
 }
 
-/// Asks every device on the link to describe itself.
+/// Asks every device on the link to describe itself. Its destination is broadcast, so the
+/// frame starts with the sync byte: a device drops a frame that starts with `0x00`.
 pub fn ping() -> Vec<u8> {
-    encode_ext(ADDR_BROADCAST, T_PING, ADDR_BROADCAST, ADDR_RADIO, &[])
+    encode_ext(ADDR_SYNC, T_PING, ADDR_BROADCAST, ADDR_RADIO, &[])
+}
+
+/// A heartbeat from the radio: a device takes it, answers nothing and passes it on to no
+/// one. An ExpressLRS module sends what it has queued for the radio only right after it
+/// takes a frame, so QuadCam sends these while it waits for an answer.
+pub fn heartbeat() -> Vec<u8> {
+    encode(ADDR_SYNC, T_HEARTBEAT, &[0x00, ADDR_RADIO])
 }
 
 /// Asks `dest` for chunk `chunk` of parameter `field`.
@@ -443,6 +457,20 @@ mod tests {
             vec![0xEC, 0x04, 0x32, 0x62, 0x6C, 0x0A]
         );
         assert_eq!(crc8(&[]), 0);
+    }
+
+    #[test]
+    fn frames_start_with_a_byte_the_device_takes() {
+        // A module takes 0xC8 or 0xEE first, a receiver 0xC8, 0xEE or 0xEC.
+        assert_eq!(ping(), vec![0xC8, 0x04, 0x28, 0x00, 0xEA, crc8(&[0x28, 0x00, 0xEA])]);
+        assert_eq!(heartbeat()[..3], [0xC8, 0x04, 0x0B]);
+        assert_eq!(read_request(ADDR_TX, 1, 0)[0], 0xEE);
+        assert_eq!(read_request(ADDR_RX, 1, 0)[0], 0xEC);
+        let mut p = FrameParser::new();
+        p.push(&heartbeat());
+        let f = p.take().unwrap();
+        assert_eq!((f.kind, f.payload.as_slice()), (T_HEARTBEAT, &[0x00, 0xEA][..]));
+        assert!(ext(&f).is_none(), "not a device message");
     }
 
     #[test]

@@ -1,6 +1,12 @@
 //! Simulators for tests and the mock core: an ExpressLRS device that answers CRSF, and the
 //! host (an EdgeTX radio or a Betaflight FC) whose CLI hands its port over to it.
 //!
+//! The device behaves as ExpressLRS 4.1 does on its serial line: it drops a frame whose first
+//! byte it does not take (a module takes `0xC8` and `0xEE`, a receiver also `0xEC`), and it
+//! answers with `0xC8` first. A transmitter module sends its answers only right after it
+//! takes the next frame from the radio (a heartbeat will do), and after it powers up it misses
+//! the frames sent while it still listens at another speed.
+//!
 //! A `FakeHost` is one device on one port. Its CLI answers the few commands the passthrough
 //! needs; after `serialpassthrough` the port speaks CRSF to the `FakeElrs` behind it. Clones
 //! share the state, so a test reads what was written after the job. An FC host built `with_msp`
@@ -134,6 +140,13 @@ struct DeviceState {
     /// Writes to these ids are received and not kept.
     forget: Vec<u8>,
     parser: FrameParser,
+    /// Answers waiting for the next frame (a transmitter module's queue).
+    queued: Vec<u8>,
+    /// Frames a module misses after it powers up.
+    boot_frames: u32,
+    deaf: u32,
+    /// Every frame received, by its first byte and type, taken or not.
+    received: Vec<(u8, u8)>,
 }
 
 /// An ExpressLRS device.
@@ -227,8 +240,35 @@ impl FakeElrs {
                 relists: Vec::new(),
                 forget: Vec::new(),
                 parser: FrameParser::new(),
+                queued: Vec::new(),
+                boot_frames: 0,
+                deaf: 0,
+                received: Vec::new(),
             })),
         }
+    }
+
+    /// After each power-up the module misses this many frames, as a real one does while it
+    /// still listens at another speed.
+    pub fn with_boot_frames(self, n: u32) -> FakeElrs {
+        {
+            let mut s = self.st.lock().unwrap();
+            s.boot_frames = n;
+            s.deaf = n;
+        }
+        self
+    }
+
+    /// The module powers up (the radio's `set rfmod 0 power on`).
+    fn power_on(&self) {
+        let mut s = self.st.lock().unwrap();
+        s.deaf = s.boot_frames;
+        s.queued.clear();
+    }
+
+    /// Every frame received: its first byte and its type.
+    pub fn received(&self) -> Vec<(u8, u8)> {
+        self.st.lock().unwrap().received.clone()
     }
 
     /// The device answers nothing.
@@ -314,7 +354,25 @@ impl FakeElrs {
         s.parser.push(data);
         let mut out = Vec::new();
         while let Some(f) = s.parser.take() {
-            out.extend(Self::answer(&mut s, &f));
+            s.received.push((f.addr, f.kind));
+            let takes: &[u8] = match s.role {
+                Role::Tx => &[crsf::ADDR_SYNC, crsf::ADDR_TX],
+                Role::Rx => &[crsf::ADDR_SYNC, crsf::ADDR_TX, crsf::ADDR_RX],
+            };
+            if !takes.contains(&f.addr) {
+                continue;
+            }
+            if s.deaf > 0 {
+                s.deaf -= 1;
+                continue;
+            }
+            let answer = Self::answer(&mut s, &f);
+            if s.role == Role::Tx {
+                out.append(&mut s.queued);
+                s.queued = answer;
+            } else {
+                out.extend(answer);
+            }
         }
         out
     }
@@ -346,7 +404,7 @@ impl FakeElrs {
                 body.push(s.params.len() as u8);
                 body.push(0);
                 crsf::encode_ext(
-                    crsf::ADDR_RADIO,
+                    crsf::ADDR_SYNC,
                     crsf::T_DEVICE_INFO,
                     crsf::ADDR_RADIO,
                     origin,
@@ -367,7 +425,7 @@ impl FakeElrs {
                 let mut body = vec![id, left];
                 body.extend_from_slice(part);
                 crsf::encode_ext(
-                    crsf::ADDR_RADIO,
+                    crsf::ADDR_SYNC,
                     crsf::T_ENTRY,
                     crsf::ADDR_RADIO,
                     origin,
@@ -601,7 +659,12 @@ impl FakeHost {
                     match arg {
                         "rfmod 0 bootpin 1" => s.bootpin = true,
                         "rfmod 0 bootpin 0" => s.bootpin = false,
-                        "rfmod 0 power on" => s.boot_mode = s.bootpin,
+                        "rfmod 0 power on" => {
+                            s.boot_mode = s.bootpin;
+                            if !s.bootpin {
+                                s.device.power_on();
+                            }
+                        }
                         _ => {}
                     }
                     format!("{line}\r\nset: {arg}\r\n> ")

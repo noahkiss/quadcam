@@ -602,6 +602,22 @@ pub mod fixtures {
                     }
                 }
             },
+            // The receiver on both of the owner's quads (Air65 II, Meteor75 Pro II O4), as the
+            // 4.1.0 release lists it. Its CRSF name is its Lua name.
+            "betafpv": {
+                "rx_2400": {
+                    "aio": {
+                        "product_name": "BETAFPV 2.4GHz AIO RX",
+                        "lua_name": "BFPV AIO 2G4RX",
+                        "layout_file": "Generic 2400.json",
+                        "upload_methods": ["uart", "wifi", "betaflight"],
+                        "min_version": "3.1.0",
+                        "platform": "esp8285",
+                        "firmware": "Unified_ESP8285_2400_RX",
+                        "prior_target_name": "DIY_2400_RX_ESP8285_SX1280"
+                    }
+                }
+            },
             // The two RadioMaster rows as the 4.1.0 release lists them (the layout file
             // names are the fixtures').
             "radiomaster": {
@@ -667,7 +683,7 @@ mod tests {
     #[test]
     fn targets_are_found_by_name_and_side() {
         let t = parse_targets(&targets_json()).unwrap();
-        assert_eq!(t.len(), 5);
+        assert_eq!(t.len(), 6);
         let rx = find_target(&t, "vendor 2.4ghz aio rx", Side::Rx).unwrap();
         assert_eq!(rx.platform, "esp8285");
         assert_eq!(rx.path, "vendor.rx_2400.aio");

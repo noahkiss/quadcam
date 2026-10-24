@@ -48,6 +48,11 @@ pub struct Timing {
     pub ping: Duration,
     /// Pause between module power steps.
     pub settle: Duration,
+    /// How long to keep pinging before a device counts as silent. A module needs about a
+    /// second after power-up before it listens at the passthrough speed.
+    pub find: Duration,
+    /// How often a heartbeat goes out while QuadCam waits for an answer.
+    pub keepalive: Duration,
 }
 
 impl Default for Timing {
@@ -58,6 +63,8 @@ impl Default for Timing {
             reply: Duration::from_millis(500),
             ping: Duration::from_millis(800),
             settle: Duration::from_millis(500),
+            find: Duration::from_secs(8),
+            keepalive: Duration::from_millis(20),
         }
     }
 }
@@ -70,6 +77,8 @@ impl Timing {
             reply: Duration::from_millis(100),
             ping: Duration::from_millis(60),
             settle: Duration::ZERO,
+            find: Duration::from_millis(400),
+            keepalive: Duration::from_millis(1),
         }
     }
 }
@@ -239,6 +248,12 @@ pub fn fc_passthrough(
 }
 
 /// A CRSF conversation with the ELRS device behind a passthrough.
+///
+/// An ExpressLRS transmitter module answers the radio only in the moment after it takes a
+/// frame from it, and with the pulses off the radio sends none. So while it waits for an
+/// answer, the link sends a heartbeat every `Timing::keepalive`. The heartbeats also keep the
+/// module at the passthrough speed: a module that takes no good frame for a second moves to
+/// another speed.
 pub struct CrsfLink {
     link: Box<dyn SerialLink>,
     parser: FrameParser,
@@ -262,14 +277,16 @@ impl CrsfLink {
         self.link.write_all(bytes)
     }
 
-    /// Reads until `f` returns Some or `timeout` passes. Frames `f` ignores are dropped (a live
-    /// link streams channel and link-statistics frames all the time).
+    /// Reads until `f` returns Some or `timeout` passes, with a heartbeat every
+    /// `keepalive`. Frames `f` ignores are dropped (a live link streams channel and
+    /// link-statistics frames all the time).
     fn until<T>(
         &mut self,
         timeout: Duration,
         mut f: impl FnMut(&Frame) -> Option<T>,
     ) -> Result<Option<T>> {
         let end = Instant::now() + timeout;
+        let mut beat = Instant::now() + self.timing.keepalive;
         loop {
             while let Some(fr) = self.parser.take() {
                 if let Some(v) = f(&fr) {
@@ -280,10 +297,30 @@ impl CrsfLink {
             if now >= end {
                 return Ok(None);
             }
-            let got = self
-                .link
-                .read_some((end - now).min(Duration::from_millis(50)))?;
+            if now >= beat {
+                self.send(&crsf::heartbeat())?;
+                beat = now + self.timing.keepalive;
+            }
+            let slice = (end - now)
+                .min(beat.saturating_duration_since(now))
+                .min(Duration::from_millis(50));
+            let got = self.link.read_some(slice)?;
             self.parser.push(&got);
+        }
+    }
+
+    /// Pings until a device at `origin` answers, for up to `Timing::find`. A module that was
+    /// just powered up listens at another speed for its first second, so one ping is not
+    /// enough.
+    pub fn find(&mut self, origin: u8) -> Result<Option<DeviceInfo>> {
+        let end = Instant::now() + self.timing.find;
+        loop {
+            if let Some(i) = self.ping()?.into_iter().find(|d| d.origin == origin) {
+                return Ok(Some(i));
+            }
+            if Instant::now() >= end {
+                return Ok(None);
+            }
         }
     }
 
@@ -304,17 +341,23 @@ impl CrsfLink {
         Ok(found)
     }
 
-    /// One parameter entry, its chunks joined.
+    /// One parameter entry, its chunks joined. Each chunk names how many follow it, so a
+    /// late answer to an earlier request (a retry's twin) is told apart and dropped.
     pub fn read_entry(&mut self, dest: u8, id: u8) -> Result<Vec<u8>> {
         let mut data: Vec<u8> = Vec::new();
         let mut chunk = 0u8;
+        let mut first_left: Option<u8> = None;
         loop {
             let mut got: Option<(u8, Vec<u8>)> = None;
+            let expect = first_left.map(|l| l.saturating_sub(chunk));
             for _try in 0..3 {
                 self.send(&crsf::read_request(dest, id, chunk))?;
                 got = self.until(self.timing.reply, |f| {
                     let e = crsf::ext(f).filter(|_| f.kind == crsf::T_ENTRY)?;
-                    (e.origin == dest && e.body.len() >= 2 && e.body[0] == id)
+                    (e.origin == dest
+                        && e.body.len() >= 2
+                        && e.body[0] == id
+                        && expect.is_none_or(|x| e.body[1] == x))
                         .then(|| (e.body[1], e.body[2..].to_vec()))
                 })?;
                 if got.is_some() {
@@ -323,6 +366,7 @@ impl CrsfLink {
             }
             let (left, bytes) =
                 got.ok_or_else(|| anyhow!("Parameter {id} did not answer (chunk {chunk})."))?;
+            first_left.get_or_insert(left);
             data.extend_from_slice(&bytes);
             if left == 0 {
                 return Ok(data);

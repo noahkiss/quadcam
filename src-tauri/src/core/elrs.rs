@@ -45,6 +45,10 @@ pub const ELRS_FLASH_CHANGE: &str = "elrs-flash";
 /// (about 1 MB at 420 kbaud) and then writes it.
 const ELRS_FC_FLASH_S: u32 = 90;
 
+/// What a radio does after its module was flashed through the EdgeTX passthrough (seen on a
+/// GX12 with EdgeTX 2.12.5 and ExpressLRS 4.1.0): it looks frozen, then recovers by itself.
+pub const RADIO_AFTER_FLASH: &str = "Expect the radio to look frozen for a minute or more: the screen stays on, the sticks, pots and power button do nothing, and unplugging USB changes nothing. Wait. It recovers by itself (it may sound the inactivity alarm first), and then the power button works. Do not pull the battery. Then restart the radio and read the module again.";
+
 const OFF: &str =
     "ELRS tools (preview) are off. Turn them on in Settings > Gear, or set elrs_preview=true.";
 
@@ -447,8 +451,7 @@ impl Core {
             crsf::ADDR_RX
         };
         let (mut c, board) = self.elrs_open(host, port, ModuleStart::Run, None, notes)?;
-        let found = c.ping()?;
-        let info = found.into_iter().find(|d| d.origin == want).ok_or_else(|| {
+        let info = c.find(want)?.ok_or_else(|| {
             anyhow!(
                 "No ExpressLRS {} answered on {port}. {} Restart the {} and try again.",
                 if want == crsf::ADDR_TX { "module" } else { "receiver" },
@@ -715,9 +718,7 @@ impl Core {
             })
             .unwrap_or(crsf::ADDR_TX);
         let info = c
-            .ping()?
-            .into_iter()
-            .find(|d| d.origin == want)
+            .find(want)?
             .ok_or_else(|| anyhow!("The device did not answer; nothing was written."))?;
         if info.name != snap.name {
             return Err(refusal(Refusal::new(
@@ -1154,7 +1155,7 @@ impl Core {
         );
         warnings.push("ExpressLRS 4 wipes a receiver's Options page; note your settings first, and read the device again afterwards.".into());
         warnings.push(match host.kind {
-            DeviceKind::Radio => "Afterwards, restart the radio.".into(),
+            DeviceKind::Radio => RADIO_AFTER_FLASH.into(),
             _ => "Afterwards, unplug the FC's USB cable and power-cycle the quad.".into(),
         });
 
@@ -1270,9 +1271,7 @@ impl Core {
         )?;
         if prep.host.kind == DeviceKind::Fc {
             let info = c
-                .ping()?
-                .into_iter()
-                .find(|d| d.origin == crsf::ADDR_RX)
+                .find(crsf::ADDR_RX)?
                 .ok_or_else(|| {
                     refusal(Refusal::new(
                         RefusalCode::DeviceChanged,
@@ -1417,12 +1416,12 @@ impl Core {
                 (
                     ChangeStatus::Verified,
                     format!(
-                        "Verified: {name} holds ExpressLRS {} (esptool compared the flash with the image). {} Then read it again.",
+                        "Verified: {name} holds ExpressLRS {} (esptool compared the flash with the image). {}",
                         prep.version,
                         if prep.host.kind == DeviceKind::Radio {
-                            "Restart the radio."
+                            RADIO_AFTER_FLASH
                         } else {
-                            "Unplug the FC and power-cycle the quad."
+                            "Unplug the FC and power-cycle the quad. Then read it again."
                         }
                     ),
                 )
