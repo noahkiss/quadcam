@@ -8,6 +8,8 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
+use crate::bbl::BblLog;
+
 /// The columns a fixture keeps, by `blackbox_decode`'s header names.
 pub const FIXTURE_COLUMNS: &[&str] = &[
     "time (us)",
@@ -237,6 +239,134 @@ pub fn read(path: &Path, scales: Scales) -> Result<LogData, String> {
         .map(|n| n.to_string_lossy().to_string())
         .unwrap_or_default();
     parse(&name, &text, scales)
+}
+
+/// A log from QuadCam's own blackbox decoder (`bbl`), in the same units as a decoded CSV.
+/// The log's header gives the accelerometer's 1 g and the motor output range; `scales`
+/// gives the pole count. Logs without the fields the harness reads are refused.
+pub fn from_bbl(name: &str, log: &BblLog, scales: Scales) -> Result<LogData, String> {
+    let need = |f: &str| log.field(f).ok_or_else(|| format!("{name}: no {f} field"));
+    let it = need("time")?;
+    let isp = [0, 1, 2, 3].map(|i| log.field(&format!("setpoint[{i}]")));
+    let ig = [0, 1, 2].map(|i| log.field(&format!("gyroADC[{i}]")));
+    let ia = [0, 1, 2].map(|i| log.field(&format!("accSmooth[{i}]")));
+    let im = [0, 1, 2, 3].map(|i| log.field(&format!("motor[{i}]")));
+    let ie = [0, 1, 2, 3].map(|i| log.field(&format!("eRPM[{i}]")));
+    let iq = [0, 1, 2].map(|i| log.field(&format!("imuQuaternion[{i}]")));
+    for (what, ok) in [
+        ("setpoint", isp.iter().all(Option::is_some)),
+        ("gyroADC", ig.iter().all(Option::is_some)),
+        ("accSmooth", ia.iter().all(Option::is_some)),
+        ("motor", im.iter().all(Option::is_some)),
+        ("eRPM (bidirectional DShot)", ie.iter().all(Option::is_some)),
+    ] {
+        if !ok {
+            return Err(format!("{name}: the log has no {what} fields"));
+        }
+    }
+    let iv = need("vbatLatest")?;
+    let ic = log.field("amperageLatest");
+    let one_g = log
+        .header_ints("acc_1G")
+        .first()
+        .map(|g| *g as f64)
+        .unwrap_or(scales.acc_1g);
+    let out = log.header_ints("motorOutput");
+    let (m_min, m_max) = match out.as_slice() {
+        [a, b, ..] if b > a => (*a as f64, *b as f64),
+        _ => (DSHOT_MIN, DSHOT_MIN + DSHOT_SPAN),
+    };
+    let poles = scales.motor_poles;
+    let mut d = LogData {
+        name: name.to_string(),
+        ..LogData::default()
+    };
+    d.meta.insert("motor_poles".into(), format!("{poles}"));
+    d.meta.insert("acc_1g".into(), format!("{one_g}"));
+    let Some(t0) = log.frames.first().map(|f| f[it]) else {
+        return Err(format!("{name}: no frames"));
+    };
+    let v = |f: &[i64], i: Option<usize>| i.map_or(0.0, |i| f[i] as f64);
+    for f in &log.frames {
+        d.t.push((f[it] - t0) as f64 / 1e6);
+        d.setpoint.push([v(f, isp[0]), v(f, isp[1]), v(f, isp[2])]);
+        d.throttle.push(v(f, isp[3]) / 1000.0);
+        d.gyro.push([v(f, ig[0]), v(f, ig[1]), v(f, ig[2])]);
+        d.acc.push([
+            v(f, ia[0]) / one_g,
+            v(f, ia[1]) / one_g,
+            v(f, ia[2]) / one_g,
+        ]);
+        d.duty
+            .push(im.map(|i| ((v(f, i) - m_min) / (m_max - m_min)).clamp(0.0, 1.0)));
+        d.rpm.push(ie.map(|i| v(f, i) * 100.0 / (poles / 2.0)));
+        // Hundredths of a volt and of an amp.
+        d.vbat.push(v(f, Some(iv)) / 100.0);
+        d.amps.push(v(f, ic) / 100.0);
+        d.quat.push(if iq.iter().all(Option::is_some) {
+            let (x, y, z) = (v(f, iq[0]) / Q15, v(f, iq[1]) / Q15, v(f, iq[2]) / Q15);
+            [(1.0 - x * x - y * y - z * z).max(0.0).sqrt(), x, y, z]
+        } else {
+            [1.0, 0.0, 0.0, 0.0]
+        });
+    }
+    Ok(d)
+}
+
+/// Every log in a blackbox file or flash image, named `<file>#<n>`. Logs shorter than
+/// `min_seconds` (a test arm) are left out; a log the harness cannot read is an error.
+pub fn read_bbl(path: &Path, scales: Scales, min_seconds: f64) -> Result<Vec<LogData>, String> {
+    let bytes = std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?;
+    let file = path
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_default();
+    let mut out = Vec::new();
+    for l in crate::bbl::decode_image(&bytes) {
+        let l = l.map_err(|e| format!("{file}: {e}"))?;
+        if l.duration() < min_seconds {
+            continue;
+        }
+        out.push(from_bbl(&format!("{file}#{}", l.index), &l, scales)?);
+    }
+    Ok(out)
+}
+
+/// Whether a path is a blackbox file QuadCam decodes itself.
+pub fn is_bbl(p: &Path) -> bool {
+    p.extension()
+        .and_then(|x| x.to_str())
+        .is_some_and(|x| ["bbl", "bfl", "bbs"].contains(&x.to_ascii_lowercase().as_str()))
+}
+
+/// Logs shorter than this are test arms, not flights.
+pub const MIN_FLIGHT_SECONDS: f64 = 5.0;
+
+/// Logs from a path: a decoded CSV, a blackbox file or flash image, or a folder of either
+/// (sorted by name).
+pub fn read_path(path: &Path, scales: Scales) -> Result<Vec<LogData>, String> {
+    if path.is_file() {
+        return if is_bbl(path) {
+            read_bbl(path, scales, MIN_FLIGHT_SECONDS)
+        } else {
+            Ok(vec![read(path, scales)?])
+        };
+    }
+    let mut paths: Vec<_> = std::fs::read_dir(path)
+        .map_err(|e| format!("{}: {e}", path.display()))?
+        .filter_map(|e| e.ok().map(|e| e.path()))
+        .filter(|p| is_bbl(p) || p.extension().is_some_and(|x| x == "csv"))
+        .collect();
+    paths.sort();
+    let mut out = Vec::new();
+    for p in paths {
+        if is_bbl(&p) {
+            out.extend(read_bbl(&p, scales, MIN_FLIGHT_SECONDS)?);
+        } else {
+            out.push(read(&p, scales)?);
+        }
+    }
+    Ok(out)
 }
 
 /// Every decoded CSV in a folder (`*.csv`), sorted by name.
