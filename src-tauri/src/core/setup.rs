@@ -97,6 +97,7 @@ fn named_setting(name: &str, values: &Values, d: &Value, g: &Value) -> Option<Va
         "tts_voice" => Value::String(text("ttsVoice")),
         "voice_index" => Value::String(super::voice::voice_index_from(values).unwrap_or_default()),
         "modules" => json!(crate::media::ToolPrefs::from_values(values).paths),
+        "overlay_dir" => json!(settings::overlay_dir_from(values)),
         _ => {
             return d
                 .get(name)

@@ -133,6 +133,13 @@ pub fn default_output_dir() -> Option<PathBuf> {
     Some(PathBuf::from(home).join(DEFAULT_OUTPUT_REL))
 }
 
+/// The default folder for telemetry overlay files (`core/overlay.rs`), outside the default
+/// library folder.
+pub fn default_overlay_dir() -> Option<PathBuf> {
+    let home = std::env::var_os("HOME").filter(|h| !h.is_empty())?;
+    Some(PathBuf::from(home).join("Movies/quadcam-overlays"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

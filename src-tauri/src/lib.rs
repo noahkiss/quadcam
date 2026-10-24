@@ -38,6 +38,7 @@ pub mod settings;
 mod share;
 pub mod sources;
 pub mod sun;
+pub mod telemetry;
 pub mod trash;
 pub mod trim;
 mod updater;
@@ -655,6 +656,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             c::library_rescan,
             c::library_analyze_video,
             c::library_weather,
+            c::library_overlay,
             c::video_feature,
             c::library_preview,
             c::library_strips,

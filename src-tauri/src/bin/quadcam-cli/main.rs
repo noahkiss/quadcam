@@ -413,6 +413,38 @@ enum LibCmd {
         /// Clip ids. Default: every clip without weather or without the sky values.
         ids: Vec<String>,
     },
+    /// Write a clip's telemetry (radio log or goggles .srt sidecar) as a subtitle file, and
+    /// with --burn a copy with the numbers drawn in, in a folder outside the library.
+    Overlay {
+        /// The clip id.
+        id: String,
+        /// Where the numbers come from: log or srt. Default: the radio log when the clip
+        /// matches one, else the sidecar.
+        #[arg(long, value_parser = ["log", "srt"])]
+        source: Option<String>,
+        /// A goggles .srt to read instead of the one kept beside the clip's original.
+        #[arg(long)]
+        srt: Option<PathBuf>,
+        /// The EdgeTX LOGS folder; default: the logDir setting.
+        #[arg(long)]
+        logs: Option<PathBuf>,
+        /// The numbers to show, in order (battery, battery_pct, used, current, lq, rssi,
+        /// snr, power, throttle, mode, timer, goggles_battery, signal, delay, bitrate,
+        /// distance). Default: every number the source has.
+        #[arg(long, value_delimiter = ',', value_parser = ["battery", "battery_pct", "used", "current", "lq", "rssi", "snr", "power", "throttle", "mode", "timer", "goggles_battery", "signal", "delay", "bitrate", "distance"])]
+        fields: Vec<String>,
+        /// Also write a copy of the clip with the numbers burned in (re-encodes).
+        #[arg(long)]
+        burn: bool,
+        /// The folder to write to, outside the library. Default: the overlay_dir setting,
+        /// else ~/Movies/quadcam-overlays.
+        #[arg(long)]
+        out: Option<PathBuf>,
+        /// Replace the clip's overlay files when they exist. Default: add a number to the
+        /// name.
+        #[arg(long)]
+        overwrite: bool,
+    },
     /// Move clips, with their cuts and originals, to the Trash.
     Trash {
         #[arg(required = true)]
@@ -538,7 +570,7 @@ enum SetCmd {
     Show,
     /// Set settings: KEY=VALUE, where VALUE is JSON or plain text ("null" resets a key).
     /// Keys: output_dir, format, encoder, keep_originals, add_time,
-    /// delete_clips_after_import, join_split_recordings, video_analysis, weather, on_device_suggestions, update_check, map_view, map_style, default_name, photos_album, format_label, log_dir, layout, place_folders, tunables, geocoder,
+    /// delete_clips_after_import, join_split_recordings, video_analysis, weather, on_device_suggestions, update_check, map_view, map_style, default_name, photos_album, format_label, log_dir, overlay_dir, layout, place_folders, tunables, geocoder,
     /// name_date_format, default_profile, ffmpeg_source, modules; Gear: gear_dir, gear_auto_backup, gear_keep_recent,
     /// gear_keep_weeks, gear_keep_monthly, gear_usb_minutes, gear_on_connect, gear_cues,
     /// firmware_check, tts_provider, tts_base_url, tts_model, tts_voice, voice_index, tts_key; sim_preview, betaflight_flash_preview; elrs_preview, elrs_binding_phrase, elrs_region, elrs_wifi_interval.
@@ -1544,6 +1576,40 @@ fn library(core: &Core, cmd: LibCmd) -> Result<Value> {
             core,
             quadcam_lib::core::WeatherParams { ids },
         )?)?,
+        LibCmd::Overlay {
+            id,
+            source,
+            srt,
+            logs,
+            fields,
+            burn,
+            out,
+            overwrite,
+        } => {
+            use quadcam_lib::core::{OverlayParams, OverlaySource};
+            use quadcam_lib::telemetry::TelemetryField as Field;
+            let fields = fields
+                .iter()
+                .map(|f| Field::parse(f).ok_or_else(|| anyhow!("unknown field {f:?}")))
+                .collect::<Result<Vec<_>>>()?;
+            let source = source.map(|s| match s.as_str() {
+                "log" => OverlaySource::Log,
+                _ => OverlaySource::Srt,
+            });
+            serde_json::to_value(call::library_overlay(
+                core,
+                OverlayParams {
+                    id,
+                    source,
+                    srt,
+                    logs,
+                    fields,
+                    burn,
+                    out,
+                    overwrite,
+                },
+            )?)?
+        }
         LibCmd::Trash { ids } => {
             serde_json::to_value(call::library_trash(core, api::IdsParams { ids })?)?
         }

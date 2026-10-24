@@ -4,8 +4,8 @@
 use super::params::*;
 use super::reload::{self, Handoff, Watch};
 use super::render::{
-    clip_views, deletion_lines, lib_line, lib_view, names, on_device_text, photos_line,
-    places_text, source_label, table, text, update_note, video_text, weather_text,
+    clip_views, deletion_lines, lib_line, lib_view, names, on_device_text, overlay_text,
+    photos_line, places_text, source_label, table, text, update_note, video_text, weather_text,
 };
 use super::tools::INSTRUCTIONS;
 use crate::control::{self, Client};
@@ -671,6 +671,32 @@ impl<B: Backend> Server<B> {
                             ));
                         }
                         Ok((vec![text(lines.join("\n"))], r))
+                    }
+                    "overlay" => {
+                        let id = one()?;
+                        let burn = x.burn.unwrap_or(false);
+                        if burn && x.confirm != Some(true) {
+                            return Ok((
+                                vec![text(format!(
+                                    "Nothing was written. burn re-encodes clip {id} into a copy with the numbers drawn in, about as slow as an analog import. To go ahead, call again with burn=true and confirm=true; without burn, overlay writes only the subtitle file."
+                                ))],
+                                json!({"id": id, "burn": true, "confirm_needed": true}),
+                            ));
+                        }
+                        let r = self.backend.call(
+                            "library_overlay",
+                            json!({
+                                "id": id,
+                                "source": x.overlay_source,
+                                "srt": x.srt,
+                                "logs": x.log_dir,
+                                "fields": x.fields.clone().unwrap_or_default(),
+                                "burn": burn,
+                                "out": x.out,
+                                "overwrite": x.overwrite.unwrap_or(false),
+                            }),
+                        )?;
+                        Ok((vec![text(overlay_text(&r))], r))
                     }
                     "weather" => {
                         let r = self.backend.call("library_weather", json!({"ids": ids}))?;

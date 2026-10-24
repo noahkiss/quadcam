@@ -382,14 +382,21 @@ mcp.param quadcam_library_files.action string
 mcp.param quadcam_library_files.again boolean
 mcp.param quadcam_library_files.album string
 mcp.param quadcam_library_files.apply boolean
+mcp.param quadcam_library_files.burn boolean
+mcp.param quadcam_library_files.confirm boolean
 mcp.param quadcam_library_files.cuts array<object>
 mcp.param quadcam_library_files.cuts.end number
 mcp.param quadcam_library_files.cuts.start number
 mcp.param quadcam_library_files.day string
 mcp.param quadcam_library_files.export boolean
+mcp.param quadcam_library_files.fields array<string>
 mcp.param quadcam_library_files.ids array<string>
 mcp.param quadcam_library_files.log_dir string
+mcp.param quadcam_library_files.out string
+mcp.param quadcam_library_files.overlay_source string
+mcp.param quadcam_library_files.overwrite boolean
 mcp.param quadcam_library_files.removed_cuts string
+mcp.param quadcam_library_files.srt string
 mcp.param quadcam_load_clips.card string
 mcp.param quadcam_load_clips.join boolean
 mcp.param quadcam_load_clips.replace boolean
@@ -461,6 +468,7 @@ mcp.param quadcam_settings.values.modules object|null
 mcp.param quadcam_settings.values.name_date_format string|null
 mcp.param quadcam_settings.values.on_device_suggestions boolean|null
 mcp.param quadcam_settings.values.output_dir string|null
+mcp.param quadcam_settings.values.overlay_dir string|null
 mcp.param quadcam_settings.values.photos_album string|null
 mcp.param quadcam_settings.values.place_folders boolean|null
 mcp.param quadcam_settings.values.sim_preview boolean|null
@@ -542,6 +550,24 @@ mcp.value quadcam_library.group=rejected
 mcp.value quadcam_library_edit.flag=none
 mcp.value quadcam_library_edit.flag=pick
 mcp.value quadcam_library_edit.flag=reject
+mcp.value quadcam_library_files.fields=battery
+mcp.value quadcam_library_files.fields=battery_pct
+mcp.value quadcam_library_files.fields=bitrate
+mcp.value quadcam_library_files.fields=current
+mcp.value quadcam_library_files.fields=delay
+mcp.value quadcam_library_files.fields=distance
+mcp.value quadcam_library_files.fields=goggles_battery
+mcp.value quadcam_library_files.fields=lq
+mcp.value quadcam_library_files.fields=mode
+mcp.value quadcam_library_files.fields=power
+mcp.value quadcam_library_files.fields=rssi
+mcp.value quadcam_library_files.fields=signal
+mcp.value quadcam_library_files.fields=snr
+mcp.value quadcam_library_files.fields=throttle
+mcp.value quadcam_library_files.fields=timer
+mcp.value quadcam_library_files.fields=used
+mcp.value quadcam_library_files.overlay_source=log
+mcp.value quadcam_library_files.overlay_source=srt
 mcp.value quadcam_library_files.removed_cuts=keep
 mcp.value quadcam_library_files.removed_cuts=trash
 mcp.value quadcam_places.provider=apple

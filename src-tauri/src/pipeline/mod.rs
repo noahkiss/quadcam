@@ -360,6 +360,11 @@ pub struct DateSuggestion {
     /// analog clip with dead air). `moments` and `flight` are timed from that row.
     #[serde(default)]
     pub log_offset_s: Option<f64>,
+    /// The claimed log rows as overlay samples, timed like `moments` (`crate::telemetry`).
+    /// Only the call that matched holds them; they are never saved.
+    #[serde(skip)]
+    #[specta(skip)]
+    pub telemetry: Vec<crate::telemetry::Sample>,
 }
 
 /// Flight numbers from the log rows inside `windows`. `zero` is the log time at clip
@@ -520,6 +525,7 @@ pub fn plan_dates_with(
         flight: None,
         match_reason: None,
         log_offset_s: None,
+        telemetry: Vec::new(),
     };
     let mut plan = DatePlan {
         suggestions: clocks
@@ -641,6 +647,7 @@ pub fn plan_dates_with(
         s.log_interval_s = log.interval();
         s.log_model = f.model.clone();
         s.flight = Some(flight_stats(rows, &windows, f.start));
+        s.telemetry = crate::telemetry::from_log(rows, &windows, f.start);
         s.match_reason = Some(f.reason);
         s.log_offset_s = f.offset_s.map(|o| (o * 1000.0).round() / 1000.0);
     }

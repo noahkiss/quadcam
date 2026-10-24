@@ -126,6 +126,11 @@ export const commands = {
 	 *  while the weather setting is on.
 	 */
 	libraryWeather: (params: WeatherParams) => typedError<WeatherReport, string>(__TAURI_INVOKE("library_weather", { params })),
+	/**
+	 *  A clip's telemetry (radio log or goggles sidecar) as a subtitle file, and with `burn`
+	 *  a copy with the numbers drawn in, in a folder outside the library.
+	 */
+	libraryOverlay: (params: OverlayParams) => typedError<OverlayReport, string>(__TAURI_INVOKE("library_overlay", { params })),
 	/**  Video analysis on this Mac: available, or why not. */
 	videoFeature: () => typedError<Feature, string>(__TAURI_INVOKE("video_feature")),
 	/**  A file the web view can play. */
@@ -5350,6 +5355,59 @@ export type OsdView = {
 
 export type Outcome = "verified" | "failed" | "skipped";
 
+/**  `library_overlay`: one clip, the source, the fields, and where to write. */
+export type OverlayParams = {
+	/**  A library clip id. */
+	id?: string,
+	/**  None: the radio log when the clip matches one, else the sidecar. */
+	source?: OverlaySource | null,
+	/**  A goggles `.srt` to read instead of the kept sidecar. */
+	srt?: string | null,
+	/**  The log folder; the `logDir` setting when missing. */
+	logs?: string | null,
+	/**  The numbers to show, in order; empty for every number the source has. */
+	fields?: TelemetryField[],
+	/**  Also write a copy of the clip with the numbers burned in. */
+	burn?: boolean,
+	/**
+	 *  The folder to write to; the `overlayDir` setting, else `~/Movies/quadcam-overlays`,
+	 *  when missing.
+	 */
+	out?: string | null,
+	/**
+	 *  Replace `<clip>.telemetry.srt` and `.mp4` when they exist. Without it a run adds a
+	 *  number to the name and never replaces a file.
+	 */
+	overwrite?: boolean,
+};
+
+export type OverlayReport = {
+	id: string,
+	source: OverlaySource,
+	/**  The radio log's match (`matched`, `likely`) or the sidecar file read. */
+	from: string,
+	/**  The fields the source has, and the ones shown. */
+	available: TelemetryField[],
+	fields: TelemetryField[],
+	cues: number,
+	/**  The span the cues cover, in clip seconds. */
+	first_s: number | null,
+	last_s: number | null,
+	srt: string,
+	/**  The burned-in copy, when `burn` made one. */
+	video: string | null,
+	/**  Sidecar keys the overlay does not show. */
+	unknown_keys: string[],
+	warnings: string[],
+};
+
+/**  Where the numbers come from. */
+export type OverlaySource = 
+/**  The EdgeTX radio log the clip matches. */
+"log" | 
+/**  A goggles `.srt` sidecar: `srt`, else the one kept beside the clip's original. */
+"srt";
+
 /**
  *  Which special functions on the card the setup owns: they are removed unless the setup
  *  still wants them, and the setup's own come after every other function. A function the
@@ -8388,6 +8446,19 @@ export type Task = "rebuild" | "cuts" | "thumbnails" | "moments" |
 "video" | 
 /**  Weather lookups at Open-Meteo. */
 "weather";
+
+/**  One number the overlay can show. */
+export type TelemetryField = 
+/**  The aircraft's battery voltage: the receiver's `RxBt`, or the sidecar's air-unit battery. */
+"battery" | "battery_pct" | 
+/**  mAh used. */
+"used" | "current" | "lq" | "rssi" | "snr" | 
+/**  Transmit power, mW. */
+"power" | "throttle" | "mode" | 
+/**  Armed time so far (radio log), or the sidecar's flight time. */
+"timer" | "goggles_battery" | 
+/**  The sidecar's signal bars. */
+"signal" | "delay" | "bitrate" | "distance";
 
 /**  The throttle curve of a rate profile. */
 export type ThrottleView = {

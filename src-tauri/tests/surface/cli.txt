@@ -64,6 +64,7 @@ cli.arg library cut <ID>
 cli.arg library cut [RANGES]...
 cli.arg library edit <ID>
 cli.arg library match-logs [IDS]...
+cli.arg library overlay <ID>
 cli.arg library photos <IDS>...
 cli.arg library rate <IDS>...
 cli.arg library rename <ID>
@@ -222,6 +223,7 @@ cli.command library cut
 cli.command library edit
 cli.command library list
 cli.command library match-logs
+cli.command library overlay
 cli.command library photos
 cli.command library rate
 cli.command library rebuild
@@ -715,6 +717,13 @@ cli.flag library list -q,--query VALUE
 cli.flag library match-logs --apply
 cli.flag library match-logs --day VALUE
 cli.flag library match-logs --logs VALUE
+cli.flag library overlay --burn
+cli.flag library overlay --fields VALUE
+cli.flag library overlay --logs VALUE
+cli.flag library overlay --out VALUE
+cli.flag library overlay --overwrite
+cli.flag library overlay --source VALUE
+cli.flag library overlay --srt VALUE
 cli.flag library photos --album VALUE
 cli.flag library rate --pick
 cli.flag library rate --reject
@@ -772,3 +781,21 @@ cli.value library list --group=moments
 cli.value library list --group=not_in_photos
 cli.value library list --group=picks
 cli.value library list --group=rejected
+cli.value library overlay --fields=battery
+cli.value library overlay --fields=battery_pct
+cli.value library overlay --fields=bitrate
+cli.value library overlay --fields=current
+cli.value library overlay --fields=delay
+cli.value library overlay --fields=distance
+cli.value library overlay --fields=goggles_battery
+cli.value library overlay --fields=lq
+cli.value library overlay --fields=mode
+cli.value library overlay --fields=power
+cli.value library overlay --fields=rssi
+cli.value library overlay --fields=signal
+cli.value library overlay --fields=snr
+cli.value library overlay --fields=throttle
+cli.value library overlay --fields=timer
+cli.value library overlay --fields=used
+cli.value library overlay --source=log
+cli.value library overlay --source=srt

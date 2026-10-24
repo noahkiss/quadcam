@@ -111,6 +111,45 @@ pub(super) fn weather_text(r: &Value) -> String {
         .join("\n")
 }
 
+/// `library_overlay`'s report: what was written and from where.
+pub(super) fn overlay_text(r: &Value) -> String {
+    let list = |v: &Value| {
+        v.as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(Value::as_str)
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+    let mut lines = vec![format!(
+        "{} cues from the {} ({}), {:.0}-{:.0} s, showing {}.",
+        r["cues"],
+        if r["source"] == "log" {
+            "radio log"
+        } else {
+            "sidecar"
+        },
+        r["from"].as_str().unwrap_or(""),
+        r["first_s"].as_f64().unwrap_or(0.0),
+        r["last_s"].as_f64().unwrap_or(0.0),
+        list(&r["fields"])
+    )];
+    lines.push(format!("Subtitles: {}", r["srt"].as_str().unwrap_or("")));
+    if let Some(v) = r["video"].as_str() {
+        lines.push(format!("Burned-in copy: {v}"));
+    }
+    if r["unknown_keys"].as_array().is_some_and(|a| !a.is_empty()) {
+        lines.push(format!(
+            "Sidecar keys not shown: {}",
+            list(&r["unknown_keys"])
+        ));
+    }
+    for w in r["warnings"].as_array().into_iter().flatten() {
+        lines.push(format!("Warning: {}", w.as_str().unwrap_or("")));
+    }
+    lines.join("\n")
+}
+
 /// `library_analyze_video`'s report: one line per clip, or why nothing ran.
 pub(super) fn video_text(r: &Value) -> String {
     let mut lines: Vec<String> = Vec::new();

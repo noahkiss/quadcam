@@ -50,6 +50,10 @@ pub struct LibMatch {
     pub moments: usize,
     /// The flight numbers and moments were written into the file.
     pub applied: bool,
+    /// The claimed log rows as overlay samples, in clip seconds (`crate::telemetry`).
+    #[serde(skip)]
+    #[specta(skip)]
+    pub telemetry: Vec<crate::telemetry::Sample>,
 }
 
 #[derive(Debug, Clone, Serialize, specta::Type)]
@@ -195,6 +199,7 @@ impl Core {
                     flight: s.flight.as_ref().map(|f| f.shifted(offset)),
                     moments: s.moments.len(),
                     applied: false,
+                    telemetry: s.telemetry.iter().map(|x| x.shifted(offset)).collect(),
                 });
                 if p.apply {
                     let named = p.ids.iter().any(|id| &c.id == id || c.aliases.contains(id));

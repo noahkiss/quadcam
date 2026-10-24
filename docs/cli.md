@@ -99,6 +99,7 @@ quadcam-cli library apply-name-format             # rename clips to the name_dat
 quadcam-cli library match-logs --logs /path/to/LOGS   # report which clips match a radio log; --apply writes flight numbers and moments
 quadcam-cli library shift <id>... --from <id> --time 18:30 [--date 2026-09-28] [--logs DIR]   # print the plan: every clip shifts by the offset of --from, a matching radio log wins; --yes writes it
 quadcam-cli library analyze-video [<id>...]       # highlights and key frame (macOS 27); skips clips done; --again redoes them
+quadcam-cli library overlay <id> [--burn] [--overwrite]  # the clip's telemetry as a .srt, and with --burn a copy with it drawn in; see telemetry-overlay.md
 quadcam-cli library weather [<id>...]             # wind, temperature and sky at each clip's place and hour (Open-Meteo; needs weather=true); a clip with weather keeps it, except one saved before the sky values
 quadcam-cli library trash <id>                    # clip, cuts and original to the Trash
 quadcam-cli library photos <id> --album Drone
@@ -151,6 +152,7 @@ See [Modules and notices](modules.md) for what a module install checks.
 - `update_check` (`true` or `false`; see [Updates](settings.md#updates))
 - `map_view` (`true` or `false`, off by default; see [Show the Map page](settings.md#show-the-map-page))
 - `map_style` (`standard`, `hybrid` or `satellite`; see [Map style](settings.md#map-style))
+- `overlay_dir` (an absolute folder outside the library; see [Telemetry overlay folder](settings.md#telemetry-overlay-folder))
 - `photos_album`, `format_label`, `log_dir`, `layout`, `place_folders`, `tunables`
 - `geocoder` (`apple`, `nominatim`, `census` or `google`), `google_places_key`
 - `name_date_format` (`YYYY-MM-DD` or `YY.MM.DD`), `default_profile`

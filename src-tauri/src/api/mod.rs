@@ -27,8 +27,8 @@ pub use setup::*;
 use crate::core::{
     CardStatus, Core, FormatPlan, FormatRequest, ImportOptions, ImportOutcome, LibMatchParams,
     LibMatchReport, LibShiftParams, LibShiftReport, LibraryView, OnDeviceParams, OnDeviceReport,
-    PlaceRemoved, RebuildReport, RenameReport, SettingsView, Status, TrashReport, VerifyReport,
-    VideoParams, VideoReport, WeatherParams, WeatherReport,
+    OverlayParams, OverlayReport, PlaceRemoved, RebuildReport, RenameReport, SettingsView, Status,
+    TrashReport, VerifyReport, VideoParams, VideoReport, WeatherParams, WeatherReport,
 };
 use crate::disk::Volume;
 use crate::geocode::GeoResult;
@@ -218,6 +218,9 @@ with_gear_rows! {
     /// The wind, temperature and sky of library clips' places and hours, from Open-Meteo; only
     /// while the weather setting is on.
     library_weather(params: WeatherParams) -> WeatherReport = |c| c.library_weather(&params);
+    /// A clip's telemetry (radio log or goggles sidecar) as a subtitle file, and with `burn`
+    /// a copy with the numbers drawn in, in a folder outside the library.
+    library_overlay(params: OverlayParams) -> OverlayReport = |c| c.library_overlay(&params);
     /// Video analysis on this Mac: available, or why not.
     video_feature() -> Feature = |c| Ok(c.video_feature());
     /// A file the web view can play.

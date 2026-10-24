@@ -76,6 +76,10 @@ Off by default. On, the sidebar shows **Map** under Library: your places and cli
 
 On by default. On a Mac with Apple's on-device model (macOS 26 or later, Apple Intelligence on), QuadCam suggests clip names, keywords and notes after a card loads, and the session report offers **Summarize day**. Off, neither runs, for the app, the command line or an agent. See [On-device suggestions](library.md#on-device-suggestions). In the settings file it is `onDeviceSuggestions`; on the command line and in MCP it is `on_device_suggestions`.
 
+### Telemetry overlay folder
+
+`~/Movies/quadcam-overlays` by default. The [telemetry overlay](telemetry-overlay.md) writes its subtitle files and burned-in copies here when a run names no folder. It must be an absolute path outside the library folder; QuadCam refuses a folder inside it. The app has no control for it yet. In the settings file it is `overlayDir`; on the command line and in MCP it is `overlay_dir`.
+
 ### Updates
 
 On by default. QuadCam checks GitHub for a newer release about 30 seconds after it opens, then every hour while it runs. Off, it checks only when you select **QuadCam > Check for Updates…**, or **Check for Updates** under the version in Settings. Once a newer version is known, that button becomes **Restart to update**. In the settings file it is `updateCheck`; on the command line and in MCP it is `update_check`.

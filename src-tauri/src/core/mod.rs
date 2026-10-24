@@ -35,6 +35,7 @@ pub mod model_edit;
 mod modules;
 mod ondevice;
 mod osd;
+mod overlay;
 mod prep;
 mod radio_aircraft;
 mod radio_cli;
@@ -109,6 +110,7 @@ pub use library::{LibEdit, LibItem, LibUpdate, LibraryView, RebuildReport, Renam
 pub use model_edit::{ModelDetail, ModelEditParams, ModelEntry, ModelParams, MODEL_CHANGE};
 pub use ondevice::{OnDeviceClip, OnDeviceParams, OnDeviceReport};
 pub use osd::{OsdEditParams, OsdParams};
+pub use overlay::{OverlayParams, OverlayReport, OverlaySource};
 pub use radio_cli::{RadioCliAction, RadioCliParams, RadioCliReport, RadioMatch, RadioVerify};
 pub use radio_settings::{
     RadioSettingsDetail, RadioSettingsEditParams, RadioSettingsParams, RADIO_CHANGE,

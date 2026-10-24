@@ -38,6 +38,7 @@ expression: "Core::METHODS"
   "library_rescan",
   "library_analyze_video",
   "library_weather",
+  "library_overlay",
   "video_feature",
   "library_preview",
   "library_strips",

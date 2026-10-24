@@ -202,6 +202,12 @@ pub const KEYS: &[Key] = &[
         check: path_or_null,
     },
     Key {
+        file: "overlayDir",
+        name: Some("overlay_dir"),
+        about: "an absolute folder path or null",
+        check: path_or_null,
+    },
+    Key {
         file: "libraryLayout",
         name: Some("layout"),
         about: "year_day, day or flat",
@@ -612,6 +618,17 @@ pub fn set(path: &Path, changes: &Values) -> Result<Values> {
         Ok(())
     })?
     .1)
+}
+
+/// The telemetry overlay folder (`overlayDir`, `core/overlay.rs`), else
+/// `~/Movies/quadcam-overlays`.
+pub fn overlay_dir_from(values: &Values) -> Option<PathBuf> {
+    values
+        .get("overlayDir")
+        .and_then(Value::as_str)
+        .map(PathBuf::from)
+        .filter(|p| p.is_absolute())
+        .or_else(crate::paths::default_overlay_dir)
 }
 
 /// A list setting (`places`, `profiles`), or empty.

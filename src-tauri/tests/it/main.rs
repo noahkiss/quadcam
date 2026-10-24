@@ -40,6 +40,7 @@ mod mount_cycle;
 mod ondevice;
 mod osd;
 mod osd_edit;
+mod overlay;
 mod qol;
 mod radio_settings;
 mod radio_setup;

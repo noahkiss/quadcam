@@ -319,7 +319,7 @@ pub struct LibraryEditArgs {
 pub struct LibraryFilesArgs {
     #[schemars(required, extend("enum" = LIBRARY_FILES_ACTIONS))]
     pub action: Option<String>,
-    /// Library clip ids from quadcam_library. cuts, split_by_flight and export_cuts take exactly one; rebuild takes none; apply_name_format, match_logs, analyze_video and weather take some or none (every clip).
+    /// Library clip ids from quadcam_library. cuts, split_by_flight, export_cuts and overlay take exactly one; rebuild takes none; apply_name_format, match_logs, analyze_video and weather take some or none (every clip).
     #[schemars(length(max = 500))]
     pub ids: Option<Vec<String>>,
     /// For cuts: ranges in clip seconds, each at least 0.5 s.
@@ -340,6 +340,44 @@ pub struct LibraryFilesArgs {
     pub apply: Option<bool>,
     /// For analyze_video: analyse clips again, even those analysed already. Omit to skip them.
     pub again: Option<bool>,
+    /// For overlay: where the numbers come from, the radio log or a goggles .srt sidecar. Omit for the radio log when the clip matches one, else the sidecar.
+    #[schemars(extend("enum" = ["log", "srt"]))]
+    pub overlay_source: Option<String>,
+    /// For overlay: a goggles .srt file to read instead of the one kept beside the clip's original.
+    pub srt: Option<String>,
+    /// For overlay: the numbers to show, in order. Omit for every number the source has.
+    #[schemars(length(max = 16))]
+    pub fields: Option<Vec<OverlayField>>,
+    /// For overlay: also write a copy of the clip with the numbers burned in (re-encodes; about as slow as an analog import).
+    pub burn: Option<bool>,
+    /// For overlay: the folder to write to, outside the library folder. Omit for the overlay_dir setting (default ~/Movies/quadcam-overlays).
+    pub out: Option<String>,
+    /// For overlay: replace the clip's overlay files when they exist. Omit to add a number to the name; nothing is replaced.
+    pub overwrite: Option<bool>,
+    /// For overlay with burn: must be true to re-encode. Without it nothing is written and the answer says what would run.
+    pub confirm: Option<bool>,
+}
+
+/// One number of the telemetry overlay.
+#[derive(Debug, Clone, Deserialize, serde::Serialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum OverlayField {
+    Battery,
+    BatteryPct,
+    Used,
+    Current,
+    Lq,
+    Rssi,
+    Snr,
+    Power,
+    Throttle,
+    Mode,
+    Timer,
+    GogglesBattery,
+    Signal,
+    Delay,
+    Bitrate,
+    Distance,
 }
 
 // ----- setup -----
@@ -463,6 +501,9 @@ pub struct SettingsValues {
     pub format_label: Option<String>,
     #[schemars(extend("x-nullable" = true))]
     pub log_dir: Option<String>,
+    /// The telemetry overlay folder: an absolute path outside the library folder.
+    #[schemars(extend("x-nullable" = true))]
+    pub overlay_dir: Option<String>,
     #[schemars(extend("x-nullable" = true))]
     pub tunables: Option<TunablesValue>,
     #[schemars(extend("x-nullable" = true, "enum" = ["apple", "nominatim", "census", "google", null]))]
