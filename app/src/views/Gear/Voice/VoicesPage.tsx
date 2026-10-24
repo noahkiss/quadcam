@@ -214,7 +214,7 @@ function MyVoice({ v, view }: { v: UseVoice; view: VoiceView }) {
   const [report, setReport] = useState<RenderReport | null>(null);
   const p = view.provider;
   const render = async (dry: boolean, confirm = false) => {
-    const r = await v.act(() => api.gearVoiceRender({ voice, lines: [], dry_run: dry, confirm, settings: null }));
+    const r = await v.act(() => api.gearVoiceRender({ voice, lines: [], dry_run: dry, confirm, settings: null, digest: confirm ? (report?.digest ?? null) : null }));
     if (r) setReport(r);
   };
   const where = [PROVIDERS[p.provider] ?? p.provider, p.provider === "openai" ? p.base_url : "", p.model].filter(Boolean).join(" · ");

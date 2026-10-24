@@ -8814,8 +8814,8 @@ export type VoiceRenderParams = {
 	/**  The carrier and batch size of a batched render; the defaults when left out. */
 	batch?: BatchSettings | null,
 	/**
-	 *  A paid batched render: the `digest` of the unconfirmed call. A `confirm` needs it, and
-	 *  is refused when the plan changed since.
+	 *  A paid render: the `digest` of the unconfirmed call (or its dry run). A `confirm` needs
+	 *  it, and is refused when the plan changed since.
 	 */
 	digest?: string | null,
 };

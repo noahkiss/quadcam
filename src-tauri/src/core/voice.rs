@@ -218,8 +218,8 @@ pub struct VoiceRenderParams {
     /// The carrier and batch size of a batched render; the defaults when left out.
     #[serde(default)]
     pub batch: Option<crate::gear::voice::batch::BatchSettings>,
-    /// A paid batched render: the `digest` of the unconfirmed call. A `confirm` needs it, and
-    /// is refused when the plan changed since.
+    /// A paid render: the `digest` of the unconfirmed call (or its dry run). A `confirm` needs
+    /// it, and is refused when the plan changed since.
     #[serde(default)]
     pub digest: Option<String>,
 }
@@ -366,6 +366,10 @@ pub struct BuildPackParams {
     pub settings: Option<RenderSettings>,
     pub confirm: bool,
     pub dry_run: bool,
+    /// With `confirm` on a provider that may charge: the digest the call without confirm
+    /// named. Refused when the plan changed since.
+    #[serde(default)]
+    pub digest: Option<String>,
 }
 
 // ----- the person's data in gear.json -----
@@ -906,9 +910,18 @@ impl Core {
                 "{} characters to render with a provider that may charge for them.",
                 plan.chars
             ));
+            let (cfg, _, _) = self.voice_config();
+            report.digest = super::voice_studio::plan_digest(&json!({
+                "kind": "render", "provider": tts.id(), "base_url": cfg.base_url,
+                "voice": voice, "model": model, "settings": settings, "spoken": spoken,
+                "chars": plan.chars,
+            }));
             if !p.confirm && !p.dry_run {
                 report.needs_confirm = true;
                 return Ok(report);
+            }
+            if !p.dry_run {
+                super::voice_studio::same_plan(p.digest.as_deref(), &report.digest)?;
             }
         }
         if p.dry_run {
@@ -998,11 +1011,20 @@ impl Core {
             .map(|l| spelling.apply(&l.text))
             .collect();
         let plan = render::plan(&ctx, &spoken);
-        if tts.paid() && plan.to_render > 0 && !p.confirm {
-            bail!(
-                "This render sends {} characters to a provider that may charge for them. Check the plan, then pass confirm.",
-                plan.chars
-            );
+        if tts.paid() && plan.to_render > 0 && !p.dry_run {
+            let (cfg, _, _) = self.voice_config();
+            let digest = super::voice_studio::plan_digest(&json!({
+                "kind": "build-pack", "provider": tts.id(), "base_url": cfg.base_url,
+                "voice": p.voice, "model": model, "settings": settings, "spoken": spoken,
+                "chars": plan.chars,
+            }));
+            if !p.confirm {
+                bail!(
+                    "This render sends {} characters to a provider that may charge for them. Check the plan, then pass confirm with digest {digest}.",
+                    plan.chars
+                );
+            }
+            super::voice_studio::same_plan(p.digest.as_deref(), &digest)?;
         }
         if p.dry_run {
             return Ok((p.out.clone(), dummy_entry(&id), plan));

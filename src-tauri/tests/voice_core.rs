@@ -335,13 +335,73 @@ fn a_provider_that_may_charge_waits_for_confirm() {
     assert_eq!(held.plan.chars, 16, "Armed + Battery low");
     assert_eq!(b.calls.load(Ordering::SeqCst), 0);
     assert!(view(&b).packs.is_empty());
-    let done = render(&b, &[ARMED, LOWBAT], false, true);
+    assert!(!held.digest.is_empty(), "the question names a digest");
+    let confirm = |lines: &[&str], digest: Option<&str>| {
+        b.core.gear_voice_render(&VoiceRenderParams {
+            lines: lines.iter().map(|s| s.to_string()).collect(),
+            confirm: true,
+            digest: digest.map(String::from),
+            ..Default::default()
+        })
+    };
+    // A confirm without the digest, or with the digest of another plan, sends nothing.
+    let e = confirm(&[ARMED, LOWBAT], None).unwrap_err();
+    assert!(format!("{e:#}").contains("digest"), "{e:#}");
+    let e = confirm(&[ARMED], Some(&held.digest)).unwrap_err();
+    assert!(format!("{e:#}").contains("estimate again"), "{e:#}");
+    assert_eq!(b.calls.load(Ordering::SeqCst), 0);
+    // A dry run names the same digest.
+    assert_eq!(
+        render(&b, &[ARMED, LOWBAT], true, false).digest,
+        held.digest
+    );
+    let done = confirm(&[ARMED, LOWBAT], Some(&held.digest)).unwrap();
     assert!(!done.needs_confirm);
     assert_eq!(done.rendered, 2);
     // Cached takes need no confirm.
     let free = render(&b, &[ARMED, LOWBAT], false, false);
     assert!(!free.needs_confirm);
     assert_eq!(free.rendered, 0);
+}
+
+#[test]
+fn a_paid_build_pack_confirms_with_its_digest() {
+    let b = bench(Opts::default());
+    b.paid.store(true, Ordering::SeqCst);
+    let out = b.dir.path().join("release");
+    let params = |confirm: bool, digest: Option<String>| quadcam_lib::core::BuildPackParams {
+        voice: "Test Voice".into(),
+        id: Some("en-test-v1".into()),
+        out: out.clone(),
+        confirm,
+        digest,
+        ..Default::default()
+    };
+    let e = b.core.voice_build_pack(&params(false, None)).unwrap_err();
+    let msg = format!("{e:#}");
+    let digest = msg
+        .split("digest ")
+        .nth(1)
+        .and_then(|t| t.split('.').next())
+        .unwrap_or_else(|| panic!("no digest in {msg}"))
+        .to_string();
+    let e = b.core.voice_build_pack(&params(true, None)).unwrap_err();
+    assert!(format!("{e:#}").contains("digest"), "{e:#}");
+    let e = b
+        .core
+        .voice_build_pack(&params(true, Some("0".repeat(64))))
+        .unwrap_err();
+    assert!(format!("{e:#}").contains("estimate again"), "{e:#}");
+    assert_eq!(
+        b.calls.load(Ordering::SeqCst),
+        0,
+        "nothing sent before the right digest"
+    );
+    let (zip, _, _) = b
+        .core
+        .voice_build_pack(&params(true, Some(digest)))
+        .unwrap();
+    assert!(zip.is_file());
 }
 
 /// Builds a pack in `dir` and returns its index path.

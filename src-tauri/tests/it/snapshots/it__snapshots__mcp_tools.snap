@@ -1909,7 +1909,7 @@ expression: "quadcam_lib::mcp::tools()"
           "type": "string"
         },
         "digest": {
-          "description": "For voice_sample, voice_retake and voice_render with `sets`: with confirm, the digest the call without confirm returned. For voice_edit with `text`: with confirm, the digest its dry_run returned. Refused when the plan changed since (voices, models, sets, seed or characters).",
+          "description": "For voice_sample, voice_retake and voice_render: with confirm, the digest the call without confirm returned. For voice_edit with `text`: with confirm, the digest its dry_run returned. Refused when the plan changed since (voices, models, sets, seed or characters).",
           "maxLength": 100,
           "type": "string"
         },

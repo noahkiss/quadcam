@@ -793,7 +793,9 @@ the voices, the models, the line sets, the cost, **Sample** and **Render pack**,
 - **Pay for what was priced.** The question names a digest of its plan: the voices, models,
   sets, seed and characters. **Sample and pay** and **Render and pay** send that digest, and
   QuadCam refuses a confirm whose plan changed ("estimate again"). A change to any picker
-  closes the question. The CLI (`--digest`) and MCP (`digest`) work the same way.
+  closes the question. The CLI (`--digest`) and MCP (`digest`) work the same way, and so
+  does a line-by-line render or `build-pack` with a provider that may charge (`openai`): its
+  digest covers the provider, server, voice, model, settings and lines.
 - **Re-takes.** A cut that fails a check (silent, under 120 ms, too long, long or short for
   its text, or starting with the carrier's last sound) stays out of the pack. An initialism's
   length counts the names of its letters ("O S D" takes as long as "oh ess dee"), and a hiss

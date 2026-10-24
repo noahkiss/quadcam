@@ -325,7 +325,7 @@ pub enum VoiceCmd {
         tries: Option<u32>,
     },
     /// Render QuadCam's lines (and your own) with the provider from the settings into a local
-    /// pack. A provider that may charge needs --confirm. With --set, render line sets as
+    /// pack. A provider that may charge needs --confirm and --digest. With --set, render line sets as
     /// carrier-sentence batches with ElevenLabs instead.
     Render {
         /// The provider's voice (default: the tts_voice setting).
@@ -348,8 +348,8 @@ pub enum VoiceCmd {
         /// Allow a render that sends text to a provider that may charge.
         #[arg(long)]
         confirm: bool,
-        /// With --set and --confirm: the digest the run without --confirm printed. Refused
-        /// when the plan changed since.
+        /// With --confirm: the digest the run without --confirm printed. Refused when the
+        /// plan changed since.
         #[arg(long)]
         digest: Option<String>,
         #[command(flatten)]
@@ -528,9 +528,13 @@ pub enum VoiceCmd {
         /// Report the plan and the characters; build nothing.
         #[arg(long)]
         dry_run: bool,
-        /// Allow a render that sends text to a provider that may charge.
+        /// Allow a render that sends text to a provider that may charge (needs --digest).
         #[arg(long)]
         confirm: bool,
+        /// With --confirm: the digest the run without --confirm printed. Refused when the
+        /// plan changed since.
+        #[arg(long)]
+        digest: Option<String>,
         #[command(flatten)]
         settings: SettingsArgs,
     },
@@ -978,6 +982,7 @@ pub fn run(core: &Core, a: VoiceArgs) -> Result<Value> {
             attribution,
             dry_run,
             confirm,
+            digest,
             settings,
         }) => {
             let (zip, entry, plan) = core.voice_build_pack(&core::BuildPackParams {
@@ -991,6 +996,7 @@ pub fn run(core: &Core, a: VoiceArgs) -> Result<Value> {
                 settings: settings.get(),
                 confirm,
                 dry_run,
+                digest,
             })?;
             serde_json::json!({
                 "dry_run": dry_run,

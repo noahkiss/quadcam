@@ -362,7 +362,7 @@ pub struct GearEditArgs {
     /// For voice_key_set: the ElevenLabs API key. It goes to the macOS Keychain; answers show only its hint. A value passed here sits in the agent's transcript.
     #[schemars(length(max = 400))]
     pub key: Option<String>,
-    /// For voice_sample, voice_retake and voice_render with `sets`: with confirm, the digest the call without confirm returned. For voice_edit with `text`: with confirm, the digest its dry_run returned. Refused when the plan changed since (voices, models, sets, seed or characters).
+    /// For voice_sample, voice_retake and voice_render: with confirm, the digest the call without confirm returned. For voice_edit with `text`: with confirm, the digest its dry_run returned. Refused when the plan changed since (voices, models, sets, seed or characters).
     #[schemars(length(max = 100))]
     pub digest: Option<String>,
     /// For voice_sample and voice_render: the take's seed (default 0). A batched re-render with another seed redoes only the batches with a line that needs a re-take.
