@@ -6,6 +6,7 @@ import { SegmentedControl } from "../../../components/SegmentedControl";
 import type { SimPreset, SimUiSettings } from "../../../ipc/types";
 import type { SimView } from "./Stage";
 import styles from "./SimPage.module.css";
+import { ProfileOptions } from "./ProfileOptions";
 
 interface Props {
   presets: SimPreset[];
@@ -27,11 +28,7 @@ export function SimSettings({ presets, profile, ui, profileCamera, onChange }: P
       <Field label="Aircraft">
         {(id) => (
           <Select id={id} value={profile} onChange={(e) => onChange({ profile: e.target.value })}>
-            {presets.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.label}
-              </option>
-            ))}
+            <ProfileOptions presets={presets} />
           </Select>
         )}
       </Field>

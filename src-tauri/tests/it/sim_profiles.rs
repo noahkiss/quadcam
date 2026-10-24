@@ -69,6 +69,10 @@ fn a_fit_saves_only_with_confirm_and_its_digest() {
     assert!(list
         .iter()
         .any(|p| p.id == "my-air65" && p.base.as_deref() == Some("air65ii")));
+    // The Sim page lists it after the built-in profiles.
+    let page = c.sim_presets();
+    assert!(page.iter().any(|p| p.id == "my-air65" && p.fitted));
+    assert!(page.iter().filter(|p| !p.fitted).count() >= 4);
     // The harness takes the fitted profile by its id.
     let r = c
         .gear_sim_validate(&SimValidateParams {

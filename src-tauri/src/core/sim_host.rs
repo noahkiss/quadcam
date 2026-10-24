@@ -33,7 +33,7 @@ const RING_CAPACITY: usize = 2048;
 /// The seed of the one deterministic run; a fresh flight does not need a fresh seed.
 const SEED: u64 = 1;
 
-/// One built-in profile the Sim page offers.
+/// One profile the Sim page offers: built in, or fitted from the person's logs.
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub struct SimPreset {
     pub id: String,
@@ -42,6 +42,9 @@ pub struct SimPreset {
     pub wheelbase_mm: f64,
     /// All-up mass (g).
     pub mass_g: f64,
+    /// Fitted from the person's logs (`gear_sim_fit_save`), not built in.
+    #[serde(default)]
+    pub fitted: bool,
 }
 
 /// The Sim page's settings, the `simSettings` key of the settings file. A missing field reads
@@ -248,15 +251,19 @@ pub(crate) struct Host {
 }
 
 impl Core {
-    /// The built-in profiles, for the page's aircraft list.
+    /// The page's aircraft list: the built-in profiles, then the fitted ones.
     pub fn sim_presets(&self) -> Vec<SimPreset> {
+        let fitted = crate::gear::sim_profiles::list(self.gear_store().root());
         quadcam_sim::presets()
-            .into_iter()
-            .map(|p| SimPreset {
+            .iter()
+            .map(|p| (p, false))
+            .chain(fitted.iter().map(|s| (&s.profile, true)))
+            .map(|(p, fitted)| SimPreset {
                 wheelbase_mm: p.frame.wheelbase.value * 1000.0,
                 mass_g: p.frame.mass.value * 1000.0,
-                id: p.id,
-                label: p.label,
+                id: p.id.clone(),
+                label: p.label.clone(),
+                fitted,
             })
             .collect()
     }

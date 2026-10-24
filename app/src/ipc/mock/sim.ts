@@ -192,7 +192,7 @@ export class MockHost {
   private armedAt: number | null = null;
 
   presets(): SimPreset[] {
-    return PRESETS.map((p) => ({ id: p.id, label: p.label, wheelbase_mm: p.wheelbase_mm, mass_g: p.mass_g }));
+    return PRESETS.map((p) => ({ id: p.id, label: p.label, wheelbase_mm: p.wheelbase_mm, mass_g: p.mass_g, fitted: false }));
   }
 
   start(p: SimStartParams): SimStartInfo {
