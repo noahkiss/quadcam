@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use crate::diff::FcConfig;
 
 /// Where a value came from (sim-design 6.1).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "lowercase")]
 pub enum Source {
     /// From logs, by the fit (S3); carries the log ids and residual.

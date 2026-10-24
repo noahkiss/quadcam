@@ -11,6 +11,7 @@
 //! | Yaw | Closed loop | lag ±5 ms |
 //! | Coast-down | Closed loop | deceleration ±15 % (needs speed in the log) |
 //! | Fall recovery | Closed loop | height lost ±20 % |
+//! | Replay | Closed loop, logged setpoint and throttle from the log's attitude, 1 s windows with no rate over 360°/s | attitude error RMS ≤ 10° |
 
 use rapier3d_f64::glamx::{DQuat, DVec3};
 use serde::Serialize;
@@ -40,7 +41,8 @@ pub enum CheckOutcome {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Type)]
 pub struct CheckResult {
-    /// `hover`, `punch`, `sag`, `roll`, `pitch`, `yaw`, `coast_down`, `fall_recovery`.
+    /// `hover`, `punch`, `sag`, `roll`, `pitch`, `yaw`, `coast_down`, `fall_recovery`,
+    /// `replay`.
     pub check: String,
     /// What is compared: `command`, `speed`, `peak_accel`, `rise_90`, ...
     pub measure: String,
@@ -173,6 +175,7 @@ pub fn validate(profile: &SimProfile, logs: &[LogData]) -> ValidationReport {
         }
         checks.extend(coast_downs(&hp, log));
         checks.extend(fall_recoveries(&hp, log));
+        checks.extend(replays(&hp, log));
     }
     // A check with no window in one log but a result in another is not reported missing.
     let ran: std::collections::BTreeSet<String> = checks
@@ -197,6 +200,46 @@ pub fn validate(profile: &SimProfile, logs: &[LogData]) -> ValidationReport {
     }
 }
 
+/// The checks that judge one group of profile values, for the fit's guard.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Group {
+    /// Hover, punch and sag: the motor, the props' torque and the pack.
+    Power,
+    /// One axis's rate response: 0 roll, 1 pitch, 2 yaw.
+    Axis(usize),
+}
+
+/// How `profile` does on one group's checks: the failures, then the summed error in bands.
+pub(crate) fn group_score(profile: &SimProfile, logs: &[LogData], g: Group) -> (usize, f64) {
+    let hp = harness_profile(profile);
+    let mut checks = Vec::new();
+    for log in logs {
+        match g {
+            Group::Power => {
+                checks.extend(hover(&hp, log));
+                checks.extend(punches(&hp, log));
+            }
+            Group::Axis(a) => checks.extend(rate_steps(&hp, log, a, ["roll", "pitch", "yaw"][a])),
+        }
+    }
+    let (mut fails, mut err) = (0, 0.0);
+    for c in checks
+        .iter()
+        .filter(|c| c.outcome != CheckOutcome::NotInLog)
+    {
+        if c.outcome == CheckOutcome::Fail {
+            fails += 1;
+        }
+        let band = if c.relative {
+            c.band * c.logged.abs()
+        } else {
+            c.band
+        };
+        err += (c.sim - c.logged).abs() / band.max(1e-9);
+    }
+    (fails, err)
+}
+
 // ----- the harness's own controls -----
 
 /// Betaflight's accelerometer low-pass (`acc_lpf_hz`, 10 Hz), as two PT1 stages.
@@ -207,7 +250,7 @@ const ANGLE_CH: usize = 5;
 
 /// The profile with the harness's switch layout (AUX1 arm, AUX2 angle) and a linear
 /// throttle, so a logged throttle is the collective. Physics and tuning are untouched.
-fn harness_profile(p: &SimProfile) -> SimProfile {
+pub(crate) fn harness_profile(p: &SimProfile) -> SimProfile {
     let mut p = p.clone();
     p.diff.aux = vec![
         AuxRange {
@@ -228,7 +271,7 @@ fn harness_profile(p: &SimProfile) -> SimProfile {
     p
 }
 
-fn frame(throttle: f64, armed: bool, angle: bool) -> RcFrame {
+pub(crate) fn frame(throttle: f64, armed: bool, angle: bool) -> RcFrame {
     let b = |on: bool| if on { 2000 } else { 1000 };
     RcFrame::from_sticks(
         Sticks {
@@ -239,7 +282,7 @@ fn frame(throttle: f64, armed: bool, angle: bool) -> RcFrame {
     )
 }
 
-fn sim_at(p: &SimProfile, vbat: f64) -> Sim {
+pub(crate) fn sim_at(p: &SimProfile, vbat: f64) -> Sim {
     let settings = SimSettings {
         ideal_cell_v: vbat / p.battery.cells.value,
         prop_wash: 0.0,
@@ -248,7 +291,7 @@ fn sim_at(p: &SimProfile, vbat: f64) -> Sim {
     Sim::new(p, WorldSpec::empty(), settings, 1)
 }
 
-fn arm(sim: &mut Sim, angle: bool) {
+pub(crate) fn arm(sim: &mut Sim, angle: bool) {
     for _ in 0..10 {
         sim.step(&frame(0.0, false, angle));
     }
@@ -281,7 +324,7 @@ impl HoverPilot {
     }
 }
 
-fn median(mut v: Vec<f64>) -> f64 {
+pub(crate) fn median(mut v: Vec<f64>) -> f64 {
     if v.is_empty() {
         return f64::NAN;
     }
@@ -289,7 +332,7 @@ fn median(mut v: Vec<f64>) -> f64 {
     v[v.len() / 2]
 }
 
-fn moving_avg(x: &[f64], n: usize) -> Vec<f64> {
+pub(crate) fn moving_avg(x: &[f64], n: usize) -> Vec<f64> {
     let n = n.max(1);
     let mut out = Vec::with_capacity(x.len());
     let mut acc = 0.0;
@@ -396,7 +439,7 @@ fn hover(p: &SimProfile, log: &LogData) -> Vec<CheckResult> {
 
 // ----- punch and sag (open loop) -----
 
-fn tilt_deg(q: [f64; 4]) -> f64 {
+pub(crate) fn tilt_deg(q: [f64; 4]) -> f64 {
     (1.0 - 2.0 * (q[1] * q[1] + q[2] * q[2]))
         .clamp(-1.0, 1.0)
         .acos()
@@ -532,7 +575,7 @@ fn open_loop_from(
 }
 
 /// Time (s) from the window start to the mean rpm covering 90 % of its rise.
-fn rise_90(t: &[f64], rpm: &[f64]) -> f64 {
+pub(crate) fn rise_90(t: &[f64], rpm: &[f64]) -> f64 {
     let r0 = rpm[0];
     let peak = rpm.iter().cloned().fold(f64::MIN, f64::max);
     let target = r0 + 0.9 * (peak - r0);
@@ -632,7 +675,7 @@ fn punches(p: &SimProfile, log: &LogData) -> Vec<CheckResult> {
 // ----- closed-loop rate response -----
 
 /// Windows of `len` seconds where the axis's setpoint moves (σ > 30 deg/s, peak > 150).
-fn rate_windows(log: &LogData, axis: usize, len: f64) -> Vec<(usize, usize)> {
+pub(crate) fn rate_windows(log: &LogData, axis: usize, len: f64) -> Vec<(usize, usize)> {
     let dt = log.dt();
     let n = (len / dt) as usize;
     let mut cands = Vec::new();
@@ -667,7 +710,7 @@ fn rate_windows(log: &LogData, axis: usize, len: f64) -> Vec<(usize, usize)> {
 
 /// Lag (s) of `y` behind `x`: the shift, 0..80 ms, with the best Pearson correlation
 /// between `x` and the shifted `y` over their overlap.
-fn lag(x: &[f64], y: &[f64], dt: f64) -> f64 {
+pub(crate) fn lag(x: &[f64], y: &[f64], dt: f64) -> f64 {
     let max = ((0.08 / dt) as usize).min(x.len() / 2);
     let pearson = |a: &[f64], b: &[f64]| {
         let n = a.len() as f64;
@@ -692,7 +735,7 @@ fn lag(x: &[f64], y: &[f64], dt: f64) -> f64 {
 
 /// Overshoot in points at the window's largest setpoint peak: the gyro's peak in the same
 /// direction within 80 ms after it, against the setpoint's.
-fn overshoot(sp: &[f64], g: &[f64], dt: f64) -> f64 {
+pub(crate) fn overshoot(sp: &[f64], g: &[f64], dt: f64) -> f64 {
     let (k, pk) =
         sp.iter().enumerate().fold(
             (0, 0.0f64),
@@ -706,28 +749,43 @@ fn overshoot(sp: &[f64], g: &[f64], dt: f64) -> f64 {
     (gpk / pk.abs() - 1.0) * 100.0
 }
 
-/// BF axes (roll, pitch, yaw) to body rates (rad/s) and back.
-fn bf_to_body(r: [f64; 3]) -> [f64; 3] {
-    [r[0].to_radians(), r[1].to_radians(), -r[2].to_radians()]
+/// BF axes (roll, pitch, yaw) to body rates (rad/s) and back. Betaflight's body frame is x
+/// forward, y right, z down; the sim's is x forward, y left, z up.
+pub(crate) fn bf_to_body(r: [f64; 3]) -> [f64; 3] {
+    [r[0].to_radians(), -r[1].to_radians(), -r[2].to_radians()]
 }
 
-fn body_to_bf(r: [f64; 3]) -> [f64; 3] {
-    [r[0].to_degrees(), r[1].to_degrees(), -r[2].to_degrees()]
+pub(crate) fn body_to_bf(r: [f64; 3]) -> [f64; 3] {
+    [r[0].to_degrees(), -r[1].to_degrees(), -r[2].to_degrees()]
 }
 
-struct Replay {
+/// A logged setpoint as the FC's override takes it: the override's pitch is positive nose
+/// down, the log's nose up.
+fn to_override(s: [f64; 3]) -> [f64; 3] {
+    [s[0], -s[1], s[2]]
+}
+
+/// A logged attitude (w, x, y, z; Betaflight's frames, z down) as the sim's (z up), and
+/// back: the same flip of y and z on both sides.
+pub(crate) fn flip_frame(q: [f64; 4]) -> [f64; 4] {
+    [q[0], q[1], -q[2], -q[3]]
+}
+
+pub(crate) struct Replay {
     /// Gyro, BF axes (deg/s).
-    gyro: Vec<[f64; 3]>,
-    z: Vec<f64>,
-    vz: Vec<f64>,
+    pub gyro: Vec<[f64; 3]>,
+    pub z: Vec<f64>,
+    pub vz: Vec<f64>,
     /// Horizontal speed (m/s).
-    speed: Vec<f64>,
+    pub speed: Vec<f64>,
+    /// Attitude (w, x, y, z), in the log's frames.
+    pub quat: Vec<[f64; 4]>,
 }
 
 /// Fly the logged setpoint and throttle closed loop over `i0..i1`, starting level with
 /// velocity `v0` (world); the sim's state at each log sample.
 /// `attitude`: start from the log's attitude (same body frame as the sim's) rather than level.
-fn closed_loop(
+pub(crate) fn closed_loop(
     p: &SimProfile,
     log: &LogData,
     i0: usize,
@@ -744,7 +802,7 @@ fn closed_loop(
         sim.step(&frame(0.3, true, false));
     }
     let q = if attitude {
-        let q = log.quat[i0];
+        let q = flip_frame(log.quat[i0]);
         DQuat::from_xyzw(q[1], q[2], q[3], q[0]).normalize()
     } else {
         DQuat::IDENTITY
@@ -758,12 +816,13 @@ fn closed_loop(
         z: Vec::new(),
         vz: Vec::new(),
         speed: Vec::new(),
+        quat: Vec::new(),
     };
     let mut t = log.t[i0];
     for i in i0..i1 {
         let k = i.saturating_sub(1).max(i0);
         let ov = Override {
-            setpoint: Some(log.setpoint[k]),
+            setpoint: Some(to_override(log.setpoint[k])),
         };
         let f = frame(log.throttle[k], true, false);
         while t < log.t[i] {
@@ -771,6 +830,8 @@ fn closed_loop(
             t += sim.dt;
         }
         let v = sim.velocity();
+        let q = sim.attitude();
+        r.quat.push(flip_frame([q.w, q.x, q.y, q.z]));
         r.gyro.push(body_to_bf(sim.body_rates()));
         r.z.push(sim.position()[2]);
         r.vz.push(v[2]);
@@ -986,6 +1047,102 @@ fn coast_downs(p: &SimProfile, log: &LogData) -> Vec<CheckResult> {
     out
 }
 
+// ----- replay: attitude and vertical acceleration -----
+
+/// The fastest rate (deg/s) a replay window asks for.
+const REPLAY_MAX_RATE: f64 = 360.0;
+
+/// Replay windows: `len` seconds of flight (motors spinning throughout, throttle above
+/// idle, no flips) where the quad followed its sticks; up to `max` per log, the busiest
+/// first.
+pub(crate) fn replay_windows(log: &LogData, len: f64, max: usize) -> Vec<(usize, usize)> {
+    let dt = log.dt();
+    let n = (len / dt) as usize;
+    if n == 0 {
+        return Vec::new();
+    }
+    let mut cands = Vec::new();
+    let mut i = 0;
+    while i + n <= log.len() {
+        let flying = (i..i + n).all(|k| log.mean_duty(k) > 0.05)
+            && (i..i + n).map(|k| log.throttle[k]).sum::<f64>() / n as f64 > 0.1;
+        let pk_sp = (i..i + n).fold(0.0f64, |a, k| {
+            a.max(log.setpoint[k].iter().fold(0.0f64, |b, x| b.max(x.abs())))
+        });
+        let pk_g = (i..i + n).fold(0.0f64, |a, k| {
+            a.max(log.gyro[k].iter().fold(0.0f64, |b, x| b.max(x.abs())))
+        });
+        // A crash or a tumble: the gyro far beyond anything asked for.
+        let tracking = pk_g < 1.5 * pk_sp + 150.0;
+        // A flip or a roll: a few percent of rate error is tens of degrees by the end.
+        let cruising = pk_sp <= REPLAY_MAX_RATE;
+        if flying && tracking && cruising {
+            let busy: f64 = (i..i + n)
+                .map(|k| log.setpoint[k].iter().map(|x| x.abs()).sum::<f64>())
+                .sum();
+            cands.push((busy, i));
+        }
+        i += n / 2;
+    }
+    cands.sort_by(|a, b| b.0.total_cmp(&a.0));
+    let mut out: Vec<(usize, usize)> = Vec::new();
+    for (_, i) in cands {
+        if out.iter().all(|(a, b)| i + n <= *a || i >= *b) {
+            out.push((i, i + n));
+        }
+        if out.len() == max {
+            break;
+        }
+    }
+    out.sort();
+    out
+}
+
+/// The angle (deg) between two attitudes (w, x, y, z).
+pub(crate) fn attitude_error_deg(a: [f64; 4], b: [f64; 4]) -> f64 {
+    let dot = (a[0] * b[0] + a[1] * b[1] + a[2] * b[2] + a[3] * b[3]).abs();
+    (2.0 * dot.min(1.0).acos()).to_degrees()
+}
+
+/// The RMS attitude error (deg) of one replay window, sim against log.
+pub(crate) fn replay_error(p: &SimProfile, log: &LogData, i0: usize, i1: usize) -> f64 {
+    let r = closed_loop(p, log, i0, i1, [0.0; 3], true);
+    let n = r.quat.len().max(1) as f64;
+    (r.quat
+        .iter()
+        .enumerate()
+        .map(|(k, q)| attitude_error_deg(*q, log.quat[i0 + k]).powi(2))
+        .sum::<f64>()
+        / n)
+        .sqrt()
+}
+
+/// Replays the logged setpoint and throttle closed loop from the log's attitude, rates and
+/// motor speeds, and scores the attitude against the log.
+fn replays(p: &SimProfile, log: &LogData) -> Vec<CheckResult> {
+    let wins = replay_windows(log, 1.0, 3);
+    if wins.is_empty() {
+        return vec![not_in_log("replay", &log.name)];
+    }
+    let mut out = Vec::new();
+    for (i0, i1) in wins {
+        let att = replay_error(p, log, i0, i1);
+        let w = Some((log.t[i0], log.t[i1 - 1]));
+        out.push(result(
+            "replay",
+            "attitude_rms",
+            &log.name,
+            w,
+            0.0,
+            att,
+            10.0,
+            false,
+            "deg",
+        ));
+    }
+    out
+}
+
 // ----- synthetic logs -----
 
 /// A log written by the sim itself, in the shape a decoded blackbox log has (800 Hz,
@@ -1044,15 +1201,16 @@ pub fn synth_log(
         let snap = sim.snapshot();
         let sp = snap.setpoint;
         log.t.push(t);
-        log.setpoint.push([sp[0], sp[1], -sp[2]]);
+        log.setpoint.push([sp[0], -sp[1], -sp[2]]);
         log.throttle.push(snap.throttle);
         log.gyro.push(body_to_bf(sim.body_rates()));
-        log.acc.push([a_body.x, a_body.y, az]);
+        // Betaflight logs the accelerometer as gravity in its z-down frame: level reads +1 g.
+        log.acc.push([-a_body.x, a_body.y, az]);
         log.duty.push(snap.motor_u.map(|u| sim.motors.duty_for(u)));
         log.rpm.push(snap.motor_rpm);
         log.vbat.push(snap.vbat);
         log.amps.push(snap.current);
-        log.quat.push([q.w, q.x, q.y, q.z]);
+        log.quat.push(flip_frame([q.w, q.x, q.y, q.z]));
         if let Some(sp) = log.speed.as_mut() {
             sp.push((v.x * v.x + v.y * v.y).sqrt());
         }

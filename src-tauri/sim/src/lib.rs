@@ -22,6 +22,7 @@ pub mod bench;
 pub mod diff;
 pub mod fc;
 pub mod filters;
+pub mod fit;
 pub mod input;
 pub mod log;
 pub mod mixer;

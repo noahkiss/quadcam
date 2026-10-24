@@ -1,10 +1,10 @@
-//! Validate a preset against decoded blackbox CSVs.
+//! Validate a preset against blackbox logs: decoded CSVs, `.bbl` files or flash images.
 //!
-//! cargo run -p quadcam-sim --example validate -- <preset> <motor poles> <csv>...
+//! cargo run -p quadcam-sim --example validate -- <preset> <motor poles> <log>...
 
 use std::path::Path;
 
-use quadcam_sim::log::{read, Scales};
+use quadcam_sim::log::{read_path, Scales};
 use quadcam_sim::preset;
 use quadcam_sim::validate::validate;
 
@@ -17,7 +17,7 @@ fn main() {
     };
     let logs: Vec<_> = args[2..]
         .iter()
-        .map(|f| read(Path::new(f), scales).expect("read log"))
+        .flat_map(|f| read_path(Path::new(f), scales).expect("read log"))
         .filter(|l| l.len() > 100)
         .collect();
     print!("{}", validate(&p, &logs).table());

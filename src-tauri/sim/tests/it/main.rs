@@ -3,6 +3,7 @@
 
 mod common;
 mod fc_behaviour;
+mod fit;
 mod physics;
 mod runner;
 mod validation;
