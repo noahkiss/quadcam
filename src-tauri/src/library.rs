@@ -108,20 +108,6 @@ pub fn day_dir(root: &Path, layout: Layout, date: NaiveDate, place: Option<&str>
     }
 }
 
-/// The example under the layout setting: `2026/2026-09-27 Backyard/2026-09-27_name.mp4`.
-pub fn example_path(
-    layout: Layout,
-    date: NaiveDate,
-    place: Option<&str>,
-    stem: &str,
-    ext: &str,
-) -> String {
-    let dir = day_dir(Path::new(""), layout, date, place);
-    dir.join(format!("{stem}.{ext}"))
-        .to_string_lossy()
-        .to_string()
-}
-
 // ---------- index ----------
 
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq, specta::Type)]
@@ -500,12 +486,6 @@ fn parse_spans(s: &str) -> Vec<Span> {
 /// A `YYYY-MM-DD...` date (the creation date, or a long-format file name).
 fn parse_date(s: &str) -> Option<NaiveDate> {
     NaiveDate::parse_from_str(s.get(..10)?, "%Y-%m-%d").ok()
-}
-
-/// A hash of the first megabyte before `moov`: the identity of a file quadcam did not
-/// write. Metadata rewrites change only `moov`, so the identity holds.
-pub fn head_id(path: &Path) -> Result<String> {
-    crate::identity::head_id(path)
 }
 
 /// What one media file in the library is.
@@ -1126,20 +1106,6 @@ mod tests {
         assert_eq!(
             day_dir(root, Layout::Day, day, Some("  ")),
             PathBuf::from("/lib/2026-09-27")
-        );
-        assert_eq!(
-            example_path(
-                Layout::YearDay,
-                day,
-                Some("Backyard"),
-                "2026-09-27_loops",
-                "mp4"
-            ),
-            "2026/2026-09-27 Backyard/2026-09-27_loops.mp4"
-        );
-        assert_eq!(
-            example_path(Layout::Flat, day, None, "2026-09-27_loops", "mp4"),
-            "2026-09-27_loops.mp4"
         );
     }
 

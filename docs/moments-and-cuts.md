@@ -128,7 +128,7 @@ In the library, QuadCam writes new cuts when you select **Save N cuts** under th
 
 QuadCam asks first:
 
-- **Keep the file** leaves the file where it is, as a clip of its own.
+- **Keep the file** leaves the file where it is, as a clip of its own. It keeps its `_cutN` name, so a later cut that would take that name gets `_cutN-2`.
 - **Move to Trash** moves the file to the Trash.
 
 The command line needs `--removed keep` or `--removed trash`. An agent needs `removed_cuts`.

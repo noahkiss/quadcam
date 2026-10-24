@@ -204,6 +204,25 @@ impl Core {
         Ok(out)
     }
 
+    /// True when the index on disk is the one this core last loaded or saved: a watcher
+    /// event for it is this process's own write.
+    pub fn library_index_current(&self) -> bool {
+        let Ok(root) = self.library_root() else {
+            return false;
+        };
+        let on_disk = lib::index_path(&root)
+            .metadata()
+            .and_then(|m| m.modified())
+            .ok();
+        let guard = self
+            .library
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        guard
+            .as_ref()
+            .is_some_and(|l| l.root == root && on_disk.is_some() && l.mtime == on_disk)
+    }
+
     /// Moves an index from QuadCam 0.4's ids to the current scheme (see `identity`). Each
     /// clip gets the id its file now reads as: an adopted file its new head id, a clip with
     /// a kept original that proves its 0.4 id the original's new fingerprint. The 0.4 id

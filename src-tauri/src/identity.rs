@@ -179,7 +179,7 @@ mod tests {
     /// The current ids for the same bytes. A clip's fingerprint is persisted
     /// (`app.quadcam.source`) and compared on every card insert, and a head id is persisted in
     /// the index, so a change here breaks every library. `pipeline::fingerprint` and
-    /// `library::head_id` only call these.
+    /// `library::read_file` only call these.
     #[test]
     fn current_ids_test_vector() {
         let d = tempfile::tempdir().unwrap();

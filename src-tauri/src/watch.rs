@@ -66,10 +66,11 @@ pub fn spawn(
                 .flat_map(|e| e.paths)
                 .collect();
             let settings_hit = paths.iter().any(|p| name(p, &settings_name));
+            // This process's own index writes are already in `core` and shown.
             let library_hit = paths.iter().any(|p| {
                 name(p, library::INDEX_FILE)
                     && p.parent().is_some_and(|d| name(d, library::INDEX_DIR))
-            });
+            }) && !core.library_index_current();
             if settings_hit {
                 core.reload_settings();
                 on_settings();
@@ -150,5 +151,12 @@ mod tests {
         let before = l.load(Ordering::SeqCst);
         cli.library_rebuild().unwrap();
         assert!(wait_for(&l, before + 1), "a second index write seen");
+
+        // The app's own write is not news: no second refresh for it.
+        std::thread::sleep(Duration::from_millis(300));
+        let before = l.load(Ordering::SeqCst);
+        app.library_rebuild().unwrap();
+        std::thread::sleep(Duration::from_millis(1000));
+        assert_eq!(l.load(Ordering::SeqCst), before, "own write skipped");
     }
 }

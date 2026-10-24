@@ -1318,7 +1318,10 @@ fn a_put_back_refuses_a_file_quadcam_did_not_trash() {
         from: l.root.join("2026/2026-09-27/stolen.mp4"),
         to: other.clone(),
     };
-    let e = l.core.library_untrash(&[forged.clone()]).unwrap_err();
+    let e = l
+        .core
+        .library_untrash(std::slice::from_ref(&forged))
+        .unwrap_err();
     assert!(
         format!("{e:#}").contains("not a file QuadCam moved"),
         "{e:#}"
