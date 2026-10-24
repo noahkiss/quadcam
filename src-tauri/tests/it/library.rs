@@ -1410,3 +1410,77 @@ fn a_newer_index_is_refused_not_replaced() {
     assert!(l.core.library_rate(&[id], Some(3), None).is_err());
     assert_eq!(std::fs::read(&p).unwrap(), newer);
 }
+
+/// The cost of one `library()` listing on a library of 2,000 clips in 400 day folders, half
+/// with a cut, every clip with a strip: the full walk for unindexed files and the picture
+/// checks (library review body #12). Run with --ignored --nocapture.
+#[test]
+#[ignore]
+fn listing_cost_on_2000_clips() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("library");
+    let cache = dir.path().join("cache");
+    std::fs::create_dir_all(cache.join("library")).unwrap();
+    let start = day();
+    let mut clips = Vec::new();
+    for i in 0..2000u32 {
+        let date = start - chrono::Duration::days((i / 5) as i64);
+        let folder = format!("{}/{}", date.format("%Y"), date.format("%Y-%m-%d"));
+        std::fs::create_dir_all(root.join(&folder)).unwrap();
+        let path = format!("{folder}/{}_flight-{i}.mp4", date.format("%Y-%m-%d"));
+        std::fs::write(root.join(&path), b"").unwrap();
+        let id = format!("{i:016x}");
+        std::fs::write(cache.join(format!("library/{id}.jpg")), b"").unwrap();
+        let cuts = if i % 2 == 0 {
+            let cut = format!("{folder}/{}_flight-{i}_cut1.mp4", date.format("%Y-%m-%d"));
+            std::fs::write(root.join(&cut), b"").unwrap();
+            serde_json::json!([{"path": cut, "start": 1.0, "end": 3.0, "size": 1}])
+        } else {
+            serde_json::json!([])
+        };
+        clips.push(serde_json::json!({
+            "id": id, "path": path, "title": format!("flight {i}"), "note": "",
+            "date": date.format("%Y-%m-%d").to_string(), "time": "18:30", "duration": 120.0,
+            "size": 100_000_000, "rating": i % 6, "place": "Home field",
+            "location": {"lat": 40.6892, "lon": -74.0445, "name": "Home field"},
+            "keywords": ["FPV", "park"], "cuts": cuts,
+            "moments": [{"kind": "roll", "start": 3.0, "end": 4.0, "score": 0.9, "source": "radio_log", "detail": ""}],
+        }));
+    }
+    let ix: library::Index = serde_json::from_value(serde_json::json!({
+        "version": library::INDEX_VERSION, "id_scheme": library::ID_SCHEME, "clips": clips,
+    }))
+    .unwrap();
+    ix.save(&root).unwrap();
+    let core = Core::new(
+        cache,
+        Some(dir.path().join("session.json")),
+        Arc::new(NoHooks),
+        Arc::new(Recorder::default()),
+    );
+    core.set_defaults(Defaults {
+        output_dir: Some(root.clone()),
+        ..Defaults::default()
+    });
+    let time = |f: &dyn Fn()| {
+        let mut ms: Vec<f64> = (0..10)
+            .map(|_| {
+                let t = std::time::Instant::now();
+                f();
+                t.elapsed().as_secs_f64() * 1000.0
+            })
+            .collect();
+        ms.sort_by(f64::total_cmp);
+        (ms[0], ms[5], ms[9])
+    };
+    let all = time(&|| assert_eq!(core.library(&Filter::default()).unwrap().clips.len(), 2000));
+    let walk = time(&|| assert_eq!(library::media_files(&root).len(), 3000));
+    println!(
+        "library() 2000 clips: min {:.1} ms, median {:.1} ms, max {:.1} ms",
+        all.0, all.1, all.2
+    );
+    println!(
+        "media_files walk alone: min {:.1} ms, median {:.1} ms, max {:.1} ms",
+        walk.0, walk.1, walk.2
+    );
+}
