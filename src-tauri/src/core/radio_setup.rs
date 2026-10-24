@@ -11,15 +11,22 @@ use super::model_edit::Base;
 use super::switchmap::{CardSource, Folder};
 use super::Core;
 use crate::gear::changes::ChangeFilter;
+use crate::gear::edgetx::board::{self, ControlLink};
 use crate::gear::edgetx::card::{identity_from_radio_yml, selected_in, Card, RADIO_FILE};
-use crate::gear::edgetx::setup::generate::{self, Generated, JobRow, SoundCheck, Source};
+use crate::gear::edgetx::setup::controls::SlotRow;
+use crate::gear::edgetx::setup::generate::{
+    self, Generated, JobRow, SetupProblem, SoundCheck, Source,
+};
 use crate::gear::edgetx::setup::postflash::{self, PackPlan};
-use crate::gear::edgetx::setup::{controls, defaults, Assignment, Control, RadioSetup};
+use crate::gear::edgetx::setup::{
+    controls, defaults, Aircraft, Assignment, Control, FittedSlot, RadioSetup,
+};
 use crate::gear::edgetx::yaml::Doc;
 use crate::gear::model::{CardFile, ChangeStatus, DiffItem, Edit, StagedChange};
 use anyhow::{anyhow, bail, Context, Result};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 /// The title of the change a setup stages.
@@ -59,9 +66,24 @@ pub struct RadioSetupDetail {
     /// `saved` (the radio's), `given` or `default` (the starting setup for the board).
     pub origin: String,
     pub setup: RadioSetup,
-    /// The board's controls a job may use.
+    /// The board's controls a job may use, with the fitted parts in place.
     pub controls: Vec<Control>,
+    /// The board's switch and pot slots: the factory part, the fitted part, and what
+    /// `radio.yml` says now.
+    #[serde(default)]
+    pub slots: Vec<SlotRow>,
     pub jobs: Vec<JobRow>,
+    /// What keeps the setup from planning, each at its job when it has one. While any is
+    /// listed, `edits` and `files` are empty and an edit refuses to save.
+    #[serde(default)]
+    pub problems: Vec<SetupProblem>,
+    /// Why the card does not take the setup (a model without sensors, a copy that does not
+    /// plan). The setup still saves; staging refuses.
+    #[serde(default)]
+    pub card_problem: Option<String>,
+    /// Models the radio's open "Radio setup" change copies from another radio first.
+    #[serde(default)]
+    pub copies: Vec<CopiedModel>,
     pub sounds: Vec<SoundCheck>,
     pub warnings: Vec<String>,
     /// The generated edits (what `stage` puts in the "Radio setup" change).
@@ -69,6 +91,31 @@ pub struct RadioSetupDetail {
     /// The card files the edits would change; empty when the card already matches.
     pub files: Vec<String>,
     pub diff: Vec<DiffItem>,
+}
+
+/// A model the setup change copies from another radio (`Edit::ModelImport`).
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
+pub struct CopiedModel {
+    /// The new model file on this radio.
+    pub to: String,
+    pub name: String,
+    /// The source radio's board.
+    pub from_board: String,
+}
+
+/// Copy models from another radio into this one, as the first edits of its setup change
+/// (`docs/radio-design.md` 5.5).
+#[derive(Debug, Clone, Default, Serialize, Deserialize, specta::Type)]
+pub struct SetupCopy {
+    /// The source: a saved radio's device id (its mounted card, else its latest backup) or
+    /// a backup id.
+    pub from: String,
+    /// The source's model files (`model00.yml`); every model when empty.
+    #[serde(default)]
+    pub models: Vec<String>,
+    /// Links in place of the two boards' default links, per source control.
+    #[serde(default)]
+    pub links: Vec<ControlLink>,
 }
 
 /// `gear_radio_setup_edit`: changes to a radio's saved setup, and its staging.
@@ -87,6 +134,14 @@ pub struct RadioSetupEditParams {
     /// Jobs that no control does any more.
     #[serde(default)]
     pub free: Vec<String>,
+    /// What is fitted in switch and pot slots (`{control, radio_type}`): a swapped switch
+    /// module, or `none` for a blanking plug. The factory type takes the slot off the list.
+    #[serde(default)]
+    pub fit: Vec<FittedSlot>,
+    /// Copy models from another radio first; their models become the setup's aircraft.
+    /// Stages the change (the copies live only there until it is applied).
+    #[serde(default)]
+    pub copy_from: Option<SetupCopy>,
     /// Stage the generated edits as the radio's "Radio setup" change.
     #[serde(default)]
     pub stage: bool,
@@ -205,6 +260,37 @@ impl Source for Src<'_> {
     }
 }
 
+/// A card reader with some files replaced (the copies a change makes first).
+struct Layered<'a> {
+    base: &'a dyn CardSource,
+    over: BTreeMap<String, Option<Vec<u8>>>,
+}
+
+impl Source for Layered<'_> {
+    fn read(&self, path: &str) -> Option<Vec<u8>> {
+        match self.over.get(path) {
+            Some(b) => b.clone(),
+            None => self.base.read(path),
+        }
+    }
+    fn files(&self) -> Vec<String> {
+        let mut f: Vec<String> = self
+            .base
+            .files()
+            .into_iter()
+            .filter(|f| !self.over.contains_key(f))
+            .collect();
+        f.extend(
+            self.over
+                .iter()
+                .filter(|(_, b)| b.is_some())
+                .map(|(p, _)| p.clone()),
+        );
+        f.sort();
+        f
+    }
+}
+
 /// The files a plan reads, copied from a backup into a folder `Card::plan` can open.
 fn materialize(src: &dyn CardSource, dir: &Path) -> Result<()> {
     for f in src.files() {
@@ -284,20 +370,93 @@ impl Core {
         Ok((default_for(base)?, "default".into()))
     }
 
+    /// The radio's open "Radio setup" change, if any.
+    fn open_setup_change(&self, device: &str) -> Option<StagedChange> {
+        self.changes()
+            .list(&ChangeFilter {
+                device: Some(device.to_string()),
+                ..Default::default()
+            })
+            .into_iter()
+            .find(|c| {
+                c.title == SETUP_CHANGE
+                    && matches!(c.status, ChangeStatus::Draft | ChangeStatus::Ready)
+            })
+    }
+
+    /// The setup against the card: the job rows, the slots and, when the setup checks and the
+    /// card takes it, the generated edits after `prefix` (models copied from another radio)
+    /// and the files they change.
     fn setup_detail(
         &self,
         device: Option<&str>,
         base: &Base<'_>,
         setup: RadioSetup,
         origin: String,
+        prefix: Vec<Edit>,
     ) -> Result<RadioSetupDetail> {
-        let g: Generated =
-            generate::generate(&setup, &Src(base.reader.as_ref())).map_err(|r| anyhow!(r))?;
+        let radio_doc = base
+            .reader
+            .read(RADIO_FILE)
+            .and_then(|b| Doc::parse("radio.yml", &b).ok());
+        let (checked, problems) = generate::problems(&setup);
+        let controls = checked
+            .or_else(|| controls::controls(&setup.board))
+            .unwrap_or_default();
+        let mut d = RadioSetupDetail {
+            device: device.map(str::to_string),
+            source: base.source.clone(),
+            origin,
+            slots: controls::slot_rows(&setup.board, &setup.fitted, radio_doc.as_ref()),
+            jobs: generate::job_rows(&setup, &controls),
+            controls,
+            problems,
+            card_problem: None,
+            copies: copies_of(&prefix),
+            sounds: vec![],
+            warnings: vec![],
+            edits: vec![],
+            files: vec![],
+            diff: vec![],
+            setup,
+        };
+        if !d.problems.is_empty() {
+            return Ok(d);
+        }
         let tmp = postflash::Scratch::new(&self.cache.join("radio-setup"))?;
         materialize(base.reader.as_ref(), tmp.path())?;
-        let plan = Card::open(tmp.path())?.plan(&g.edits, None)?;
+        // The copies come first; the generator reads the card as they leave it.
+        let mut over = BTreeMap::new();
+        if !prefix.is_empty() {
+            let plan = Card::open(tmp.path())?.plan(&prefix, None)?;
+            if let Some(r) = plan.checks.iter().find_map(|c| c.refusal.clone()) {
+                d.card_problem = Some(format!(
+                    "The copy from the other radio does not plan: {}",
+                    r.reason
+                ));
+                return Ok(d);
+            }
+            for f in plan.files {
+                over.insert(f.path, f.after);
+            }
+        }
+        let layered = Layered {
+            base: base.reader.as_ref(),
+            over,
+        };
+        let g: Generated = match generate::generate(&d.setup, &layered) {
+            Ok(g) => g,
+            Err(r) => {
+                d.card_problem = Some(r.reason);
+                return Ok(d);
+            }
+        };
+        let mut edits = prefix;
+        edits.extend(g.edits);
+        let plan = Card::open(tmp.path())?.plan(&edits, None)?;
         if let Some(r) = plan.checks.iter().find_map(|c| c.refusal.clone()) {
-            return Err(anyhow!(r));
+            d.card_problem = Some(r.reason);
+            return Ok(d);
         }
         let files = plan
             .files
@@ -308,36 +467,47 @@ impl Core {
             })
             .map(|f| f.path.clone())
             .collect::<Vec<_>>();
-        let controls = controls::controls(&setup.board).unwrap_or_default();
-        let mut warnings = g.warnings;
-        warnings.extend(plan.warnings.iter().cloned());
-        Ok(RadioSetupDetail {
-            device: device.map(str::to_string),
-            source: base.source.clone(),
-            origin,
-            controls,
-            jobs: g.jobs,
-            sounds: g.sounds,
-            warnings,
-            edits: g.edits,
-            diff: if files.is_empty() { vec![] } else { plan.diff },
-            files,
-            setup,
-        })
+        d.warnings = g.warnings;
+        d.warnings.extend(plan.warnings.iter().cloned());
+        d.sounds = g.sounds;
+        d.jobs = g.jobs;
+        d.edits = edits;
+        d.diff = if files.is_empty() { vec![] } else { plan.diff };
+        d.files = files;
+        Ok(d)
+    }
+
+    /// The models a radio's open setup change copies first.
+    fn setup_prefix(&self, device: Option<&str>, mount: Option<&str>) -> Vec<Edit> {
+        match (device, mount) {
+            (Some(d), None) => self
+                .open_setup_change(d)
+                .map(|c| {
+                    c.edits
+                        .into_iter()
+                        .filter(|e| matches!(e, Edit::ModelImport { .. }))
+                        .collect()
+                })
+                .unwrap_or_default(),
+            _ => vec![],
+        }
     }
 
     /// Reads a setup against a radio's card or a card folder: the jobs and their controls,
-    /// the generated edits and the files they would change. Writes nothing.
+    /// the slots, what keeps the setup from planning, the generated edits and the files they
+    /// would change. Writes nothing.
     pub fn gear_radio_setup(&self, p: &RadioSetupParams) -> Result<RadioSetupDetail> {
         let snaps = self.snapshots();
         let base = self.setup_base(p.device.as_deref(), p.mount.as_deref(), &snaps)?;
         let (setup, origin) = self.pick_setup(p.device.as_deref(), p.setup.as_ref(), &base)?;
-        self.setup_detail(p.device.as_deref(), &base, setup, origin)
+        let prefix = self.setup_prefix(p.device.as_deref(), p.mount.as_deref());
+        self.setup_detail(p.device.as_deref(), &base, setup, origin, prefix)
     }
 
-    /// Changes a radio's saved setup (the whole setup, a reset, or job controls), checks it
-    /// against the board and the card, saves it, and with `stage` stages its edits as the
-    /// radio's "Radio setup" change. Writes only QuadCam's own data.
+    /// Changes a radio's saved setup (the whole setup, a reset, job controls, fitted parts,
+    /// or models copied from another radio), checks it against the board, saves it, and
+    /// with `stage` stages its edits as the radio's "Radio setup" change. Writes only
+    /// QuadCam's own data.
     pub fn gear_radio_setup_edit(&self, p: &RadioSetupEditParams) -> Result<RadioSetupEdited> {
         let snaps = self.snapshots();
         let base = self.setup_base(Some(&p.device), None, &snaps)?;
@@ -350,6 +520,18 @@ impl Core {
                 None => default_for(&base)?,
             },
         };
+        let mut notes = Vec::new();
+        let mut prefix = self.setup_prefix(Some(&p.device), None);
+        if let Some(cp) = &p.copy_from {
+            let (imports, copied, n) = self.setup_copy(&p.device, &base, &snaps, cp, setup)?;
+            prefix = imports;
+            setup = copied;
+            notes.extend(n);
+        }
+        for f in &p.fit {
+            controls::set_fitted(&setup.board, &mut setup.fitted, &f.control, &f.radio_type)
+                .map_err(|r| anyhow!(r))?;
+        }
         for a in &p.assign {
             setup.assignments.retain(|x| x.job != a.job);
             setup.assignments.push(a.clone());
@@ -366,22 +548,23 @@ impl Core {
             .assignments
             .sort_by_key(|a| order.iter().position(|j| *j == a.job).unwrap_or(usize::MAX));
         generate::check(&setup).map_err(|r| anyhow!(r))?;
-        let detail = self.setup_detail(Some(&p.device), &base, setup.clone(), "saved".into())?;
+        let detail = self.setup_detail(
+            Some(&p.device),
+            &base,
+            setup.clone(),
+            "saved".into(),
+            prefix,
+        )?;
+        let stage = p.stage || p.copy_from.is_some();
+        if stage {
+            if let Some(r) = &detail.card_problem {
+                bail!("{r}");
+            }
+        }
         self.save_setup(&p.device, &setup)?;
-        let mut notes = Vec::new();
-        let open = self
-            .changes()
-            .list(&ChangeFilter {
-                device: Some(p.device.clone()),
-                ..Default::default()
-            })
-            .into_iter()
-            .find(|c| {
-                c.title == SETUP_CHANGE
-                    && matches!(c.status, ChangeStatus::Draft | ChangeStatus::Ready)
-            });
+        let open = self.open_setup_change(&p.device);
         let mut change = None;
-        if p.stage {
+        if stage {
             change = Some(match (open, detail.files.is_empty()) {
                 (Some(c), true) => {
                     notes.push(
@@ -416,6 +599,197 @@ impl Core {
             change,
             notes,
         })
+    }
+
+    /// The edits that copy models from another radio onto this one, and the setup for them:
+    /// the source radio's saved setup with its controls mapped through the boards' links,
+    /// else `current` with the copied models as its aircraft.
+    fn setup_copy(
+        &self,
+        device: &str,
+        base: &Base<'_>,
+        snaps: &crate::gear::backup::Snapshots,
+        cp: &SetupCopy,
+        current: RadioSetup,
+    ) -> Result<(Vec<Edit>, RadioSetup, Vec<String>)> {
+        use crate::gear::edgetx::model as em;
+        use crate::gear::edgetx::yaml::latin1;
+        let from = cp.from.trim();
+        if from.is_empty() {
+            bail!("Name the radio to copy from: a saved radio or a backup id.");
+        }
+        if from == device {
+            bail!("Copy from another radio, not this one.");
+        }
+        let from_device = self.gear_store().devices()?.iter().any(|d| d.id == from);
+        let src: Base<'_> = if from_device {
+            self.model_base(from, snaps)?
+        } else {
+            let b = snaps
+                .get(from)
+                .map_err(|_| anyhow!("{from:?} is not a saved radio or a backup id."))?;
+            Base {
+                source: format!("backup {}", b.id),
+                reader: Box::new(super::switchmap::InBackup { snaps, backup: b }),
+            }
+        };
+        let src_radio = src
+            .reader
+            .read(RADIO_FILE)
+            .and_then(|b| Doc::parse("radio.yml", &b).ok());
+        let from_board = src_radio
+            .as_ref()
+            .and_then(|r| r.top_value("board"))
+            .map(|b| b.trim().to_ascii_lowercase())
+            .context("The source's radio.yml names no board.")?;
+        let model_files = |r: &dyn super::switchmap::CardSource| -> Vec<String> {
+            let mut v: Vec<String> = r
+                .files()
+                .into_iter()
+                .filter_map(|f| f.strip_prefix("MODELS/").map(str::to_string))
+                .filter(|f| crate::gear::edgetx::card::is_model_file(f))
+                .collect();
+            v.sort();
+            v
+        };
+        let models = if cp.models.is_empty() {
+            model_files(src.reader.as_ref())
+        } else {
+            cp.models
+                .iter()
+                .map(|m| m.trim().trim_start_matches("MODELS/").to_string())
+                .collect()
+        };
+        if models.is_empty() {
+            bail!("The {} holds no models.", src.source);
+        }
+        let to_radio = base
+            .reader
+            .read(RADIO_FILE)
+            .and_then(|b| Doc::parse("radio.yml", &b).ok());
+        let from_controls = board::inventory(Some(&from_board), src_radio.as_ref(), None);
+        let to_controls = board::inventory(Some(&current.board), to_radio.as_ref(), None);
+        let links = crate::gear::edgetx::card::effective_links(
+            &from_board,
+            &from_controls,
+            &current.board,
+            &to_controls,
+            &cp.links,
+        );
+        let mut taken: std::collections::BTreeSet<String> =
+            model_files(base.reader.as_ref()).into_iter().collect();
+        let mut imports = Vec::new();
+        let mut moved: BTreeMap<String, String> = BTreeMap::new();
+        for m in &models {
+            let bytes = src
+                .reader
+                .read(&format!("MODELS/{m}"))
+                .with_context(|| format!("The {} has no MODELS/{m}.", src.source))?;
+            let doc = Doc::parse(m, &bytes).map_err(anyhow::Error::new)?;
+            let name = em::model_name(&doc)
+                .map_err(anyhow::Error::new)?
+                .unwrap_or_default();
+            let to = (0..100)
+                .map(|n| format!("model{n:02}.yml"))
+                .find(|f| !taken.contains(f))
+                .context("The radio has no free model slot.")?;
+            taken.insert(to.clone());
+            imports.push(Edit::ModelImport {
+                from_board: from_board.clone(),
+                text: latin1(&bytes),
+                to: to.clone(),
+                name,
+                links: cp.links.clone(),
+                template: None,
+            });
+            moved.insert(m.clone(), to);
+        }
+        let mut notes = Vec::new();
+        let mut setup = current;
+        let source_setup = if from_device {
+            self.saved_setup(from)?
+        } else {
+            None
+        };
+        if let Some(s) = source_setup {
+            let defaults = defaults::setup(&setup.board, "model00.yml");
+            setup.jobs = s.jobs.clone();
+            setup.template = s.template.clone();
+            setup.radio = s.radio.clone();
+            setup.radio.select_model = s
+                .radio
+                .select_model
+                .as_ref()
+                .and_then(|f| moved.get(f).cloned());
+            setup.radio.delete_other_models = false;
+            setup.aircraft = s
+                .aircraft
+                .iter()
+                .filter_map(|a| {
+                    Some(Aircraft {
+                        file: moved.get(&a.file)?.clone(),
+                        was_named: vec![],
+                        copy_from: a.copy_from.as_ref().and_then(|f| moved.get(f).cloned()),
+                        ..a.clone()
+                    })
+                })
+                .collect();
+            setup.assignments = Vec::new();
+            for a in &s.assignments {
+                let label = s.job(&a.job).map_or(a.job.as_str(), |j| j.label.as_str());
+                match links.iter().find(|l| l.from == a.control) {
+                    Some(l) => {
+                        // The board's own direction for the control, when its default
+                        // puts the job there; else the source's.
+                        let high = defaults
+                            .as_ref()
+                            .and_then(|d| d.assignment(&a.job))
+                            .filter(|d| d.control == l.to)
+                            .map_or(a.high, |d| d.high);
+                        setup.assignments.push(Assignment {
+                            job: a.job.clone(),
+                            control: l.to.clone(),
+                            high,
+                        });
+                    }
+                    None => notes.push(format!(
+                        "{label}: {} on the {from_board} has no control here; pick one.",
+                        a.control
+                    )),
+                }
+            }
+        }
+        if setup.aircraft.is_empty() {
+            setup.aircraft = moved.values().map(|f| plain_aircraft(f)).collect();
+            setup.radio.select_model = moved.values().next().cloned();
+        }
+        // A mapped control that cannot do its job here is left for the person to pick.
+        let (_, problems) = generate::problems(&setup);
+        for pr in problems {
+            if let Some(job) = pr.job.as_deref() {
+                if setup.assignments.iter().any(|a| a.job == job) {
+                    setup.assignments.retain(|a| a.job != job);
+                    notes.push(format!("{} Pick another control.", pr.message));
+                }
+            }
+        }
+        notes.insert(
+            0,
+            format!(
+                "Copies {} from the {} ({}) first.",
+                imports
+                    .iter()
+                    .filter_map(|e| match e {
+                        Edit::ModelImport { name, to, .. } => Some(format!("{name} to {to}")),
+                        _ => None,
+                    })
+                    .collect::<Vec<_>>()
+                    .join(", "),
+                src.source,
+                from_board
+            ),
+        );
+        Ok((imports, setup, notes))
     }
 
     /// Plans the steps after a flash on a radio's card (mounted, else its latest backup),
@@ -762,6 +1136,42 @@ impl Core {
     }
 }
 
+/// The models `edits` copy from another radio.
+fn copies_of(edits: &[Edit]) -> Vec<CopiedModel> {
+    edits
+        .iter()
+        .filter_map(|e| match e {
+            Edit::ModelImport {
+                to,
+                name,
+                from_board,
+                ..
+            } => Some(CopiedModel {
+                to: to.clone(),
+                name: name.clone(),
+                from_board: from_board.clone(),
+            }),
+            _ => None,
+        })
+        .collect()
+}
+
+/// An aircraft on a model file with nothing of its own.
+fn plain_aircraft(file: &str) -> Aircraft {
+    Aircraft {
+        file: file.to_string(),
+        name: None,
+        was_named: vec![],
+        model_id: None,
+        copy_from: None,
+        checklist: None,
+        drop_timers: vec![],
+        logical_switches: vec![],
+        drop_functions: vec![],
+        functions: vec![],
+    }
+}
+
 /// The board's default setup on the base's card, for its selected model.
 fn default_for(base: &Base<'_>) -> Result<RadioSetup> {
     let radio = base
@@ -807,6 +1217,37 @@ pub fn render_text(d: &RadioSetupDetail) -> String {
             j.control.as_deref().unwrap_or("(none)"),
             states.join(" / ")
         );
+    }
+    let fitted: Vec<String> = d
+        .slots
+        .iter()
+        .filter(|x| x.fitted != x.factory)
+        .map(|x| format!("{} {}", x.control, x.fitted))
+        .collect();
+    if !fitted.is_empty() {
+        let _ = writeln!(s, "Fitted: {}", fitted.join(", "));
+    }
+    for x in d
+        .slots
+        .iter()
+        .filter(|x| x.on_radio.as_ref().is_some_and(|r| *r != x.fitted))
+    {
+        let _ = writeln!(
+            s,
+            "  {}: the radio says {}, the setup {}",
+            x.control,
+            x.on_radio.as_deref().unwrap_or_default(),
+            x.fitted
+        );
+    }
+    for c in &d.copies {
+        let _ = writeln!(s, "Copies {} from the {} to {}", c.name, c.from_board, c.to);
+    }
+    for p in &d.problems {
+        let _ = writeln!(s, "  problem: {}", p.message);
+    }
+    if let Some(r) = &d.card_problem {
+        let _ = writeln!(s, "  the card does not take it: {r}");
     }
     let _ = writeln!(
         s,

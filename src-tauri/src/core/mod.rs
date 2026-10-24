@@ -117,8 +117,8 @@ pub use radio_settings::{
 };
 pub use radio_setup::{
     PostFlashParams, PostFlashPlan, PostFlashPlanned, PostFlashStep, RadioSetupDetail,
-    RadioSetupEditParams, RadioSetupEdited, RadioSetupParams, SavedSetup, VolumeLabelParams,
-    VolumeLabeled, SETUP_CHANGE,
+    RadioSetupEditParams, RadioSetupEdited, RadioSetupParams, SavedSetup, SetupCopy,
+    VolumeLabelParams, VolumeLabeled, SETUP_CHANGE,
 };
 pub use rates::{RatesParams, RatesPreview, RatesPreviewParams, SimsParams};
 pub use rematch::{LibMatch, LibMatchParams, LibMatchReport};

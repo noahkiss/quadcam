@@ -9,6 +9,7 @@ import { VoiceSegment } from "./Voice/VoiceSegment";
 import { OsdSegment } from "./Osd/OsdSegment";
 import { RatesSegment } from "./Rates/RatesSegment";
 import { SwitchesSegment } from "./Switches/SwitchesSegment";
+import { SetupSegment } from "./Setup/SetupSegment";
 import { ChangesSegment } from "./Changes/ChangesSegment";
 import { BackupsSegment } from "./Backups/BackupsSegment";
 import { BlackboxSegment } from "./Blackbox/BlackboxSegment";
@@ -23,6 +24,9 @@ export const DEVICE_SEGMENTS: DeviceSegment[] = [
   { id: "rates", label: "Rates", kinds: ["fc"], render: (d) => <RatesSegment key={d.key} device={d.device?.last_backup ? d.device.id : null} /> },
   // From a card or model file and a dump; the latest backups join as sources later.
   { id: "switches", label: "Switches", kinds: ["fc", "radio"], render: (d) => <SwitchesSegment d={d} /> },
+  // A radio's setup: the control and direction of each job, the fitted parts, Learn, Copy
+  // from another radio, and Review of the one "Radio setup" change.
+  { id: "setup", label: "Setup", kinds: ["radio"], render: (d) => <SetupSegment key={d.key} d={d} /> },
   // A radio's models and checklists: each edit stages one "Model edits" change (WP9).
   { id: "models", label: "Models", kinds: ["radio"], render: (d) => <ModelsSegment key={d.key} d={d} /> },
   // A radio's voice: packs, Choose voice and per-line overrides (WP9).

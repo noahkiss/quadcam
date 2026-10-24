@@ -8,7 +8,7 @@ use anyhow::{anyhow, bail, Context, Result};
 use clap::Args;
 use quadcam_lib::api::{self, call};
 use quadcam_lib::core::{radio_setup, Core, PostFlashStep};
-use quadcam_lib::gear::edgetx::setup::{Assignment, RadioSetup};
+use quadcam_lib::gear::edgetx::setup::{Assignment, FittedSlot, RadioSetup};
 use serde_json::Value;
 use std::path::PathBuf;
 
@@ -44,6 +44,23 @@ pub struct SetupEditArgs {
     /// A job no control does any more. Repeat for more.
     #[arg(long, value_name = "JOB")]
     pub free: Vec<String>,
+    /// What is fitted in a switch or pot slot, `CONTROL=TYPE`: a switch 2POS, 3POS, TOGGLE
+    /// (momentary) or NONE; a pot with_detent, without_detent or none (a blanking plug); a
+    /// slider slider or none (`SA=TOGGLE`). Repeat for more.
+    #[arg(long, value_name = "CONTROL=TYPE")]
+    pub fit: Vec<String>,
+    /// Copy models from another radio first (a saved radio's device id or a backup id), and
+    /// stage them with the setup as one change.
+    #[arg(long, value_name = "SOURCE")]
+    pub copy_from: Option<String>,
+    /// With --copy-from: a source model file (model00.yml); every model when left out.
+    /// Repeat for more.
+    #[arg(long = "copy-model", value_name = "FILE")]
+    pub copy_models: Vec<String>,
+    /// With --copy-from: a link in place of the default, SOURCE=TARGET (SE=SH); repeat for
+    /// more.
+    #[arg(long = "link")]
+    pub links: Vec<String>,
     /// Stage the generated edits as the radio's "Radio setup" change.
     #[arg(long)]
     pub stage: bool,
@@ -144,6 +161,34 @@ pub fn edit(core: &Core, a: SetupEditArgs) -> Result<Value> {
         .iter()
         .map(|s| assignment_of(s))
         .collect::<Result<Vec<_>>>()?;
+    let fit = a
+        .fit
+        .iter()
+        .map(|s| {
+            let (c, t) = s
+                .split_once('=')
+                .ok_or_else(|| anyhow!("{s:?} is not CONTROL=TYPE"))?;
+            Ok(FittedSlot {
+                control: c.trim().into(),
+                radio_type: t.trim().into(),
+            })
+        })
+        .collect::<Result<Vec<_>>>()?;
+    if a.copy_from.is_none() && (!a.copy_models.is_empty() || !a.links.is_empty()) {
+        bail!("--copy-model and --link go with --copy-from");
+    }
+    let copy_from = match a.copy_from {
+        Some(from) => Some(radio_setup::SetupCopy {
+            from,
+            models: a.copy_models,
+            links: a
+                .links
+                .iter()
+                .map(|l| super::card::parse_link(l))
+                .collect::<Result<_>>()?,
+        }),
+        None => None,
+    };
     let r = call::gear_radio_setup_edit(
         core,
         api::RadioSetupEditParams {
@@ -152,6 +197,8 @@ pub fn edit(core: &Core, a: SetupEditArgs) -> Result<Value> {
             reset: a.reset,
             assign,
             free: a.free,
+            fit,
+            copy_from,
             stage: a.stage,
             editor: None,
         },

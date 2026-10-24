@@ -7,7 +7,7 @@ import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialo
 import { openPath, openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { commands, type MapFrame, type MapPin, type MapStyle } from "../bindings";
 import * as N from "./normalize";
-import type { ProfileGear, ElrsFlashParams, FormatRequest, ChangeStatus, CopyRequest, Edit, SimFrame, SimPreset, SimStartInfo, SimStartParams, SimStopInfo, CrashSaveParams, ImportOptions, LibEdit, LibraryFilter, Moved, ModelEditParams, ModelParams, RadioSettingsEditParams, RadioSettingsParams, PackDeleteParams, PackInstallParams, PackPreviewParams, PublishApproveParams, PublishParams, SaveSetsParams, CatalogParams, EstimateParams, ImportTakesParams, KeyParams, LibraryParams, RenderPacksParams, SampleParams, SamplesDeleteParams, FlagParams, RetakeParams, SetsParams, VoiceCheckParams, VoiceChooseParams, VoiceChooseRadiosParams, VoiceEditParams, VoiceParams, VoicePreviewParams, VoiceRenderParams, OsdEditParams, OsdParams, RatesParams, RatesPreview, RateProfile, FirmwareRestoreParams, FlashParams, SplashParams, SimRestoreParams, SimSyncParams, SimsParams, Pack, PackType, PlanPatch, RemovedCuts, SettingsValues, Span, SwitchMapParams, SimCalibrationSaveParams, CalibrateParams } from "./types";
+import type { ProfileGear, ElrsFlashParams, FormatRequest, ChangeStatus, CopyRequest, Edit, SimFrame, SimPreset, SimStartInfo, SimStartParams, SimStopInfo, CrashSaveParams, ImportOptions, LibEdit, LibraryFilter, Moved, ModelEditParams, ModelParams, RadioSettingsEditParams, RadioSettingsParams, RadioSetupEditParams, RadioSetupEdited, RadioSetupParams, PackDeleteParams, PackInstallParams, PackPreviewParams, PublishApproveParams, PublishParams, SaveSetsParams, CatalogParams, EstimateParams, ImportTakesParams, KeyParams, LibraryParams, RenderPacksParams, SampleParams, SamplesDeleteParams, FlagParams, RetakeParams, SetsParams, VoiceCheckParams, VoiceChooseParams, VoiceChooseRadiosParams, VoiceEditParams, VoiceParams, VoicePreviewParams, VoiceRenderParams, OsdEditParams, OsdParams, RatesParams, RatesPreview, RateProfile, FirmwareRestoreParams, FlashParams, SplashParams, SimRestoreParams, SimSyncParams, SimsParams, Pack, PackType, PlanPatch, RemovedCuts, SettingsValues, Span, SwitchMapParams, SimCalibrationSaveParams, CalibrateParams } from "./types";
 
 type Result<T> = Promise<{ status: "ok"; data: T } | { status: "error"; error: string }>;
 
@@ -182,6 +182,8 @@ export const api = {
   gearModelEdit: (params: ModelEditParams) => ok(commands.gearModelEdit(params)),
   gearRadioSettings: (params: RadioSettingsParams) => ok(commands.gearRadioSettings(params)),
   gearRadioSettingsEdit: (params: RadioSettingsEditParams) => ok(commands.gearRadioSettingsEdit(params)),
+  gearRadioSetup: (params: RadioSetupParams) => ok(commands.gearRadioSetup(params)),
+  gearRadioSetupEdit: async (params: RadioSetupEditParams) => (await ok(commands.gearRadioSetupEdit(params))) as RadioSetupEdited,
   gearOsd: (params: OsdParams) => ok(commands.gearOsd(params)),
   gearOsdEdit: (params: OsdEditParams) => ok(commands.gearOsdEdit(params)),
   gearRates: async (params: RatesParams) => N.rates(await ok(commands.gearRates(params))),

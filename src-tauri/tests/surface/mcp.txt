@@ -281,6 +281,7 @@ mcp.param quadcam_gear_edit.edits array
 mcp.param quadcam_gear_edit.elrs_version string
 mcp.param quadcam_gear_edit.fc_files array<string>
 mcp.param quadcam_gear_edit.firmware_channel string
+mcp.param quadcam_gear_edit.fit array
 mcp.param quadcam_gear_edit.flight string
 mcp.param quadcam_gear_edit.folder string
 mcp.param quadcam_gear_edit.free array<string>
@@ -296,9 +297,11 @@ mcp.param quadcam_gear_edit.label string
 mcp.param quadcam_gear_edit.license string
 mcp.param quadcam_gear_edit.line string
 mcp.param quadcam_gear_edit.lines array<string>
+mcp.param quadcam_gear_edit.links array<string>
 mcp.param quadcam_gear_edit.mass_g number
 mcp.param quadcam_gear_edit.minutes integer
 mcp.param quadcam_gear_edit.model string
+mcp.param quadcam_gear_edit.models array<string>
 mcp.param quadcam_gear_edit.mount string
 mcp.param quadcam_gear_edit.moves array
 mcp.param quadcam_gear_edit.name string

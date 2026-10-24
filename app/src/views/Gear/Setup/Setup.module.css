@@ -1,0 +1,83 @@
+.segment {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+}
+.source,
+.note,
+.status {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--t-sm);
+}
+.status {
+  color: var(--fg);
+}
+.muted {
+  color: var(--muted);
+  font-size: var(--t-sm);
+}
+.changed {
+  color: var(--warning-text);
+  font-size: var(--t-sm);
+}
+.error,
+.learnError {
+  color: var(--error-text);
+  font-size: var(--t-sm);
+}
+.cell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+  min-width: 0;
+}
+.states {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 2px;
+  font-size: var(--t-sm);
+}
+.states li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+.pos {
+  min-width: 6.5rem;
+}
+.us {
+  min-width: 4.5rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  min-width: min(28rem, 100%);
+}
+.models {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+.models legend {
+  padding: 0;
+  margin-bottom: var(--s-2);
+  font-size: var(--t-sm);
+  color: var(--muted);
+}

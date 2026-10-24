@@ -324,6 +324,7 @@ pub fn template() -> ModelTemplate {
 pub fn setup(board: &str, model_file: &str) -> Option<RadioSetup> {
     Some(RadioSetup {
         board: board.trim().to_ascii_lowercase(),
+        fitted: vec![],
         jobs: jobs(),
         assignments: assignments(board)?,
         template: template(),
