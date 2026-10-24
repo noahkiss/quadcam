@@ -1542,7 +1542,7 @@ battery.
 
 QuadCam reads logs from three places: the gear folder's `logs/`, folders you add (**Add log
 folder…** in the Flights page's **…** menu), and the `LOGS/` of a radio plugged in as USB Storage. It keeps a
-cache of each log's flights in `<gear>/flights.json` and reads a log again only when it changes.
+cache of each log's flights in `<gear>/flights.json` and reads a log again only when it changes. A log that fails to read is not cached, so the next look tries it again.
 
 **Flights** shows one day's flights; pick the day from the pop-up in the header, beside the
 section switch. For each flight:

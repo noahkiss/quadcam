@@ -465,7 +465,8 @@ pub fn log_files(sources: &[PathBuf]) -> Vec<PathBuf> {
 
 /// Every flight in the logs under `sources`, in time order, one per id (the same log in two
 /// places counts once). Files the cache knows by size and mtime are not read again; the
-/// cache is rewritten when anything changed (a write failure only costs the next read).
+/// cache is rewritten when anything changed (a write failure only costs the next read). A
+/// file that fails to read is left out of the cache, so the next index tries it again.
 pub fn index(sources: &[PathBuf], cache_file: &Path, tun: &Tunables) -> Result<Vec<Flight>> {
     let old: Cache = std::fs::read(cache_file)
         .ok()
@@ -490,7 +491,9 @@ pub fn index(sources: &[PathBuf], cache_file: &Path, tun: &Tunables) -> Result<V
             continue;
         }
         changed = true;
-        let flights = analyse_file(&f, tun).unwrap_or_default();
+        let Ok(flights) = analyse_file(&f, tun) else {
+            continue;
+        };
         cache.files.push(CacheEntry {
             path: f,
             len,
@@ -663,6 +666,33 @@ mod tests {
         assert_eq!(c.files.len(), 2);
         // A second run reads the cache, with the same answer.
         assert_eq!(index(&srcs, &cache, &tun).unwrap(), f);
+    }
+
+    #[test]
+    fn a_log_that_fails_to_read_is_tried_again() {
+        use std::os::unix::fs::PermissionsExt;
+        let d = tempfile::tempdir().unwrap();
+        let p = synth::write_known(d.path()).unwrap();
+        let cache = d.path().join("flights.json");
+        let tun = Tunables::default();
+        let srcs = vec![d.path().to_path_buf()];
+        let mode = |m| std::fs::set_permissions(&p, std::fs::Permissions::from_mode(m)).unwrap();
+        mode(0o000);
+        let unreadable = index(&srcs, &cache, &tun);
+        mode(0o644);
+        assert!(unreadable.unwrap().is_empty());
+        assert_eq!(index(&srcs, &cache, &tun).unwrap().len(), KNOWN.flights);
+    }
+
+    #[test]
+    fn a_byte_that_is_not_utf8_costs_only_its_row() {
+        let d = tempfile::tempdir().unwrap();
+        let p = synth::write_known(d.path()).unwrap();
+        let mut bytes = std::fs::read(&p).unwrap();
+        bytes.extend_from_slice(b"\xff\xfe damaged\n");
+        std::fs::write(&p, bytes).unwrap();
+        let f = analyse_file(&p, &Tunables::default()).unwrap();
+        assert_eq!(f.len(), KNOWN.flights);
     }
 
     #[test]

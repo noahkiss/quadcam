@@ -293,10 +293,11 @@ pub fn parse_rows(text: &str) -> Vec<LogRow> {
     out
 }
 
-/// Every row of one EdgeTX CSV file, tagged with the model name from the file name.
+/// Every row of one EdgeTX CSV file, tagged with the model name from the file name. A byte
+/// that is not UTF-8 (a damaged card sector) costs only its own row.
 pub fn read_rows(path: &Path) -> Result<Vec<LogRow>> {
-    let text =
-        std::fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
+    let bytes = std::fs::read(path).with_context(|| format!("reading {}", path.display()))?;
+    let text = String::from_utf8_lossy(&bytes);
     let model: Option<std::sync::Arc<str>> = path
         .file_name()
         .and_then(|n| model_from_file_name(&n.to_string_lossy()))
