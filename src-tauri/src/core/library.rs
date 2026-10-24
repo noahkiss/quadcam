@@ -420,29 +420,53 @@ impl Core {
         if rating.is_some_and(|r| r > 5) {
             bail!("A rating is 0 to 5 stars.");
         }
-        self.with_index(|root, ix| {
+        let mut set = Vec::new();
+        if let Some(r) = rating {
+            set.push((
+                lib::KEY_RATING,
+                if r == 0 { String::new() } else { r.to_string() },
+            ));
+        }
+        if let Some(f) = flag {
+            set.push((lib::KEY_FLAG, f.as_str().to_string()));
+        }
+        // Every id first; then the files, outside the index lock. The index takes the new
+        // values only for the files that took them, so it never claims a value a file lacks.
+        let clips = ids
+            .iter()
+            .map(|id| self.clip(id))
+            .collect::<Result<Vec<_>>>()?;
+        let mut written = Vec::new();
+        let mut failed = Vec::new();
+        for (root, c) in &clips {
+            match lib::write_keys(&root.join(&c.path), &set) {
+                Ok(()) => written.push(c.id.clone()),
+                Err(e) => failed.push(format!("{e:#}")),
+            }
+        }
+        let out = self.with_index(|_, ix| {
             let mut out = Vec::new();
-            for id in ids {
-                let c = ix
-                    .get_mut(id)
-                    .with_context(|| format!("No clip {id} in the library."))?;
-                let mut set = Vec::new();
+            for id in &written {
+                let Some(c) = ix.get_mut(id) else { continue };
                 if let Some(r) = rating {
                     c.rating = r;
-                    set.push((
-                        lib::KEY_RATING,
-                        if r == 0 { String::new() } else { r.to_string() },
-                    ));
                 }
                 if let Some(f) = flag {
                     c.flag = f;
-                    set.push((lib::KEY_FLAG, f.as_str().to_string()));
                 }
-                lib::write_keys(&root.join(&c.path), &set)?;
                 out.push(c.clone());
             }
-            Ok((out, true))
-        })
+            Ok((out, !written.is_empty()))
+        })?;
+        if !failed.is_empty() {
+            bail!(
+                "{} of {} clips not changed: {}",
+                failed.len(),
+                ids.len(),
+                failed.join("; ")
+            );
+        }
+        Ok(out)
     }
 
     /// Changes a clip's note, keywords, author, location, aircraft profile, date or time,
@@ -914,6 +938,10 @@ impl Core {
     pub fn library_apply_name_format(&self, ids: Option<Vec<String>>) -> Result<RenameReport> {
         let format = self.defaults().name_date_format;
         let clips: Vec<(PathBuf, LibClip)> = self.with_index(|root, ix| {
+            // An id may be a 0.4 alias: compare current ids.
+            let ids: Option<Vec<String>> = ids
+                .as_ref()
+                .map(|ids| ids.iter().filter_map(|id| Some(ix.get(id)?.id.clone())).collect());
             Ok((
                 ix.clips
                     .iter()

@@ -242,3 +242,18 @@ fn a_card_with_a_known_clip_has_nothing_new() {
     let st = c.card_status(card.path()).unwrap();
     assert_eq!((st.clips, st.new), (2, 1));
 }
+
+/// Renaming to the date format by a 0.4 id renames that clip, as a lookup by it would.
+#[test]
+fn an_old_id_renames_its_clip_to_the_date_format() {
+    let l = lab();
+    let old = old_ids();
+    let c = core(&l);
+    let mut d = c.defaults();
+    d.name_date_format = quadcam_lib::naming::DateFormat::Short;
+    c.set_defaults(d);
+    let r = c
+        .library_apply_name_format(Some(vec![old["loops"].clone()]))
+        .unwrap();
+    assert_eq!(r.renamed.len(), 1, "{r:?}");
+}

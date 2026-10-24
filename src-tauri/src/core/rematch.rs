@@ -197,7 +197,7 @@ impl Core {
                     applied: false,
                 });
                 if p.apply {
-                    let named = p.ids.contains(&c.id);
+                    let named = p.ids.iter().any(|id| &c.id == id || c.aliases.contains(id));
                     let write = match s.badge {
                         Badge::Matched => true,
                         Badge::Likely => named,

@@ -1310,3 +1310,27 @@ fn a_put_back_refuses_a_file_quadcam_did_not_trash() {
     assert!(format!("{e:#}").contains("not a file QuadCam moved"), "{e:#}");
     assert!(other.is_file() && !forged.from.exists());
 }
+
+/// A rating that one file refuses still rates the others, and the index holds each file's
+/// own value: the refused clip keeps its old rating there.
+#[test]
+fn a_rating_one_file_refuses_rates_the_rest() {
+    use std::os::unix::fs::PermissionsExt;
+    let l = lab(Layout::YearDay, false, false);
+    import(&l);
+    let a = by_name(&l, "backyard loops");
+    let b = by_name(&l, "gap run");
+    std::fs::set_permissions(&b.file, std::fs::Permissions::from_mode(0o444)).unwrap();
+    let e = l
+        .core
+        .library_rate(&[a.clip.id.clone(), b.clip.id.clone()], Some(4), None)
+        .unwrap_err();
+    assert!(format!("{e:#}").contains("1 of 2"), "{e:#}");
+    std::fs::set_permissions(&b.file, std::fs::Permissions::from_mode(0o644)).unwrap();
+    assert_eq!(by_name(&l, "backyard loops").clip.rating, 4);
+    assert_eq!(by_name(&l, "gap run").clip.rating, 0);
+    assert_eq!(
+        quadcam_lib::qtmeta::get(&quadcam_lib::qtmeta::read(&a.file).unwrap(), library::KEY_RATING),
+        Some("4")
+    );
+}
