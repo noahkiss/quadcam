@@ -56,7 +56,7 @@ async function openVoices(app: AppFixture, page: Page, seed = 0, drawer: "open" 
   // inside the cards opens it first. The drawer test keeps it closed.
   if (seed && drawer === "open") {
     await expect(samples.locator("article").first()).toBeVisible();
-    const more = samples.getByRole("button", { name: /^Show All / });
+    const more = samples.getByRole("button", { name: /^Show all / });
     if (await more.count()) await more.click();
   }
   return samples;
