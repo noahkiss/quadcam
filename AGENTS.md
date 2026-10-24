@@ -542,7 +542,10 @@ claude mcp add quadcam -- "$(brew --prefix)/bin/quadcam-cli" mcp
   `disk::format_card`.
 - "Format card" is never saved as a setting.
 - Outputs are written under a hidden `.part` name and renamed only after verify passes.
-  Never overwrite an existing file.
+  Never overwrite an existing file. The one in-place write is a metadata edit
+  (`qtmeta::update`): it rewrites only the last box, `moov`, under a file lock, with the old
+  `moov` in a `.<name>.moov` journal that the next open puts back after a crash
+  (docs/metadata.md).
 - Record corpus values in `test-clips/README.md` when the test clips change.
 - **Never download from the internet while testing.** Module tests serve fixture archives
   from a local server; `modules::fetch::real_fetch` reaches only 127.0.0.1 under cargo. A

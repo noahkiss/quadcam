@@ -38,6 +38,15 @@ QuadCam reads every key back before a file counts as verified. It reads them wit
 
 ffmpeg cannot write these keys where Apple's frameworks find them. QuadCam adds them to the file itself after ffmpeg finishes.
 
+### How an edit changes a library file
+
+An edit in the library (a rating, a place, a date) rewrites only the file's last box, `moov`, where these keys live. The video data before it never changes. The edit keeps the keys of other apps, including keys that are not text (a number, a picture).
+
+- One edit at a time: the app, the command line and the MCP server wait for each other on a lock on the file.
+- Before the edit, QuadCam copies the old `moov` to a hidden journal beside the file: `.<file name>.moov`. When the edit is on disk, QuadCam removes the journal.
+- If QuadCam stops mid-edit (a crash, a power loss), the next read of the file puts the old `moov` back from the journal. The file then holds its values from before that edit.
+- A journal that does not match the file (another file took the name) is removed, and the file stays as it is.
+
 A DJI clip as MP4 is a byte copy of the original with these keys added. It keeps every stream: the video, the DJI data streams that Gyroflow reads, and the cover picture. As MOV, ffmpeg copies the streams into a new container. The data streams stay, but the cover picture does not. QuadCam never re-encodes a full DJI clip. One side effect: MP4 files no longer have the index at the front (`+faststart`). That matters only for streaming from a web server. Local players and Photos do not care.
 
 ### What Photos reads
