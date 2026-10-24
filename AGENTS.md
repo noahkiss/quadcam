@@ -373,11 +373,12 @@ GitHub (`noahkiss/quadcam`, public) is the only remote. Users install the cask
 - **Delete clips after import:** the setting `deleteClipsAfterImport` (off by default) is the
   only consent to delete clip files from a card or folder. `Core::import` runs it after the
   export; a run can turn it off (`ImportOptions.keep_clips`, CLI `--keep-clips`, MCP
-  `keep_clips`), never on. It never formats. Its guards all run in
+  `keep_clips`), never on. MCP `quadcam_settings` writes it off, never on. It never formats. Its guards all run in
   `core::import::delete_clip_file`, immediately before the unlink: the source's
   `CardPolicy.delete_clips_offered`, a verified result, the output verified again, the path a
   plain file inside `Session.source` that the source's `pick` takes as a clip, and the same size
-  and fingerprint as the staged copy. Sidecars and every other file stay. The result lists each
+  and fingerprint as the staged copy; a recovered (half-written) clip only when its original
+  was kept. Sidecars and every other file stay. The result lists each
   clip (`ImportOutcome.clip_deletion`).
 - **Add to Photos:** one "Add N files" button on the import's Finish step, and per clip in the library. `photos::PhotoKit` uses
   PhotoKit through `objc2-photos`: add-only access for the library, read-write when an
@@ -519,17 +520,20 @@ claude mcp add quadcam -- "$(brew --prefix)/bin/quadcam-cli" mcp
   `diskutil eraseDisk`. Do not move a guard out of that path. It takes the source's
   `CardPolicy` and the path (`EraseBy`: refuses a policy that does not offer that path), writes
   the policy's file system (`erase_personality`: FAT32, proven on real cards; exFAT, tested on
-  disk images only; anything else refuses), refuses a radio's card and a DJI device over USB
-  (`disk::check_volume_contents`), and runs the caller's `recheck` last: the session's
+  disk images only; anything else refuses), refuses a volume that is not FAT or exFAT and a
+  disk with more than one volume (`check_format_guards`, `check_one_volume`), refuses a radio's
+  card, a DJI device over USB and a card holding a video file no source reads
+  (`disk::check_volume_contents`, `sources::unread_videos`), and runs the caller's `recheck` last: the session's
   `format_ready` after an import, "every clip in the library" for card prep.
 - **Never refuse a card for its size.** The other disk guards stay: not internal storage, not
   the boot disk or `disk0`, removable or ejectable (a built-in SD slot card counts), the same
   device and volume UUID. Size is advice only: `disk::format_advice` puts the policy's
   `size_warning` into `FormatPlan.warnings`, which the confirm shows.
 - **DJI, two rules.** (a) Never format a DJI device over USB (an O4 air unit, goggles in
-  storage mode): absolute. `check_volume_contents` refuses a DJI volume whose media name names
-  DJI, or that is not a built-in-slot card while a DJI USB device is attached
-  (`gear::events::dji_usb_attached` through `Env.dji_usb`, fails closed). (b) A removable DJI goggles card may be
+  storage mode): absolute. `check_volume_contents` refuses any volume, whatever it holds, whose
+  media name names DJI, or that is not a built-in-slot card while a DJI USB device is attached
+  (`gear::events::dji_usb_attached` through `Env.dji_usb`, fails closed, and reads `ioreg`
+  under cargo too). (b) A removable DJI goggles card may be
   erased by card prep only, as exFAT, behind the every-clip-in-the-library guard. A card that
   once held DJI clips (empty `DCIM/DJI_*` folders) is a goggles card under (b).
 - A source's `CardPolicy` says whether "Format card" (after an import, `format_offered`) and

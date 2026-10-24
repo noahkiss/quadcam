@@ -24,7 +24,7 @@ Open Settings with the gear icon or Command-comma. **Done** saves every change a
 
 A DJI air unit stops recording when its storage is full. With this setting on, QuadCam deletes the imported clips from the card after each import, so the next flight has room. It works for every source: DJI and analog, a card or a folder.
 
-The setting is off by default. Turning it on is your consent: the app, the command line and an agent then all delete without asking again.
+The setting is off by default. Turning it on is your consent: the app, the command line and an agent then all delete without asking again. You turn it on in Settings or with `quadcam-cli settings set`. An agent can turn it off, never on.
 
 After the import, QuadCam deletes a clip's file only when all of these are true:
 
@@ -35,6 +35,7 @@ After the import, QuadCam deletes a clip's file only when all of these are true:
 Everything else stays:
 
 - Skipped clips, clips that failed, and clips whose output did not verify again.
+- A clip that the DVR left half-written. It imports as the part QuadCam could recover, so its file on the card stays. With **Keep originals** on, the library holds that file as it was, and QuadCam deletes it from the card.
 - Every file that is not a clip. On a DJI O4 air unit, QuadCam deletes `DCIM/DJI_001/*.MP4` and keeps `MISC/`, the `.SRT` files and the empty `DCIM` folders. On an analog card, it deletes only the imported `.AVI` files.
 
 If the card does not mount again for the delete, every clip stays, and the result says the card did not mount.

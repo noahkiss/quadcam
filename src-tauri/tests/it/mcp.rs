@@ -787,3 +787,38 @@ fn schema_limits_are_enforced_before_a_call() {
         json!({"suggestions": [{"id": 0, "name": "Dive", "keywords": ["pond"]}]}),
     );
 }
+
+/// Like the app, an agent's load does not replace an import that is loaded and not exported
+/// unless it says `replace=true`. Once the import is exported, a load replaces it.
+#[test]
+fn a_load_does_not_replace_an_unexported_import_unasked() {
+    let dir = tempfile::tempdir().unwrap();
+    let c = core(dir.path(), Arc::new(NoHooks), Arc::default());
+    let mut s = Server::new(LocalBackend(c.clone()));
+    let first = clips_folder();
+    let second = clips_folder();
+    call(
+        &mut s,
+        "quadcam_load_clips",
+        json!({"source": first.path()}),
+    );
+    let r = s.call_tool("quadcam_load_clips", json!({"source": second.path()}));
+    assert_eq!(r["isError"], true, "{r}");
+    let t = r["content"][0]["text"].as_str().unwrap();
+    assert!(t.contains("replace=true") && t.contains("2 clips"), "{t}");
+    let name = |c: &Core| c.session().unwrap().source.file_name().unwrap().to_owned();
+    assert_eq!(name(&c), first.path().file_name().unwrap());
+    call(
+        &mut s,
+        "quadcam_load_clips",
+        json!({"source": second.path(), "replace": true}),
+    );
+    assert_eq!(name(&c), second.path().file_name().unwrap());
+    call(&mut s, "quadcam_export", json!({}));
+    call(
+        &mut s,
+        "quadcam_load_clips",
+        json!({"source": first.path()}),
+    );
+    assert_eq!(name(&c), first.path().file_name().unwrap());
+}

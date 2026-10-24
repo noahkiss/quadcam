@@ -318,12 +318,14 @@ impl Core {
         })
     }
 
-    /// Converts, verifies and (optionally) adds to Photos, using the session's plans.
+    /// Converts, verifies and (optionally) adds to Photos, using the session's plans. The
+    /// claim holds to the end: the delete from the card, Photos and the unmount all work on
+    /// this session, so no load may replace it before they finish.
     pub fn import(&self, o: &ImportOptions) -> Result<ImportOutcome> {
         let settings = self.import_settings(o)?;
         let tools = media::find_tools()?;
+        let _b = self.claim()?;
         let s = {
-            let _b = self.claim()?;
             let s = self.current()?;
             let hooks = self.hooks.clone();
             let hooks2 = self.hooks.clone();
@@ -726,6 +728,14 @@ fn delete_clip_file(tools: &media::Tools, s: &Session, clip: &Clip) -> Result<()
     media::verify(tools, probe, output, meta)
         .and_then(|_| media::verify_qt(tools, output, &r.qt))
         .map_err(|e| format!("its output did not verify again: {e:#}"))?;
+    // A half-written clip imported as its recovered copy, which may hold less than the file
+    // on the card. The card's file goes only when its original was kept in the library.
+    if clip.recovered.is_some() && !r.original.as_deref().is_some_and(Path::is_file) {
+        return Err(
+            "it was recovered from a half-written file, which stays (Keep originals keeps it in the library)"
+                .into(),
+        );
+    }
     // The path must be a plain file inside the card or folder the clips came from.
     let path = &clip.card_path;
     let lmeta =

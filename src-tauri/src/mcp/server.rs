@@ -938,12 +938,30 @@ impl<B: Backend> Server<B> {
                             .context(
                                 "values is required: {setting: value}; null resets a setting",
                             )?;
-                        if let Some(k) = PERSON_ONLY_SETTINGS
-                            .iter()
-                            .find(|k| values.get(**k).is_some())
-                        {
+                        // A setting goes by its name or its file key: check both.
+                        let given = |name: &str| {
+                            values.as_object().and_then(|o| {
+                                o.iter()
+                                    .find(|(k, _)| {
+                                        crate::settings::key(k).is_ok_and(|key| {
+                                            key.name == Some(name) || key.file == name
+                                        })
+                                    })
+                                    .map(|(_, v)| v)
+                            })
+                        };
+                        if let Some(k) = PERSON_ONLY_SETTINGS.iter().find(|k| given(k).is_some()) {
                             anyhow::bail!(
                                 "{k} is set by the person, not over MCP: in the app's Settings window, or `quadcam-cli settings set {k}=...`"
+                            );
+                        }
+                        // The setting is the only consent to delete clip files from a card:
+                        // an agent may turn it off, never on.
+                        if given("delete_clips_after_import")
+                            .is_some_and(|v| !v.is_null() && v.as_bool() != Some(false))
+                        {
+                            anyhow::bail!(
+                                "delete_clips_after_import is the person's consent to delete clips from a card; an agent may turn it off, not on. The person turns it on in the app's Settings window, or with `quadcam-cli settings set delete_clips_after_import=true`."
                             );
                         }
                         self.backend
@@ -968,6 +986,17 @@ impl<B: Backend> Server<B> {
             }
             "quadcam_load_clips" => {
                 let x: LoadClipsArgs = args(a)?;
+                // The app asks before it replaces an unexported import; so does an agent.
+                if x.replace != Some(true) {
+                    let open = self.backend.call("session", Value::Null)?;
+                    let clips = open["clips"].as_array().map_or(0, Vec::len);
+                    if clips > 0 && open["results"].as_array().is_some_and(Vec::is_empty) {
+                        anyhow::bail!(
+                            "An import is loaded and not exported: {clips} clips from {}. Loading replaces it, and its names, dates and cuts are lost. Ask the person, then call again with replace=true.",
+                            open["source"].as_str().unwrap_or("?")
+                        );
+                    }
+                }
                 let session = self.backend.call(
                     "load",
                     json!({"source": x.source, "device": x.card, "join": x.join}),

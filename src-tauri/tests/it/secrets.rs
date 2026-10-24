@@ -272,6 +272,7 @@ fn mcp_refuses_the_settings_that_run_a_program_or_send_a_key() {
         json!({"modules": {"ffmpeg": "/tmp/x"}}),
         json!({"tts_base_url": "http://example.invalid/"}),
         json!({"tts_model": "m", "modules": null}),
+        json!({"ttsBaseUrl": "http://example.invalid/"}),
     ] {
         let r = s.call_tool(
             "quadcam_settings",

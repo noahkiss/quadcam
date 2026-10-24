@@ -232,6 +232,159 @@ fn mcp_follows_the_setting_and_cannot_turn_it_on() {
     assert!(other.is_file());
 }
 
+/// The setting is the person's consent: an agent's settings write may turn it off, never
+/// on, by its name or its file key. Then an export keeps every clip.
+#[test]
+fn mcp_settings_cannot_turn_it_on() {
+    let card = tempfile::tempdir().unwrap();
+    let (a, b, _) = analog_card(card.path());
+    let work = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(work.path().join("support")).unwrap();
+    let core =
+        Arc::new(core(work.path(), false).with_settings(work.path().join("support/settings.json")));
+    let mut s = Server::new(LocalBackend(core.clone()));
+    for values in [
+        json!({"delete_clips_after_import": true}),
+        json!({"deleteClipsAfterImport": true}),
+        json!({"default_name": "x", "delete_clips_after_import": "yes"}),
+    ] {
+        let r = s.call_tool(
+            "quadcam_settings",
+            json!({"action": "write", "values": values}),
+        );
+        assert_eq!(r["isError"], true, "{values} -> {r}");
+        let t = r["content"][0]["text"].as_str().unwrap();
+        assert!(t.contains("turn it off, not on"), "{t}");
+    }
+    assert!(!core.defaults().delete_clips_after_import);
+    let out = work.path().join("out");
+    for values in [
+        json!({"delete_clips_after_import": false}),
+        json!({"delete_clips_after_import": null, "output_dir": out, "layout": "flat"}),
+    ] {
+        mcp_call(
+            &mut s,
+            "quadcam_settings",
+            json!({"action": "write", "values": values}),
+        );
+    }
+    mcp_call(&mut s, "quadcam_load_clips", json!({"source": card.path()}));
+    let r = mcp_call(&mut s, "quadcam_export", json!({}));
+    assert!(r["structuredContent"]["clip_deletion"].is_null(), "{r}");
+    assert!(a.is_file() && b.is_file());
+}
+
+/// A Photos library that tries to load another folder while the import adds to it.
+struct LoadsDuringPhotos {
+    core: std::sync::OnceLock<std::sync::Weak<Core>>,
+    other: PathBuf,
+    answer: std::sync::Mutex<Option<String>>,
+}
+
+impl quadcam_lib::photos::PhotosLibrary for LoadsDuringPhotos {
+    fn add_videos(&self, _: &[PathBuf], _: Option<&str>) -> anyhow::Result<()> {
+        let core = self.core.get().and_then(|w| w.upgrade()).unwrap();
+        let r = core.load(Some(&self.other));
+        *self.answer.lock().unwrap() = Some(match r {
+            Ok(_) => "loaded".into(),
+            Err(e) => format!("{e:#}"),
+        });
+        Ok(())
+    }
+}
+
+/// The import holds its claim through the delete, Photos and the unmount: a load in the
+/// middle is refused, so those steps finish on the session they started on.
+#[test]
+fn a_load_waits_for_the_whole_import() {
+    let card = tempfile::tempdir().unwrap();
+    let (a, b, _) = analog_card(card.path());
+    let other = tempfile::tempdir().unwrap();
+    analog_card(other.path());
+    let work = tempfile::tempdir().unwrap();
+    let photos = Arc::new(LoadsDuringPhotos {
+        core: Default::default(),
+        other: other.path().to_path_buf(),
+        answer: Default::default(),
+    });
+    let core = Arc::new(Core::new(
+        work.path().join("cache"),
+        None,
+        Arc::new(NoHooks),
+        photos.clone(),
+    ));
+    photos.core.set(Arc::downgrade(&core)).unwrap();
+    let mut d = core.defaults();
+    d.output_dir = Some(work.path().join("out"));
+    std::fs::create_dir_all(work.path().join("out")).unwrap();
+    d.layout = quadcam_lib::library::Layout::Flat;
+    d.delete_clips_after_import = true;
+    core.set_defaults(d);
+    core.load(Some(card.path())).unwrap();
+    let out = core
+        .import(&ImportOptions {
+            add_to_photos: true,
+            ..mp4()
+        })
+        .unwrap();
+    let answer = photos.answer.lock().unwrap().clone().unwrap();
+    assert!(answer.contains("Another step is still running"), "{answer}");
+    assert_eq!(out.summary.imported, 2);
+    assert!(!a.exists() && !b.exists());
+    let source = core.session().unwrap().source;
+    assert!(
+        source.ends_with(card.path().file_name().unwrap()),
+        "{}",
+        source.display()
+    );
+}
+
+/// A half-written clip imports as its recovered copy, which may hold less than the card's
+/// file: that file stays, unless Keep originals put it in the library.
+#[test]
+fn a_recovered_clip_stays_unless_its_original_was_kept() {
+    for keep_originals in [false, true] {
+        let card = tempfile::tempdir().unwrap();
+        let (a, _, _) = analog_card(card.path());
+        let long = card.path().join("long.tmp");
+        make_clip(&long, 4, true);
+        let half = card.path().join("DCIM/PICT0003.AVI");
+        truncate_copy(&long, &half, 0.5);
+        std::fs::remove_file(&long).unwrap();
+        let work = tempfile::tempdir().unwrap();
+        let core = core(work.path(), true);
+        core.load(Some(card.path())).unwrap();
+        let s = core.session().unwrap();
+        let id = s
+            .clips
+            .iter()
+            .find(|c| c.name == "PICT0003.AVI")
+            .unwrap()
+            .id;
+        assert!(s.clips[id].recovered.is_some(), "{}", s.clips[id].detail);
+        let out = core
+            .import(&ImportOptions {
+                keep_originals: Some(keep_originals),
+                ..mp4()
+            })
+            .unwrap();
+        let d = out.clip_deletion.unwrap();
+        let row = d.iter().find(|x| x.id == id).unwrap();
+        assert!(!a.exists(), "a whole clip goes");
+        if keep_originals {
+            assert_eq!(row.state, DeletionState::Deleted, "{row:?}");
+            assert!(!half.exists());
+        } else {
+            assert_eq!(row.state, DeletionState::Kept);
+            assert!(
+                row.reason.as_deref().unwrap().contains("recovered"),
+                "{row:?}"
+            );
+            assert!(half.is_file());
+        }
+    }
+}
+
 /// Runs `quadcam-cli --json <args>` with HOME in `home`; returns (exit code, JSON).
 fn cli(home: &Path, args: &[&str]) -> (i32, Value) {
     let out = Command::new(env!("CARGO_BIN_EXE_quadcam-cli"))

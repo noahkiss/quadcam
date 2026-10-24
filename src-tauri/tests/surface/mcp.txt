@@ -378,6 +378,7 @@ mcp.param quadcam_library_files.log_dir string
 mcp.param quadcam_library_files.removed_cuts string
 mcp.param quadcam_load_clips.card string
 mcp.param quadcam_load_clips.join boolean
+mcp.param quadcam_load_clips.replace boolean
 mcp.param quadcam_load_clips.source string
 mcp.param quadcam_match_logs.day string
 mcp.param quadcam_match_logs.log_dir string

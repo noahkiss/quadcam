@@ -112,6 +112,8 @@ pub struct LoadClipsArgs {
     pub card: Option<String>,
     /// false keeps recordings the DVR split into files (PICT0001.AVI, PICT0002.AVI, ...) as separate clips this run. Omit to follow the join_split_recordings setting (on by default).
     pub join: Option<bool>,
+    /// true replaces an import that is loaded and not exported yet, with its names, dates and cuts. Only after the person agreed. Without it such a load is refused.
+    pub replace: Option<bool>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize, JsonSchema)]
