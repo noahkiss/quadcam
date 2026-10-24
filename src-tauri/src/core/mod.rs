@@ -371,6 +371,9 @@ pub struct Core {
     /// The library index, loaded on first use: (library folder, index).
     library: Mutex<Option<library::Loaded>>,
     trash: Arc<dyn crate::trash::Trash>,
+    /// The library files this core moved to the Trash: the only ones `library_untrash`
+    /// puts back.
+    trashed: Mutex<Vec<files::Moved>>,
     /// The app's settings file; the defaults are read from it.
     settings_file: Option<PathBuf>,
     /// What Gear reaches outside the process: serial ports, volumes, DFU devices.
@@ -453,6 +456,7 @@ impl Core {
             session_file,
             library: Mutex::new(None),
             trash: crate::trash::real_trash(),
+            trashed: Mutex::new(Vec::new()),
             settings_file: None,
             gear: crate::gear::Env::system(&cache),
             gear_hooks: Mutex::new(Vec::new()),

@@ -1234,3 +1234,79 @@ fn a_clip_named_like_a_cut_stays_a_clip() {
     // The real cut of the other clip is still its cut.
     assert_eq!(by_name(&l, "backyard loops").clip.cuts.len(), 1);
 }
+
+/// A Trash that refuses files whose path holds `.0`, and moves the rest as `DirTrash` does.
+struct FailOn(&'static str, DirTrash);
+
+impl quadcam_lib::trash::Trash for FailOn {
+    fn trash(&self, path: &Path) -> anyhow::Result<Option<PathBuf>> {
+        if path.to_string_lossy().contains(self.0) {
+            anyhow::bail!("refused by the test");
+        }
+        self.1.trash(path)
+    }
+}
+
+fn lab_failing_on(name: &'static str) -> Lab {
+    let Lab {
+        _dir,
+        root,
+        trash,
+        src,
+        core,
+    } = lab(Layout::YearDay, false, false);
+    let core = core.with_trash(Arc::new(FailOn(name, DirTrash(trash.clone()))));
+    Lab {
+        _dir,
+        root,
+        trash,
+        src,
+        core,
+    }
+}
+
+/// A cut that does not go to the Trash keeps its clip: the clip file stays and the library
+/// still lists the clip with that cut. A clip file that does not go keeps the clip; undo
+/// puts its cut back on it.
+#[test]
+fn a_trash_that_fails_partway_leaves_the_clip_whole() {
+    let l = lab_failing_on("_cut1");
+    import(&l);
+    let a = by_name(&l, "backyard loops");
+    let r = l.core.library_trash(std::slice::from_ref(&a.clip.id)).unwrap();
+    assert_eq!(r.failed.len(), 1, "{r:?}");
+    assert!(r.trashed.is_empty(), "{r:?}");
+    assert!(a.file.is_file());
+    assert_eq!(by_name(&l, "backyard loops").clip.cuts.len(), 1);
+
+    let l = lab_failing_on("backyard_loops.mp4");
+    import(&l);
+    let a = by_name(&l, "backyard loops");
+    let r = l.core.library_trash(std::slice::from_ref(&a.clip.id)).unwrap();
+    assert_eq!(r.failed.len(), 1, "{r:?}");
+    assert_eq!(r.moved.len(), 1, "the cut went: {r:?}");
+    let b = by_name(&l, "backyard loops");
+    assert!(b.file.is_file());
+    assert!(b.clip.cuts.is_empty());
+    l.core.library_untrash(&r.moved).unwrap();
+    assert_eq!(by_name(&l, "backyard loops").clip.cuts.len(), 1);
+}
+
+/// Undo puts back only what this library's Move to Trash moved: a file from elsewhere is
+/// refused and stays where it is.
+#[test]
+fn a_put_back_refuses_a_file_quadcam_did_not_trash() {
+    let l = lab(Layout::YearDay, false, false);
+    import(&l);
+    let other = l._dir.path().join("Documents/notes.mp4");
+    std::fs::create_dir_all(other.parent().unwrap()).unwrap();
+    std::fs::write(&other, b"not a clip").unwrap();
+    let forged = quadcam_lib::core::Moved {
+        id: by_name(&l, "gap run").clip.id,
+        from: l.root.join("2026/2026-09-27/stolen.mp4"),
+        to: other.clone(),
+    };
+    let e = l.core.library_untrash(&[forged.clone()]).unwrap_err();
+    assert!(format!("{e:#}").contains("not a file QuadCam moved"), "{e:#}");
+    assert!(other.is_file() && !forged.from.exists());
+}

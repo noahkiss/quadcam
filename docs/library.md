@@ -126,7 +126,7 @@ If the library folder already holds videos that are not in the index, the librar
 - **Rate** with the keys 1 to 5. The key 0 clears the rating. The stars on a card also work.
 - **Flag** with P (pick), X (reject), or U (clear).
 - **Rename** with Return.
-- **Undo** (Command-Z) and **Redo** (Shift-Command-Z) work for ratings, flags, renames, notes, keywords, places and Move to Trash. Undo after Move to Trash puts the files back from the Trash.
+- **Undo** (Command-Z) and **Redo** (Shift-Command-Z) work for ratings, flags, renames, notes, keywords, places and Move to Trash. Undo after Move to Trash puts the files back from the Trash. It puts back only files that QuadCam moved to the Trash since the app started.
 - **Search** matches the name, note, place, aircraft, keywords, file name and [sun tag](#sun-and-weather) (`golden hour`).
 - **Thumbnails** show the clip as you move the pointer across them.
 - **Rejected** in the sidebar shows a **Move to Trash** button for every rejected clip.
@@ -148,7 +148,7 @@ Right-click a clip for these commands:
 | Find highlights again (macOS 27; see [Highlights](moments-and-cuts.md#highlights-from-video-analysis)) | |
 | Move to Trash | Command-Delete |
 
-Move to Trash takes the clip's cuts and kept original with it.
+Move to Trash takes the clip's cuts and kept original with it. The clip's own file goes last, and only after all the others went: if one of them cannot go, the clip stays in the library with what is left.
 
 **Share** opens the macOS Share menu, which includes Photos. You cannot drag clips out to Finder yet. Use **Show in Finder**.
 

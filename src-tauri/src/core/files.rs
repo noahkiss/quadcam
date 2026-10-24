@@ -22,7 +22,7 @@ pub struct TrashReport {
 }
 
 /// A library file in the Trash: the clip it belongs to, where it was, where it is now.
-#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, specta::Type)]
 pub struct Moved {
     pub id: String,
     pub from: PathBuf,
@@ -159,6 +159,8 @@ impl Core {
     }
 
     /// Moves clips (with their cuts and originals) to the Trash and out of the library.
+    /// The clip's own file goes last, and only when every other file of it went: a clip
+    /// whose cut stayed stays in the library with that cut.
     pub fn library_trash(&self, ids: &[String]) -> Result<TrashReport> {
         let mut report = TrashReport {
             trashed: Vec::new(),
@@ -168,32 +170,51 @@ impl Core {
         let mut gone = Vec::new();
         for id in ids {
             let (root, c) = self.clip(id)?;
+            let files = c.files(&root);
+            let Some((clip, rest)) = files.split_first() else {
+                continue;
+            };
             let mut ok = true;
-            for f in c.files(&root) {
+            let mut moved = Vec::new();
+            for f in rest.iter().chain(std::iter::once(clip)) {
                 if !f.exists() {
                     continue;
                 }
-                match self.trash.trash(&f) {
+                if f == clip && !ok {
+                    break;
+                }
+                match self.trash.trash(f) {
                     Ok(to) => {
                         if let Some(to) = to {
-                            report.moved.push(Moved {
+                            let m = Moved {
                                 id: id.clone(),
                                 from: f.clone(),
                                 to,
-                            });
+                            };
+                            // `library_untrash` reads the clip's entry first.
+                            if f == clip {
+                                moved.insert(0, m);
+                            } else {
+                                moved.push(m);
+                            }
                         }
-                        report.trashed.push(f)
+                        report.trashed.push(f.clone())
                     }
                     Err(e) => {
                         ok = false;
-                        report.failed.push((f, format!("{e:#}")));
+                        report.failed.push((f.clone(), format!("{e:#}")));
                     }
                 }
             }
+            report.moved.extend(moved);
             if ok {
                 gone.push(id.clone());
             }
         }
+        self.trashed
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .extend(report.moved.iter().cloned());
         self.with_index(|_, ix| {
             ix.clips.retain(|c| !gone.contains(&c.id));
             Ok(((), true))
@@ -208,13 +229,23 @@ impl Core {
     }
 
     /// Puts trashed library files back where they were and the clips back in the index:
-    /// the undo of `library_trash`. Refuses before moving anything when a file is no longer
-    /// in the Trash, its old place is taken, or it was not in the library.
+    /// the undo of `library_trash`. Refuses before moving anything when a file is not one
+    /// that `library_trash` moved, is no longer in the Trash, or its old place is taken.
     pub fn library_untrash(&self, moved: &[Moved]) -> Result<Vec<String>> {
         let root = self.library_root()?;
+        let mut trashed = self
+            .trashed
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         for m in moved {
             if !m.from.starts_with(&root) {
                 bail!("{} is not in the library.", m.from.display());
+            }
+            if !trashed.contains(m) {
+                bail!(
+                    "{} is not a file QuadCam moved to the Trash; not putting it back.",
+                    m.to.display()
+                );
             }
             if m.from.exists() {
                 bail!("{} exists already; not putting it back.", m.from.display());
@@ -228,7 +259,9 @@ impl Core {
                 std::fs::create_dir_all(dir)?;
             }
             crate::trash::move_file(&m.to, &m.from)?;
+            trashed.retain(|t| t != m);
         }
+        drop(trashed);
         let mut ids: Vec<String> = Vec::new();
         for m in moved {
             if !ids.contains(&m.id) {
@@ -238,11 +271,17 @@ impl Core {
         self.with_index(|root, ix| {
             for id in &ids {
                 // The clip comes first in `LibClip::files`, then its cuts, then its original.
-                let rels: Vec<PathBuf> = moved
+                let mut rels: Vec<PathBuf> = moved
                     .iter()
                     .filter(|m| &m.id == id)
                     .map(|m| rel_to(root, &m.from))
                     .collect();
+                // A clip whose own file never left (one of its cuts failed to go) is still
+                // in the index: its cuts come back to it.
+                if let Some(e) = ix.get(id) {
+                    rels.insert(0, e.path.clone());
+                    rels.extend(e.cuts.iter().map(|c| c.path.clone()));
+                }
                 let Some((clip, rest)) = rels.split_first() else {
                     continue;
                 };
