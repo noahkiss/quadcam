@@ -6,6 +6,7 @@ import { Button } from "../../../components/Button";
 import { Select } from "../../../components/Field";
 import { SegmentedControl } from "../../../components/SegmentedControl";
 import { DataTable, type Column } from "../../../components/dash/DataTable";
+import { Disclosure } from "../../../components/dash/Disclosure";
 import { EmptyState } from "../../../components/dash/EmptyState";
 import { FactList } from "../../../components/dash/FactList";
 import { PageHeader } from "../../../components/dash/PageHeader";
@@ -17,6 +18,7 @@ import { fmtDay } from "../../../lib/format";
 import { checkOnDevice } from "../../../actions/session";
 import { sel } from "../../../store/settings";
 import { copyText, hhmm, mmss, num } from "../../../lib/flights";
+import { PathText } from "../../../components/PathText";
 import { RangeTrend } from "./RangeTrend";
 import { useGearData } from "./useGearData";
 import styles from "./Flights.module.css";
@@ -113,6 +115,7 @@ function Flights({ data, error, shown }: { data: Awaited<ReturnType<typeof api.g
     return (
       <>
         <DayStats r={null} />
+        <Unreadable data={data} />
         <EmptyState icon="stopwatch">No flights in the radio logs.</EmptyState>
       </>
     );
@@ -141,11 +144,30 @@ function Flights({ data, error, shown }: { data: Awaited<ReturnType<typeof api.g
   return (
     <>
       <DayStats r={report.data && report.data.days.includes(shown) ? report.data : null} />
+      <Unreadable data={data} />
       <WithDrawer drawer={sel && <FlightDetail r={sel} onClose={() => setOpen(null)} />}>
         <DataTable label={`Flights on ${shown}`} columns={columns} rows={list} rowKey={(r) => r.flight.id} />
         <RangeTrend places={data.places} />
       </WithDrawer>
     </>
+  );
+}
+
+/** The radio logs that failed to read. The next read of the page tries them again. */
+function Unreadable({ data }: { data: Awaited<ReturnType<typeof api.gearFlights>> }) {
+  const bad = data.unreadable ?? [];
+  if (!bad.length) return null;
+  return (
+    <Disclosure summary={<span className={styles.warn}>{`${bad.length} log${bad.length === 1 ? "" : "s"} could not be read`}</span>}>
+      <ul className={styles.unreadable}>
+        {bad.map((u) => (
+          <li key={u.path}>
+            <PathText path={u.path} />
+            <span className={`${styles.muted} selectable`}>{u.error}</span>
+          </li>
+        ))}
+      </ul>
+    </Disclosure>
   );
 }
 

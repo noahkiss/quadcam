@@ -213,6 +213,27 @@ pub(super) fn read<B: Backend>(
             } else {
                 list.iter().map(flight_line).collect::<Vec<_>>().join("\n")
             };
+            let bad = v["unreadable"].as_array().cloned().unwrap_or_default();
+            let line = if bad.is_empty() {
+                line
+            } else {
+                let n = bad.len();
+                let s = if n == 1 { "" } else { "s" };
+                let each = bad
+                    .iter()
+                    .map(|u| {
+                        format!(
+                            "{}: {}",
+                            u["path"].as_str().unwrap_or(""),
+                            u["error"].as_str().unwrap_or("")
+                        )
+                    })
+                    .collect::<Vec<_>>()
+                    .join("; ");
+                format!(
+                    "{line}\n{n} log{s} could not be read and will be read again next time: {each}"
+                )
+            };
             Ok((vec![text(line)], v))
         }
         "packs" => {

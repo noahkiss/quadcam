@@ -12,6 +12,18 @@ async function openPage(app: AppFixture, page: Page, name: string) {
   await expect(page.getByRole("heading", { name, exact: true })).toBeVisible();
 }
 
+test("a radio log that could not be read shows as a note with its path and error", async ({ app, page }) => {
+  await app.open();
+  await app.core(`c => c.flights.unreadable.push({ path: "/Volumes/RADIO/LOGS/Whoop-2026-10-04-101500.csv", error: "Permission denied (os error 13)" })`);
+  await side(page).getByRole("button", { name: /^Flights/ }).click();
+  await expect(page.getByRole("table", { name: "Flights on 2026-10-04" })).toBeVisible();
+  const note = page.getByText("1 log could not be read");
+  await expect(note).toBeVisible();
+  await note.click();
+  await expect(page.getByText("Permission denied (os error 13)")).toBeVisible();
+  await expect(page.getByText(/Whoop-2026-10-04-101500\.csv/)).toBeVisible();
+});
+
 test("flights of a day with their measures; a pack is set from the row", async ({ app, page }) => {
   await openPage(app, page, "Flights");
   const table = page.getByRole("table", { name: "Flights on 2026-10-04" });

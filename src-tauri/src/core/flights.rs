@@ -84,6 +84,9 @@ pub struct FlightsView {
     /// The log folders read.
     pub sources: Vec<PathBuf>,
     pub places: Vec<PlaceTrend>,
+    /// The logs that failed to read; they are read again next time.
+    #[serde(default)]
+    pub unreadable: Vec<flights::Unreadable>,
 }
 
 /// `gear_flight_set`: `Some("")` clears a value; leaving it out keeps it.
@@ -274,13 +277,23 @@ impl Core {
 
     /// Every flight in the sources (and `extra`), from the cache where it is current.
     fn gear_all_flights(&self, extra: Option<&Path>) -> Result<(Vec<Flight>, Vec<PathBuf>)> {
+        let (all, sources, _) = self.gear_all_flights_read(extra)?;
+        Ok((all, sources))
+    }
+
+    /// `gear_all_flights`, with the logs that failed to read.
+    fn gear_all_flights_read(
+        &self,
+        extra: Option<&Path>,
+    ) -> Result<(Vec<Flight>, Vec<PathBuf>, Vec<flights::Unreadable>)> {
         let mut sources = self.gear_flight_sources()?;
         if let Some(e) = extra {
             sources.push(e.to_path_buf());
         }
         let cache = self.gear_store().flights_file();
         let tun = self.defaults().tunables;
-        Ok((flights::index(&sources, &cache, &tun)?, sources))
+        let (all, unreadable) = flights::index_logs(&sources, &cache, &tun)?;
+        Ok((all, sources, unreadable))
     }
 
     fn library_clips(&self) -> Vec<LibClip> {
@@ -348,7 +361,7 @@ impl Core {
     /// Flights from the radio logs, with their measures, pack, place and clip.
     pub fn gear_flights(&self, filter: &FlightFilter) -> Result<FlightsView> {
         let store = self.gear_store();
-        let (all, sources) = self.gear_all_flights(filter.logs.as_deref())?;
+        let (all, sources, unreadable) = self.gear_all_flights_read(filter.logs.as_deref())?;
         let sets = packs::flight_sets(&store)?;
         let (pk, types) = (packs::packs(&store)?, packs::pack_types(&store)?);
         let mut days: Vec<NaiveDate> = all.iter().map(|f| f.day).collect();
@@ -403,6 +416,7 @@ impl Core {
             days,
             sources,
             places,
+            unreadable,
         })
     }
 

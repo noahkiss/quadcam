@@ -15,6 +15,20 @@
 .warn {
   color: var(--warning-text);
 }
+.unreadable {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.unreadable li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  min-width: 0;
+}
 .rowButton {
   border: 0;
   padding: 0;

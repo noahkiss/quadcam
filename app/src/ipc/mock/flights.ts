@@ -34,6 +34,8 @@ export class MockFlights {
   types: PackType[] = this.s.packs.types.map((t) => t.pack_type);
   notes = this.s.packs.notes;
   folders: string[] = [];
+  /** Logs that fail to read, as the core reports them. Specs push to it. */
+  unreadable: { path: string; error: string }[] = [];
   crashes: Crash[] = [];
   /** Flight id -> pack label. */
   sets = new Map<string, string>(this.s.flights.flights.filter((f) => f.pack).map((f) => [f.flight.id, f.pack!]));
@@ -45,6 +47,7 @@ export class MockFlights {
       if (f.pack) f.suggested_pack = null;
     }
     v.sources = [...v.sources, ...this.folders];
+    v.unreadable = [...this.unreadable];
     if (day) v.flights = v.flights.filter((f) => f.flight.day === day);
     return v;
   }

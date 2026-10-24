@@ -3627,6 +3627,8 @@ export type FlightsView = {
 	/**  The log folders read. */
 	sources: string[],
 	places: PlaceTrend[],
+	/**  The logs that failed to read; they are read again next time. */
+	unreadable?: Unreadable[],
 };
 
 export type Format = "mp4" | "mov";
@@ -8703,6 +8705,12 @@ export type Unmapped = {
 	reads: string[],
 	/**  What uses it (`Plays "lowbat"`, `CH7 mix`, `L6`). */
 	used_by: string[],
+};
+
+/**  A radio log that failed to read or parse. */
+export type Unreadable = {
+	path: string,
+	error: string,
 };
 
 /**  `library_untrash`: the files `library_trash` moved. */

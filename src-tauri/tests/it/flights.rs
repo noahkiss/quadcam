@@ -88,6 +88,33 @@ fn flights_carry_the_known_measures_and_joins() {
 }
 
 #[test]
+fn a_log_that_fails_to_read_is_named_in_flights_and_mcp() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = tempfile::tempdir().unwrap();
+    let c = setup(dir.path());
+    let log = std::fs::read_dir(dir.path().join("logs"))
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .find(|p| p.extension().is_some_and(|x| x == "csv"))
+        .unwrap();
+    let mode = |m| std::fs::set_permissions(&log, std::fs::Permissions::from_mode(m)).unwrap();
+    mode(0o000);
+    let v = c.gear_flights(&Default::default()).unwrap();
+    let mut s = Server::new(LocalBackend(c.clone()));
+    let r = s.call_tool("quadcam_gear", json!({"action":"flights"}));
+    mode(0o644);
+    assert!(v.flights.is_empty());
+    assert_eq!(v.unreadable.len(), 1);
+    assert_eq!(v.unreadable[0].path, log);
+    let text = r["content"][0]["text"].as_str().unwrap_or("");
+    assert!(text.contains("1 log could not be read"), "{text}");
+    // Readable again, the next read finds its flights.
+    let v = c.gear_flights(&Default::default()).unwrap();
+    assert_eq!(v.flights.len(), KNOWN.flights);
+    assert!(v.unreadable.is_empty());
+}
+
+#[test]
 fn pack_history_and_next_label() {
     let dir = tempfile::tempdir().unwrap();
     let c = setup(dir.path());

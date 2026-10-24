@@ -463,11 +463,27 @@ pub fn log_files(sources: &[PathBuf]) -> Vec<PathBuf> {
     out
 }
 
+/// A radio log that failed to read or parse.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Type)]
+pub struct Unreadable {
+    pub path: PathBuf,
+    pub error: String,
+}
+
 /// Every flight in the logs under `sources`, in time order, one per id (the same log in two
 /// places counts once). Files the cache knows by size and mtime are not read again; the
 /// cache is rewritten when anything changed (a write failure only costs the next read). A
 /// file that fails to read is left out of the cache, so the next index tries it again.
 pub fn index(sources: &[PathBuf], cache_file: &Path, tun: &Tunables) -> Result<Vec<Flight>> {
+    Ok(index_logs(sources, cache_file, tun)?.0)
+}
+
+/// `index`, with the logs that failed to read this time.
+pub fn index_logs(
+    sources: &[PathBuf],
+    cache_file: &Path,
+    tun: &Tunables,
+) -> Result<(Vec<Flight>, Vec<Unreadable>)> {
     let old: Cache = std::fs::read(cache_file)
         .ok()
         .and_then(|b| serde_json::from_slice(&b).ok())
@@ -478,6 +494,7 @@ pub fn index(sources: &[PathBuf], cache_file: &Path, tun: &Tunables) -> Result<V
         files: Vec::new(),
     };
     let mut changed = false;
+    let mut unreadable = Vec::new();
     for f in log_files(sources) {
         let Some((len, mtime_ms)) = stamp(&f) else {
             continue;
@@ -491,8 +508,15 @@ pub fn index(sources: &[PathBuf], cache_file: &Path, tun: &Tunables) -> Result<V
             continue;
         }
         changed = true;
-        let Ok(flights) = analyse_file(&f, tun) else {
-            continue;
+        let flights = match analyse_file(&f, tun) {
+            Ok(v) => v,
+            Err(e) => {
+                unreadable.push(Unreadable {
+                    path: f,
+                    error: format!("{e:#}"),
+                });
+                continue;
+            }
         };
         cache.files.push(CacheEntry {
             path: f,
@@ -519,7 +543,7 @@ pub fn index(sources: &[PathBuf], cache_file: &Path, tun: &Tunables) -> Result<V
     }
     all.sort_by(|a, b| a.start.cmp(&b.start).then(a.id.cmp(&b.id)));
     fill_resting(&mut all);
-    Ok(all)
+    Ok((all, unreadable))
 }
 
 fn write_cache(path: &Path, cache: &Cache) -> Result<()> {
@@ -678,9 +702,11 @@ mod tests {
         let srcs = vec![d.path().to_path_buf()];
         let mode = |m| std::fs::set_permissions(&p, std::fs::Permissions::from_mode(m)).unwrap();
         mode(0o000);
-        let unreadable = index(&srcs, &cache, &tun);
+        let (flights, unreadable) = index_logs(&srcs, &cache, &tun).unwrap();
         mode(0o644);
-        assert!(unreadable.unwrap().is_empty());
+        assert!(flights.is_empty());
+        assert_eq!(unreadable.len(), 1);
+        assert_eq!(unreadable[0].path, p);
         assert_eq!(index(&srcs, &cache, &tun).unwrap().len(), KNOWN.flights);
     }
 
