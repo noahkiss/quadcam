@@ -87,7 +87,8 @@ pub fn is_error(reply: &str) -> bool {
 }
 
 /// Lines `run_lines` never sends: the engine saves and exits itself, and these would reset
-/// the config, enter a bootloader, erase flash or hand the port to another device.
+/// the config, enter a bootloader, erase or write flash, hand the port to another device,
+/// program the ESCs or spin the motors.
 pub const FORBIDDEN: &[&str] = &[
     "save",
     "exit",
@@ -97,14 +98,28 @@ pub const FORBIDDEN: &[&str] = &[
     "flash_erase",
     "msc",
     "serialpassthrough",
+    "gpspassthrough",
+    "escprog",
+    "dshotprog",
+    "flash_write",
+    "bind_rx",
+    "motor",
     "batch",
     "#",
 ];
 
-/// The refusal for a line `run_lines` will not send, if any.
+/// The refusal for a line `run_lines` will not send, if any. The FC matches a command in
+/// any letter case and ends a line on `\r` as well as `\n`, so a line with a control
+/// character in it is refused whole.
 pub fn forbidden(line: &str) -> Option<&'static str> {
+    if line.chars().any(|c| c.is_control() && c != '\t') {
+        return Some("a control character");
+    }
     let verb = line.split_whitespace().next().unwrap_or("");
-    FORBIDDEN.iter().copied().find(|f| *f == verb)
+    FORBIDDEN
+        .iter()
+        .copied()
+        .find(|f| f.eq_ignore_ascii_case(verb))
 }
 
 /// One command and what it answered.
@@ -387,6 +402,14 @@ mod tests {
         assert_eq!(forbidden("save"), Some("save"));
         assert_eq!(forbidden("defaults nosave"), Some("defaults"));
         assert_eq!(forbidden("set beeper_dshot_beacon_tone = 1"), None);
+        // The FC matches a command in any case and ends a line on `\r` too.
+        assert_eq!(forbidden("SAVE"), Some("save"));
+        assert_eq!(forbidden("Defaults nosave"), Some("defaults"));
+        assert_eq!(forbidden("Flash_Erase"), Some("flash_erase"));
+        assert!(forbidden("version\rdefaults").is_some());
+        assert!(forbidden("set name = a\u{1b}b").is_some());
+        assert_eq!(forbidden("dshotprog 0 21"), Some("dshotprog"));
+        assert_eq!(forbidden("gpspassthrough"), Some("gpspassthrough"));
     }
 
     #[test]

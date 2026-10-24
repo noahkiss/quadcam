@@ -532,8 +532,10 @@ Proven by a hand-written serial runner over many bench sessions:
 
 **Built (WP2):** `bf/cli.rs` (`CliSession`, `run_lines`, `Timing`), `bf::read` (read-only
 commands only), `bf::run`. `run_lines` refuses `save`, `exit`, `defaults`, `bl`, `dfu`,
-`flash_erase`, `msc`, `serialpassthrough` and `batch` in a change: the engine saves and exits
-itself. Before the first write, `bf::run` reads `version` and `mcu_id` in the CLI, re-runs the
+`flash_erase`, `flash_write`, `msc`, `serialpassthrough`, `gpspassthrough`, `escprog`,
+`dshotprog`, `bind_rx`, `motor` and `batch` in a change, in any letter case (`cli::FORBIDDEN`;
+Betaflight matches commands with `strncasecmp`), and any line with a control character in it
+(the FC ends a line on `\r` too): the engine saves and exits itself. Before the first write, `bf::run` reads `version` and `mcu_id` in the CLI, re-runs the
 `compat` guard on what the FC says now and checks the planned device id (`device_changed`).
 Proven pairs are keyed by board and build (`compat.rs`); every other FC is read-only with the
 reason. Dumps from 2026.6 add `battery_profile N` sections (`Section::BatteryProfile`).

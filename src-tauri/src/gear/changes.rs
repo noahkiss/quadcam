@@ -1113,6 +1113,26 @@ set roll_expo = 10
     }
 
     #[test]
+    fn staged_lines_the_fc_reads_as_a_forbidden_command_are_refused() {
+        for l in [
+            "Defaults",
+            "SAVE",
+            "Bl",
+            "version\rdefaults",
+            "gpspassthrough",
+        ] {
+            let r = render_fc(
+                &[Edit::FcLines {
+                    lines: vec![l.into()],
+                }],
+                None,
+            );
+            assert!(r.lines.is_empty(), "{l:?}: {:?}", r.lines);
+            assert_eq!(r.problems.len(), 1, "{l:?}");
+        }
+    }
+
+    #[test]
     fn restore_lines_make_the_base_read_as_the_target() {
         let base = Config::parse("set a = 1\nset b = 2\naux 0 0 0 900 2100 0 0\n");
         let target = Config::parse("set a = 1\nset b = 9\naux 0 0 1 900 2100 0 0\n");

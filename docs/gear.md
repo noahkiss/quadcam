@@ -1102,7 +1102,11 @@ does, and only after the plan's checks pass.
 **Stage a setting.** On an FC's page open **Changes**, then **Edit setting…**. Give a setting
 name (`osd_cap_alarm`), its value, and, for a profile setting, the PID or rate profile. QuadCam
 refuses a name that the FC's latest backup does not hold, and any line it never sends
-(`save`, `exit`, `defaults`, `batch`, `bl`, `dfu`: QuadCam saves and exits itself). The change
+(`save`, `exit`, `defaults`, `batch`: QuadCam saves and exits itself; `bl`, `dfu`, `msc`,
+`flash_erase`, `flash_write`, `serialpassthrough`, `gpspassthrough`, `escprog`, `dshotprog`,
+`bind_rx`, `motor`: they reboot the FC, change its flash, hand its port to another device, program
+the ESCs or spin the motors). It matches these in any letter case, and refuses a line with a
+control character in it. The change
 waits in the gear folder (`changes/`) until you apply or discard it. **Discard** keeps it in
 the history.
 
