@@ -259,18 +259,42 @@ pub async fn update_restart(app: AppHandle, core: State<'_, Arc<Core>>) -> Resul
         core.set_update(|s| s.error = Some(msg.clone()));
         return Err(msg);
     }
+    // A job that started while the update installed holds the restart back too. The new
+    // version is on disk; the bytes stay, so the next click installs it again and restarts.
+    if let Some(job) = core.restart_blocker() {
+        *pending.bytes.lock().unwrap() = Some((version, bytes));
+        core.set_update(|_| {});
+        tell_when_free(core.inner().clone());
+        return Err(format!("QuadCam restarts after {job} ends."));
+    }
     prepare_relaunch(&app);
     app.restart();
 }
 
-/// Marks the process the restart starts as an update relaunch. Tauri's restart spawns the new
-/// binary with this process's environment.
-const RELAUNCH: &str = "QUADCAM_UPDATE_RELAUNCH";
+/// Marks the process the restart starts as an update relaunch: a file in the cache folder that
+/// holds the time it was written, not the environment, which other threads read while
+/// `setenv` would change it.
+fn relaunch_mark() -> std::path::PathBuf {
+    crate::paths::cache_dir().join("update-relaunch")
+}
+
+/// A mark older than this is left from a restart that never launched: it does not count.
+const RELAUNCH_FRESH_S: u64 = 120;
+
+fn unix_now() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs())
+}
 
 /// Right before Restart to update restarts: marks the new process, and (macOS 14 and later)
 /// lets it take activation from this one, which the person's click made the active app.
 fn prepare_relaunch<R: Runtime>(app: &AppHandle<R>) {
-    std::env::set_var(RELAUNCH, "1");
+    let mark = relaunch_mark();
+    if let Some(d) = mark.parent() {
+        let _ = std::fs::create_dir_all(d);
+    }
+    let _ = std::fs::write(&mark, unix_now().to_string());
     let (tx, rx) = std::sync::mpsc::channel();
     let ran = app.run_on_main_thread(move || {
         yield_activation();
@@ -281,12 +305,20 @@ fn prepare_relaunch<R: Runtime>(app: &AppHandle<R>) {
     }
 }
 
-/// True in the process Restart to update started. Clears the mark, so nothing this process
-/// starts inherits it. Call it once, at launch, before other threads start.
+/// True in the process Restart to update started. Removes the mark, so only one launch
+/// counts. Call it once, at launch.
 pub fn take_relaunch() -> bool {
-    let set = std::env::var_os(RELAUNCH).is_some();
-    std::env::remove_var(RELAUNCH);
-    set
+    take_relaunch_at(&relaunch_mark(), unix_now())
+}
+
+fn take_relaunch_at(mark: &std::path::Path, now: u64) -> bool {
+    let Ok(text) = std::fs::read_to_string(mark) else {
+        return false;
+    };
+    let _ = std::fs::remove_file(mark);
+    text.trim()
+        .parse::<u64>()
+        .is_ok_and(|at| now.saturating_sub(at) <= RELAUNCH_FRESH_S)
 }
 
 /// Whether the new window comes to the front at launch: only after an update relaunch the
@@ -357,7 +389,23 @@ fn yield_activation() {}
 
 #[cfg(test)]
 mod tests {
-    use super::front_at_launch;
+    use super::{front_at_launch, take_relaunch_at};
+
+    #[test]
+    fn the_relaunch_mark_counts_once_and_only_when_fresh() {
+        let d = tempfile::tempdir().unwrap();
+        let mark = d.path().join("update-relaunch");
+        assert!(!take_relaunch_at(&mark, 1000), "no mark");
+        std::fs::write(&mark, "1000").unwrap();
+        assert!(take_relaunch_at(&mark, 1005));
+        assert!(!mark.exists());
+        assert!(!take_relaunch_at(&mark, 1005), "once");
+        std::fs::write(&mark, "1000").unwrap();
+        assert!(!take_relaunch_at(&mark, 5000), "stale");
+        assert!(!mark.exists());
+        std::fs::write(&mark, "garbage").unwrap();
+        assert!(!take_relaunch_at(&mark, 1000));
+    }
 
     #[test]
     fn only_an_update_relaunch_comes_to_the_front() {

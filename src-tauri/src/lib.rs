@@ -885,7 +885,7 @@ pub fn bindings_language() -> specta_typescript::Typescript {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // Read before any thread starts: it clears the mark from the environment.
+    // Read once, at launch: it removes the mark.
     let relaunched = updater::take_relaunch();
     let specta = specta_builder();
     // Debug builds keep the new UI's bindings current, once it exists.
