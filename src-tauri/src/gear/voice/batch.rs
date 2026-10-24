@@ -207,7 +207,9 @@ pub fn plan_within(items: &[Item], s: &BatchSettings, max_chars: usize) -> Vec<B
 
 // ----- the batch cache -----
 
-/// Raw batch audio and alignment: `<cache>/voice/batch/<provider>/<key>.wav` and `.json`.
+/// Raw batch audio and alignment: `<cache>/voice/batch/<provider>/<key>.wav` and `.json`. A
+/// paid take that did not cut is kept as `<key>.failed.wav` and `.failed.json`: never cut
+/// from, never sent again.
 #[derive(Debug, Clone)]
 pub struct BatchCache {
     root: PathBuf,
@@ -223,6 +225,9 @@ struct Stored {
     seed: u64,
     text: String,
     alignment: Alignment,
+    /// Why the take did not cut; only in a `.failed.json`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    failed: Option<String>,
 }
 
 impl BatchCache {
@@ -281,6 +286,14 @@ impl BatchCache {
 
     pub fn has(&self, provider: &str, key: &str) -> bool {
         self.path(provider, key, "wav").is_file() && self.path(provider, key, "json").is_file()
+    }
+
+    /// Why the paid take of this batch did not cut, when one was kept (`put_failed`).
+    pub fn failed(&self, provider: &str, key: &str) -> Option<String> {
+        let st: Stored =
+            serde_json::from_slice(&std::fs::read(self.path(provider, key, "failed.json")).ok()?)
+                .ok()?;
+        Some(st.failed.unwrap_or_default())
     }
 
     /// Forgets a batch: its audio and its alignment.
@@ -349,6 +362,7 @@ impl BatchCache {
             seed,
             text: text.into(),
             alignment: a.alignment.clone(),
+            failed: None,
         };
         // The alignment goes first: a WAV without its alignment would not count as cached.
         let jp = self.path(provider, key, "json");
@@ -358,6 +372,38 @@ impl BatchCache {
         let wt = wav_path.with_extension("tmp");
         std::fs::write(&wt, wav::write(&a.pcm))?;
         std::fs::rename(&wt, &wav_path)?;
+        Ok(())
+    }
+
+    /// Keeps a paid take that did not cut, with why, so no render sends its batch again.
+    /// `has` stays false: no line is ever cut from it.
+    pub fn put_failed(
+        &self,
+        provider: &str,
+        key: &str,
+        ctx: &Ctx<'_>,
+        text: &str,
+        a: &Aligned,
+        why: &str,
+    ) -> Result<()> {
+        let jp = self.path(provider, key, "failed.json");
+        std::fs::create_dir_all(jp.parent().unwrap())?;
+        let st = Stored {
+            voice: ctx.voice.into(),
+            model: ctx.model.into(),
+            speed: ctx.settings.speed,
+            seed: ctx.settings.seed,
+            text: text.into(),
+            alignment: a.alignment.clone(),
+            failed: Some(why.into()),
+        };
+        let wp = self.path(provider, key, "failed.wav");
+        let wt = wp.with_extension("tmp");
+        std::fs::write(&wt, wav::write(&a.pcm))?;
+        std::fs::rename(&wt, &wp)?;
+        let jt = jp.with_extension("tmp");
+        std::fs::write(&jt, serde_json::to_vec(&st)?)?;
+        std::fs::rename(&jt, &jp)?;
         Ok(())
     }
 }
@@ -388,11 +434,18 @@ impl Ctx<'_> {
     pub fn cached(&self, b: &Batch) -> bool {
         self.cache.has(self.tts.id(), &self.key(b))
     }
+
+    /// Whether an estimate prices this batch: neither cached nor kept as a take that did not
+    /// cut.
+    pub fn to_send(&self, b: &Batch) -> bool {
+        !self.cached(b) && self.cache.failed(self.tts.id(), &self.key(b)).is_none()
+    }
 }
 
 /// One batch, cut: from the cache, or from the provider. A fresh take is cached only when it
-/// cuts, so a take the provider changed never stays cached; a cached take that does not cut
-/// is removed, and the next render fetches it again. The provider is asked only when
+/// cuts; a paid take that does not cut is kept apart (`put_failed`), and its batch is never
+/// sent again: the same text would bill again for the same failure. A cached take that does
+/// not cut is removed, and the next render fetches it again. The provider is asked only when
 /// `may_send` (the estimate priced the batch): a cached take that cannot be read is removed
 /// instead, so the next estimate prices it. True when the cache answered.
 pub fn fetch(ctx: &Ctx<'_>, b: &Batch, snap_ms: u32, may_send: bool) -> Result<(Vec<Cut>, bool)> {
@@ -409,6 +462,13 @@ pub fn fetch(ctx: &Ctx<'_>, b: &Batch, snap_ms: u32, may_send: bool) -> Result<(
                 )))
             }
         };
+    }
+    if let Some(why) = ctx.cache.failed(ctx.tts.id(), &key) {
+        bail!(
+            "an earlier take of a batch of {} {} lines did not cut ({why}); it was paid for once and is not sent again: change that line's spelling, or render with another seed",
+            b.items.len(),
+            b.tone
+        );
     }
     if !may_send {
         ctx.cache.remove(ctx.tts.id(), &key);
@@ -436,13 +496,25 @@ pub fn fetch(ctx: &Ctx<'_>, b: &Batch, snap_ms: u32, may_send: bool) -> Result<(
             &rates::today(),
         );
     }
-    let cuts = cut(b, &a, snap_ms).with_context(|| {
-        format!(
-            "the take of a batch of {} {} lines does not cut, so it was not kept",
-            b.items.len(),
-            b.tone
-        )
-    })?;
+    let cuts = match cut(b, &a, snap_ms) {
+        Ok(c) => c,
+        Err(e) => {
+            let why = format!("{e:#}");
+            let kept = ctx
+                .cache
+                .put_failed(ctx.tts.id(), &key, ctx, &b.text, &a, &why);
+            return Err(e.context(format!(
+                "the take of a batch of {} {} lines does not cut; {}",
+                b.items.len(),
+                b.tone,
+                if kept.is_ok() {
+                    "it is kept, and this batch is not sent again: change that line's spelling, or render with another seed"
+                } else {
+                    "it could not be kept, so the next render asks again"
+                }
+            )));
+        }
+    };
     ctx.cache.put(
         ctx.tts.id(),
         &key,
@@ -792,6 +864,21 @@ fn moved(al: &Alignment, b: &Batch, sentences: &[(usize, usize)], heard: &[Heard
         .collect()
 }
 
+/// The line where the provider's characters first differ from the batch text: the line that
+/// holds that character, or the next one when it falls in a carrier.
+fn changed_line<'a>(b: &'a Batch, got: &[String]) -> Option<&'a str> {
+    let want: Vec<char> = b.text.chars().collect();
+    let at = (0..want.len()).find(|&i| {
+        got.get(i)
+            .is_none_or(|c| c.chars().ne(std::iter::once(want[i])))
+    })?;
+    b.items
+        .iter()
+        .find(|(_, r)| r.end > at)
+        .or(b.items.last())
+        .map(|(i, _)| i.spoken.as_str())
+}
+
 /// Cuts every item of a batch out of its take. Fails when the alignment does not describe
 /// the batch text or runs past the audio.
 pub fn cut(b: &Batch, a: &Aligned, snap_ms: u32) -> Result<Vec<Cut>> {
@@ -799,8 +886,11 @@ pub fn cut(b: &Batch, a: &Aligned, snap_ms: u32) -> Result<Vec<Cut>> {
     let al = &a.alignment;
     if al.characters.len() != n || al.starts.len() != n || al.ends.len() != n {
         bail!(
-            "the timestamps cover {} characters but the batch has {n}: the provider changed the text",
-            al.characters.len()
+            "the timestamps cover {} characters but the batch has {n}: the provider changed the text{}",
+            al.characters.len(),
+            changed_line(b, &al.characters)
+                .map(|l| format!(" of the line {l:?}"))
+                .unwrap_or_default()
         );
     }
     let audio_s = a.pcm.samples.len() as f64 / f64::from(a.pcm.rate);
@@ -1151,7 +1241,7 @@ pub fn estimate(ctx: &Ctx<'_>, batches: &[Batch], price: &Pricing) -> Estimate {
     };
     for b in batches {
         e.batches += 1;
-        if ctx.cached(b) {
+        if !ctx.to_send(b) {
             e.cached_batches += 1;
         } else {
             e.lines += b.items.len() as u32;
@@ -1252,7 +1342,7 @@ mod tests {
     fn priced(ctx: &Ctx<'_>, batches: &[Batch]) -> Vec<String> {
         batches
             .iter()
-            .filter(|b| !ctx.cached(b))
+            .filter(|b| ctx.to_send(b))
             .map(|b| ctx.key(b))
             .collect()
     }
@@ -2089,7 +2179,7 @@ mod tests {
     }
 
     #[test]
-    fn a_take_that_does_not_cut_is_never_cached() {
+    fn a_paid_take_that_does_not_cut_is_kept_and_never_sent_again() {
         let dir = tempfile::tempdir().unwrap();
         let batches = plan(&[item("Six", "number")], &BatchSettings::default());
         // The provider changed the text: the timestamps cover other characters.
@@ -2113,20 +2203,24 @@ mod tests {
             true
         })
         .unwrap_err();
-        assert!(format!("{e:#}").contains("changed the text"), "{e:#}");
+        let msg = format!("{e:#}");
+        assert!(msg.contains("changed the text"), "{msg}");
+        assert!(msg.contains("\"Six\""), "the error names the line: {msg}");
+        // The paid take is kept, but never as a take a line is cut from.
         assert!(!ctx.cached(&batches[0]));
-        assert_eq!(
-            estimate(&ctx, &batches, &price(1.0, None)).cached_batches,
-            0
-        );
-        // A re-run asks the provider again instead of failing from the cache.
-        assert!(
-            render_all(&ctx, &batches, 40, &priced(&ctx, &batches), &mut |_, _| {
-                true
-            })
-            .is_err()
-        );
-        assert_eq!(h.posts(), 2);
+        assert!(cache.failed("elevenlabs", &ctx.key(&batches[0])).is_some());
+        // The next estimate prices nothing for it, and a re-run fails from the kept take
+        // without sending it again, even when the batch is in `priced`.
+        let e = estimate(&ctx, &batches, &price(1.0, None));
+        assert_eq!((e.cached_batches, e.chars), (1, 0));
+        assert!(priced(&ctx, &batches).is_empty());
+        let key = vec![ctx.key(&batches[0])];
+        let e = render_all(&ctx, &batches, 40, &key, &mut |_, _| true).unwrap_err();
+        assert!(format!("{e:#}").contains("\"Six\""), "{e:#}");
+        assert_eq!(h.posts(), 1, "the batch was sent and billed only once");
+        // Clearing the voice's takes clears the kept one too.
+        assert_eq!(cache.remove_voice("elevenlabs", "abc", "m"), 1);
+        assert!(cache.failed("elevenlabs", &ctx.key(&batches[0])).is_none());
 
         // A bad take already in the cache (from an older QuadCam) is removed.
         let bad: Aligned = Eleven::new(
@@ -2169,7 +2263,11 @@ mod tests {
         .unwrap_err();
         assert!(format!("{e:#}").contains("removed"), "{e:#}");
         assert!(!ctx.cached(&batches[0]));
-        assert_eq!(h.posts(), 2);
+        assert_eq!(
+            h.posts(),
+            1,
+            "a cached take that does not cut is removed, not sent"
+        );
     }
 
     #[test]

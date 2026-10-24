@@ -54,6 +54,12 @@ impl<'a> Scope<'a> {
         self.cache.has(self.provider, &self.key(b))
     }
 
+    /// Whether a render would send this batch: neither cached nor kept as a paid take that
+    /// did not cut (`batch::Ctx::to_send`).
+    pub fn to_send(&self, b: &Batch) -> bool {
+        !self.cached(b) && self.cache.failed(self.provider, &self.key(b)).is_none()
+    }
+
     /// The cache key of one line spoken alone (`BatchCache::alone_key`).
     pub fn alone_key(&self, text: &str) -> String {
         BatchCache::alone_key(

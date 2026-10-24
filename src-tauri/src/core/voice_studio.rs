@@ -577,7 +577,7 @@ impl StudioPlan {
         }
         let priced = batches
             .iter()
-            .filter(|b| !s.cached(b))
+            .filter(|b| s.to_send(b))
             .map(|b| s.key(b))
             .collect();
         StudioPlan {

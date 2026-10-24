@@ -816,8 +816,11 @@ the voices, the models, the line sets, the cost, **Sample** and **Render pack**,
   then gets the usual trim, fades and tempo.
   A cut that fails a check becomes a re-take (above). The raw audio and
   timestamps of each batch are kept by provider, voice, model, speed, text and seed, so a new
-  trim or tempo setting re-cuts for free. QuadCam keeps a batch only after it cuts: when
-  ElevenLabs changed the text, the take is not kept, and the next render asks again. When a
+  trim or tempo setting re-cuts for free. QuadCam cuts lines only from a batch that cuts.
+  When a paid take does not cut (ElevenLabs changed the text, or the audio ends before its
+  timestamps), QuadCam keeps it apart and never sends that batch again: the same text would
+  bill again for the same failure. The error names the line where the text changed. Change
+  that line's spelling, or render with another seed; the estimate prices the kept take at 0. When a
   QuadCam update cuts differently, **Sample** again (samples are cut fresh every time) and
   **Render pack** again with the same voice, model, sets and seed: the pack's batches are cut
   again from the cache, and the estimate shows 0 credits. A paid
