@@ -804,6 +804,34 @@ fn revert_of_a_card_change_restores_the_files_from_the_backup() {
         })
         .unwrap_err();
     assert!(format!("{e:#}").contains("names the files"), "{e:#}");
+
+    // A typed restore of this radio's backup staged on another radio is refused.
+    let mut other: quadcam_lib::gear::model::Device =
+        serde_json::from_value(serde_json::json!({"id": "radio-other", "kind": "radio"})).unwrap();
+    other.id = quadcam_lib::gear::model::device_id(DeviceKind::Radio, "marker:other");
+    Store::new(b.dir.path().join("support/gear"))
+        .save_device(&other)
+        .unwrap();
+    let e = b
+        .core
+        .gear_change_stage(&StageParams {
+            device: other.id.clone(),
+            edits: vec![Edit::Restore {
+                backup: rs_backup(&rs),
+                paths: vec!["RADIO/radio.yml".into()],
+            }],
+            ..Default::default()
+        })
+        .unwrap_err();
+    assert!(format!("{e:#}").contains("belongs to"), "{e:#}");
+}
+
+/// The backup a staged restore puts back.
+fn rs_backup(c: &StagedChange) -> String {
+    match &c.edits[0] {
+        Edit::Restore { backup, .. } => backup.clone(),
+        e => panic!("not a restore: {e:?}"),
+    }
 }
 
 #[test]

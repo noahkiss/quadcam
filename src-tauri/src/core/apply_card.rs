@@ -263,7 +263,8 @@ impl Core {
 
     /// What a card change asks of the card. A restore stands alone and becomes the files
     /// the backup holds for the paths it names (a path the backup lacks is removed).
-    fn card_work(&self, edits: &[Edit]) -> Result<CardWork> {
+    /// A restore's backup must be this device's (or one of its aliases').
+    fn card_work(&self, device: &str, edits: &[Edit]) -> Result<CardWork> {
         let restores: Vec<&Edit> = edits
             .iter()
             .filter(|e| matches!(e, Edit::Restore { .. }))
@@ -321,6 +322,18 @@ impl Core {
         }
         let snaps = self.snapshots();
         let b = snaps.get(backup)?;
+        // Another radio's backup would plan its models and settings onto this card.
+        let ours = b.device == device
+            || self
+                .gear_store()
+                .device(device)?
+                .is_some_and(|d| d.aliases.contains(&b.device));
+        if !ours {
+            bail!(
+                "Refused (device_changed): backup {backup} belongs to {}, not {device}; nothing was written.",
+                b.device
+            );
+        }
         let blobs = snaps.blobs();
         let mut files = Vec::new();
         for p in paths {
@@ -339,7 +352,7 @@ impl Core {
 
     /// Stage-time check of a card change's edits: the work builds and the edits are ones
     /// the engine plans. The files are checked at plan time, when the card is mounted.
-    pub(super) fn check_card_stageable(&self, edits: &[Edit]) -> Result<()> {
+    pub(super) fn check_card_stageable(&self, device: &str, edits: &[Edit]) -> Result<()> {
         for e in edits {
             match e {
                 Edit::Model { .. }
@@ -383,7 +396,7 @@ impl Core {
                 crate::gear::edgetx::model::check_model_name(n).map_err(refusal)?;
             }
         }
-        self.card_work(edits).map(|_| ())
+        self.card_work(device, edits).map(|_| ())
     }
 
     /// The plan of a card change; the card is mounted for it and, when this call mounted
@@ -393,7 +406,7 @@ impl Core {
         change: &StagedChange,
         keep_mounted: bool,
     ) -> Result<(CardPlanned, Option<Located>)> {
-        let work = self.card_work(&change.edits)?;
+        let work = self.card_work(&change.device, &change.edits)?;
         let located = self.locate_card(&change.device, true)?;
         let (cands, facts) = match &located {
             Some(l) => (

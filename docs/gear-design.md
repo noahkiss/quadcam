@@ -2108,7 +2108,8 @@ dialog, Mount and Done on a radio's page. Deviations and choices:
   Pack up, flight sources) never mount a card.
 - **Restore on a card** names the files (`Edit::Restore { paths }`) and stands alone: the plan
   makes each path read as in the backup (a path the backup lacks is removed), through
-  `Card::plan_files`. A whole-card restore is not offered.
+  `Card::plan_files`. A whole-card restore is not offered. The backup must be the radio's own
+  (its id or an alias): another radio's backup refuses (`device_changed`).
 - **Statuses.** Try, Read first and Draft are set by hand (`gear_change_update`). A Read first
   change refuses at plan time (`read_first`) until the person marks it Ready, and a Draft
   (`draft`) until it is Ready or Try. Both gates (`status_checks`) open every plan: FC, card and

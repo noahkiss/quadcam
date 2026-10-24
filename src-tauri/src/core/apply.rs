@@ -155,7 +155,7 @@ impl Core {
                 Ok(base.map(|b| b.backup.id).unwrap_or_default())
             }
             DeviceKind::Radio => {
-                self.check_card_stageable(edits)?;
+                self.check_card_stageable(device, edits)?;
                 Ok(self
                     .snapshots()
                     .latest(device)
