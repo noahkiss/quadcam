@@ -23,7 +23,7 @@ test("Pull blackbox stores the flash and keeps it while the erase setting is off
   await expect(fc.getByRole("button", { name: "Erase flash" })).toBeDisabled();
   await fc.getByRole("button", { name: "Pull blackbox" }).click();
   await expect(page.getByText("3 logs stored (4 MB). Flash kept.")).toBeVisible();
-  expect((await app.method("gear_blackbox_pull")).at(-1)).toEqual({ port: "/dev/cu.usbmodem0", keep: false });
+  expect((await app.method("gear_blackbox_pull")).at(-1)).toEqual({ port: "/dev/cu.usbmodem0", keep: false, confirm: true });
   const table = fc.getByRole("table", { name: "Blackbox pulls" });
   await expect(table.getByRole("row")).toHaveCount(2);
   await expect(table.getByRole("row").nth(1)).toContainText("Kept");
