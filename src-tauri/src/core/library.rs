@@ -368,8 +368,10 @@ impl Core {
         if self.library_root().ok().as_deref() != Some(root) {
             return Ok(());
         }
-        self.with_index(|root, ix| {
+        let failed = self.with_index(|root, ix| {
             let mut any = false;
+            // One clip that does not read back leaves the others in the index.
+            let mut failed = Vec::new();
             for r in s.results.iter().filter(|r| r.outcome == Outcome::Verified) {
                 let Some(out) = &r.output else { continue };
                 let cuts: Vec<PathBuf> = r
@@ -378,10 +380,14 @@ impl Core {
                     .filter(|c| c.outcome == Outcome::Verified)
                     .filter_map(|c| c.output.as_deref().map(|o| rel_to(root, o)))
                     .collect();
-                let mut c = lib::reread(root, &rel_to(root, out), &cuts)?;
-                c.in_photos |= s.in_photos.contains(&r.id);
-                ix.upsert(c);
-                any = true;
+                match lib::reread(root, &rel_to(root, out), &cuts) {
+                    Ok(mut c) => {
+                        c.in_photos |= s.in_photos.contains(&r.id);
+                        ix.upsert(c);
+                        any = true;
+                    }
+                    Err(e) => failed.push(format!("{}: {e:#}", out.display())),
+                }
             }
             if any
                 && s.results
@@ -396,8 +402,12 @@ impl Core {
                     .unwrap_or_else(|| import_id.to_string());
                 ix.last_import = Some(newest);
             }
-            Ok(((), any))
-        })
+            Ok((failed, any))
+        })?;
+        if !failed.is_empty() {
+            bail!("not added to the library: {}", failed.join("; "));
+        }
+        Ok(())
     }
 
     /// Sets star ratings (0 clears) and pick or reject flags, in the files and the index.

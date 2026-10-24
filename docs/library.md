@@ -29,6 +29,8 @@ A clip without a name gets one that is unique in its day:
 - If a radio log dated the clip, the name is the aircraft and the time (`Whoop 14:03`).
 - Otherwise, the name is `flight-1`, `flight-2`, and so on. **Default short name** in Settings > Import sets the word.
 
+A name that ends like a cut's (`cut2`) gets a trailing `_` (`2026-09-27_cut2_.mp4`), so the file never reads as a cut. A file that QuadCam wrote is a cut only when its metadata says so (`app.quadcam.cut`), whatever its name.
+
 ### On-device suggestions
 
 On a Mac with Apple's on-device model (macOS 26 or later, Apple Intelligence on), QuadCam suggests a short name, keywords and a note for each clip after a card loads. The model reads what QuadCam knows about the clip: the date and time of day, the place, the aircraft, the length, the radio-log moments and the flight. On macOS 27 it also looks at one frame from mid-flight. It runs on the Mac, offline and free; nothing leaves the Mac.

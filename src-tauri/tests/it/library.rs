@@ -1210,3 +1210,27 @@ fn a_place_edit_moves_the_clip_to_that_places_day_folder() {
         .is_file());
     assert!(!l.root.join("2026/2026-09-27 Home field").exists());
 }
+
+/// A clip named like a cut (`cut2`) stays a clip: the name gets a trailing `_`, and a file
+/// renamed in Finder to end in `_cut7` still reads as a clip, since QuadCam's items say so.
+#[test]
+fn a_clip_named_like_a_cut_stays_a_clip() {
+    let l = lab(Layout::YearDay, false, false);
+    import(&l);
+    let id = by_name(&l, "gap run").clip.id;
+    let c = l.core.library_rename(&id, "cut2").unwrap();
+    assert_eq!(
+        c.path.file_name().unwrap().to_string_lossy(),
+        "2026-09-27_cut2_.mp4"
+    );
+    let dir = l.root.join("2026/2026-09-27");
+    std::fs::rename(dir.join("2026-09-27_cut2_.mp4"), dir.join("2026-09-27_cut7.mp4")).unwrap();
+    let r = l.core.library_rebuild().unwrap();
+    let a = all(&l);
+    assert_eq!(a.len(), 2, "{r:?}");
+    assert!(a.iter().any(|c| c.clip.id == id
+        && c.file == dir.join("2026-09-27_cut7.mp4")
+        && c.clip.cuts.is_empty()));
+    // The real cut of the other clip is still its cut.
+    assert_eq!(by_name(&l, "backyard loops").clip.cuts.len(), 1);
+}

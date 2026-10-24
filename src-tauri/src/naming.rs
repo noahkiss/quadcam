@@ -89,6 +89,10 @@ pub fn slug(name: &str, default_name: &str) -> String {
         }
         return slug(default_name, DEFAULT_NAME);
     }
+    // A name ending in `cut2` would read back as a cut of another clip: `<date>_cut2`.
+    if crate::library::cut_stem(&format!("_{out}")).is_some() {
+        return format!("{out}_");
+    }
     out
 }
 
@@ -153,6 +157,10 @@ mod tests {
         assert_eq!(slug("  a   b  ", "flight"), "a_b");
         assert_eq!(slug("Dive/Park!", "flight"), "dive_park_");
         assert_eq!(slug("", "flight"), "flight");
+        assert_eq!(slug("cut1", "flight"), "cut1_");
+        assert_eq!(slug("My cut2-3", "flight"), "my_cut2-3_");
+        assert_eq!(slug("uncut", "flight"), "uncut");
+        assert_eq!(slug("cutting", "flight"), "cutting");
         assert_eq!(slug("   ", "flight"), "flight");
         assert_eq!(slug("..", "flight"), "flight");
         assert_eq!(slug("", ""), "flight");

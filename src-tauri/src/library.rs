@@ -549,7 +549,10 @@ pub fn read_file(root: &Path, rel: &Path) -> Result<Found> {
                 .into_iter()
                 .next()
         });
-    if !detached {
+    // A file QuadCam wrote says it is a cut with `app.quadcam.cut`; only a file without
+    // QuadCam's items is a cut by its name alone.
+    let ours = items.iter().any(|(k, _)| k.starts_with("app.quadcam."));
+    if !detached && (cut_range.is_some() || !ours) {
         if let Some((parent, _)) = cut_stem(&stem) {
             let span = cut_range.unwrap_or(Span {
                 start: 0.0,
