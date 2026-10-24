@@ -61,6 +61,10 @@ enum Cmd {
         /// join_split_recordings setting is on by default).
         #[arg(long)]
         no_join: bool,
+        /// Replace an import that is loaded and not exported yet, with its names, dates and
+        /// cuts. Without it such a stage is refused.
+        #[arg(long)]
+        replace: bool,
     },
     /// Probe staged clips, recover half-written ones, make thumbnails.
     Analyze,
@@ -782,16 +786,31 @@ fn run(cmd: Cmd, session: Option<PathBuf>) -> Result<Value> {
             path,
             card,
             no_join,
-        } => serde_json::to_value(via::<_, quadcam_lib::session::Session>(
-            &core,
-            "stage",
-            api::SourceParams {
-                source: path.map(abs),
-                device: card,
-                join: no_join.then_some(false),
-            },
-            call::stage,
-        )?)?,
+            replace,
+        } => serde_json::to_value({
+            // The app asks before it replaces an unexported import; so does the CLI.
+            if !replace {
+                if let Some(open) =
+                    session_of(&core)?.filter(|s| !s.clips.is_empty() && s.results.is_empty())
+                {
+                    bail!(
+                        "Refused: an import is loaded and not exported: {} clips from {}. Staging replaces it, and its names, dates and cuts are lost. Run again with --replace to replace it.",
+                        open.clips.len(),
+                        open.source.display()
+                    );
+                }
+            }
+            via::<_, quadcam_lib::session::Session>(
+                &core,
+                "stage",
+                api::SourceParams {
+                    source: path.map(abs),
+                    device: card,
+                    join: no_join.then_some(false),
+                },
+                call::stage,
+            )?
+        })?,
         Cmd::Analyze => serde_json::to_value(via::<_, quadcam_lib::session::Session>(
             &core,
             "analyse",

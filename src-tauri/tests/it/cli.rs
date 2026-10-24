@@ -346,6 +346,22 @@ fn errors_and_exit_codes() {
     assert!(v["error"]["message"].as_str().unwrap().contains("--device"));
 }
 
+/// `stage` refuses to replace a loaded, unexported import unless `--replace`, as the app
+/// asks first and MCP needs replace=true.
+#[test]
+fn stage_replaces_an_open_import_only_with_replace() {
+    let env = Env::new();
+    let src = folder_with_clips();
+    env.ok(&["stage", s(src.path())]);
+    let (code, v) = env.run(&["stage", s(src.path())]);
+    assert_eq!(code, 3, "{v}");
+    assert!(v["error"]["message"]
+        .as_str()
+        .unwrap()
+        .contains("--replace"));
+    env.ok(&["stage", s(src.path()), "--replace"]);
+}
+
 #[test]
 fn format_a_disk_image_only_with_every_flag() {
     let env = Env::new();

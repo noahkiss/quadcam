@@ -767,6 +767,7 @@ cli.flag profiles save --rename VALUE
 cli.flag profiles save --video-system VALUE
 cli.flag stage --card VALUE
 cli.flag stage --no-join
+cli.flag stage --replace
 cli.flag verify --source VALUE
 cli.value cut --removed=keep
 cli.value cut --removed=trash
