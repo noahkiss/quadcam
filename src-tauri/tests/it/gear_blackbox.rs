@@ -96,7 +96,10 @@ fn fc_with(img: Vec<u8>) -> FakeFc {
 
 fn pull(b: &Bench) -> anyhow::Result<quadcam_lib::core::BlackboxPullResult> {
     b.core
-        .gear_blackbox_pull(&BlackboxPullParams::default())
+        .gear_blackbox_pull(&BlackboxPullParams {
+            confirm: true,
+            ..Default::default()
+        })
         .map(|j| j.result)
 }
 
@@ -188,9 +191,17 @@ fn with_the_setting_on_the_flash_is_erased_after_verify_and_the_cue_follows_the_
     let fc = fc_with(img.clone());
     let b = bench(&fc);
     b.settings(r#"{"gearEraseBlackbox":true}"#);
+    // Without confirm the core refuses before it opens the port: any surface, not just MCP.
+    let e = b
+        .core
+        .gear_blackbox_pull(&BlackboxPullParams::default())
+        .unwrap_err();
+    assert!(format!("{e:#}").starts_with("Refused"), "{e:#}");
+    assert_eq!(fc.dataflash_erases(), 0);
     let r = b
         .core
         .gear_blackbox_pull(&BlackboxPullParams {
+            confirm: true,
             keep: true,
             ..Default::default()
         })
@@ -301,6 +312,7 @@ fn the_usb_timer_refuses_a_pull_that_would_outlast_it_and_never_starts_an_erase_
     let r = b
         .core
         .gear_blackbox_pull(&BlackboxPullParams {
+            confirm: true,
             force: true,
             ..Default::default()
         })
@@ -352,6 +364,7 @@ fn a_manual_erase_refuses_a_flash_that_grew_after_the_last_pull() {
     b.settings(r#"{"gearEraseBlackbox":true}"#);
     b.core
         .gear_blackbox_pull(&BlackboxPullParams {
+            confirm: true,
             keep: true,
             ..Default::default()
         })
@@ -517,6 +530,7 @@ fn usb_disk_mode_copies_the_files_and_falls_back_to_msp_when_the_fc_lacks_it() {
     let e = b
         .core
         .gear_blackbox_pull(&BlackboxPullParams {
+            confirm: true,
             mode: Some(PullMode::Msc),
             ..Default::default()
         })
@@ -543,6 +557,7 @@ fn an_msc_pull_that_does_not_match_the_flash_is_read_over_msp_or_refused() {
     let e = b
         .core
         .gear_blackbox_pull(&BlackboxPullParams {
+            confirm: true,
             mode: Some(PullMode::Msc),
             ..Default::default()
         })

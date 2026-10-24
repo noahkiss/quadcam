@@ -2084,7 +2084,7 @@ quadcam-cli --json gear sims uncrashed --restore [--backup ID]                  
 quadcam-cli --json gear sims uncrashed --restore [--backup ID] --digest D --yes                   # restore
 quadcam-cli --json gear firmware [--check]           # installed against newest; --check reads the network
 quadcam-cli --json gear elrs [status [--check]]      # ELRS devices read so far (a preview: elrs_preview)
-quadcam-cli --json gear elrs read HOST [--port P]    # the module behind a radio or the receiver behind an FC
+quadcam-cli --json gear elrs read HOST [--port P] [--yes]   # the module behind a radio (needs --yes: the quad goes to failsafe) or the receiver behind an FC
 quadcam-cli --json gear elrs set DEVICE packet_rate=250Hz   # stage options; then gear apply
 quadcam-cli --json gear elrs flash DEVICE [--version V] [--sha256 H]   # the flash plan
 quadcam-cli --json gear elrs flash DEVICE --digest D --yes            # flash with the esptool module

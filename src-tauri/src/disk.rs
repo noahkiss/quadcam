@@ -578,6 +578,12 @@ pub fn format_card_with(
 /// `dji_usb` says whether a DJI USB device is attached (`Env.dji_usb`). Unplugging
 /// mid-write once wedged diskarbitrationd, so this always runs before a pull.
 pub fn safe_remove(target: &str, dji_usb: &dyn Fn() -> bool) -> Result<()> {
+    safe_remove_with(target, dji_usb, true)
+}
+
+/// `safe_remove`, but with `other_disks` false it refuses a disk that is neither a card nor
+/// a DJI device, before it runs anything: a target someone named may be a backup drive.
+pub fn safe_remove_with(target: &str, dji_usb: &dyn Fn() -> bool, other_disks: bool) -> Result<()> {
     let vol = info(target)?;
     let whole_id = whole_disk_of(if vol.parent_whole_disk.is_empty() {
         &vol.device_identifier
@@ -588,8 +594,10 @@ pub fn safe_remove(target: &str, dji_usb: &dyn Fn() -> bool) -> Result<()> {
     let dev = format!("/dev/{whole_id}");
     if removes_by_unmount(&whole, dji_usb) {
         unmount_disk(&dev)
-    } else {
+    } else if other_disks {
         eject(&dev)
+    } else {
+        bail!("{target} is not a card or a DJI device; QuadCam ejects only those. Nothing was ejected.")
     }
 }
 

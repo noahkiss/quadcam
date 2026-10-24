@@ -144,7 +144,7 @@ pub struct ReportParams {
 pub struct ReportSaveParams {
     #[serde(default)]
     pub day: Option<NaiveDate>,
-    /// The file to write. Its folder must exist.
+    /// The file to write: a `.md` or `.markdown` file whose folder exists.
     pub path: PathBuf,
     /// Replace a file that is already there. The GUI's save dialog has asked already.
     #[serde(default)]
@@ -521,6 +521,16 @@ impl Core {
     pub fn gear_session_report_save(&self, p: &ReportSaveParams) -> Result<ReportSaved> {
         if p.path.is_dir() {
             bail!("{} is a folder; name a file.", p.path.display());
+        }
+        let md = p
+            .path
+            .extension()
+            .is_some_and(|e| e.eq_ignore_ascii_case("md") || e.eq_ignore_ascii_case("markdown"));
+        if !md {
+            bail!(
+                "{} is not a Markdown file; name a .md file.",
+                p.path.display()
+            );
         }
         if p.path.exists() && !p.overwrite {
             bail!("{} exists. Pass overwrite to replace it.", p.path.display());

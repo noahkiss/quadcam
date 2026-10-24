@@ -456,11 +456,13 @@ impl Core {
         Ok(out)
     }
 
-    /// Makes `target` (a mount point or `/dev/diskN`), or the session's card, safe to remove
-    /// (`disk::safe_remove`: unmount a card or a DJI device over USB, eject anything else).
+    /// Makes `target` (a mount point or `/dev/diskN` of a card or a DJI device), or the
+    /// session's card, safe to remove (`disk::safe_remove`: unmount a card or a DJI device
+    /// over USB). A named target that is another disk is refused.
     pub fn eject(&self, target: Option<&str>) -> Result<()> {
         let target = match target {
-            Some(t) => t.to_string(),
+            // A named target: only a card or a DJI device, never another disk.
+            Some(t) => return disk::safe_remove_with(t, &*self.gear.dji_usb, false),
             None => {
                 let s = self.current()?;
                 let Some(card) = &s.card else {

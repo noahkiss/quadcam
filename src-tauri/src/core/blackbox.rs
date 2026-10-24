@@ -64,6 +64,10 @@ pub struct BlackboxPullParams {
     /// could not finish still does not start.
     #[serde(default)]
     pub force: bool,
+    /// The person agreed: a pull holds the FC for minutes and, with the
+    /// `gear_erase_blackbox` setting on, erases its flash after. Needs true.
+    #[serde(default)]
+    pub confirm: bool,
 }
 
 /// `gear_blackbox`: one device's pulls, or every device's.
@@ -168,8 +172,10 @@ pub fn blackbox_hooks() -> Vec<OnConnectHook> {
         if core.gear_poll_paused(&port) {
             return Err(Skip.into());
         }
+        // The person turned the step on: that is the consent.
         core.gear_blackbox_pull(&BlackboxPullParams {
             port: Some(port),
+            confirm: true,
             ..Default::default()
         })
         .map(|_| ())
@@ -232,6 +238,9 @@ impl Core {
     /// Pulls the FC's blackbox flash: verify, store, and erase when allowed. One cue at the
     /// end, after the erase finished.
     pub fn gear_blackbox_pull(&self, p: &BlackboxPullParams) -> Result<FcJob<BlackboxPullResult>> {
+        if !p.confirm {
+            bail!("Refused: a blackbox pull reads the FC and, when the gear_erase_blackbox setting is on, erases its flash; it needs confirm=true.");
+        }
         let settings = self.gear_settings();
         let a = PullArgs {
             timing: self.fc_timing(),

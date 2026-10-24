@@ -56,7 +56,7 @@ quadcam-cli format --prep --device /dev/diskN --volume-uuid <uuid> --yes
 
 **Mount, work, unmount.** The end of `import` unmounts the session's card (a removable card; never a DJI device over USB), and the result says so under `card`. `format`, `format --plan` and `eject` mount it again when they need it. `stage --card` and `format --prep --card` take a card that an earlier job unmounted and mounted by its device id from `gear status`.
 
-`eject` makes the card safe to remove. For a card it runs `diskutil unmountDisk`: every volume unmounts, and the card stays listed until you pull it. For a disk that is not a card it runs `diskutil eject`.
+`eject` makes the card safe to remove. For a card it runs `diskutil unmountDisk`: every volume unmounts, and the card stays listed until you pull it. A target you name must be a card or a DJI device: `eject` refuses any other disk and changes nothing.
 
 When the `delete_clips_after_import` setting is on, `import` deletes each clip that verified from the card or folder, and its result lists every clip under `clip_deletion` as `deleted`, or `kept` with a `reason`. `--keep-clips` keeps them for that run. No flag turns the delete on. See [Settings](settings.md#delete-clips-after-import).
 
@@ -225,7 +225,7 @@ quadcam-cli --json gear sims SIM --restore [--backup ID] [--digest D --yes]   # 
 quadcam-cli --json gear sims FILE|DEVICE [--rate-profile N] --sync --to SIM[:PROFILE][@FILE] [--to ...] [--digest D --yes]   # write the quad's rates into sim profiles
 quadcam-cli --json gear firmware [--check]                    # each device's firmware against the newest release (an FC on its maker's build: the maker's newest file); --check reads the network
 quadcam-cli --json gear elrs [status [--check]]               # ExpressLRS devices read so far (preview: settings set elrs_preview=true)
-quadcam-cli --json gear elrs read HOST [--port P]             # the module behind a saved radio (stops its pulses) or the receiver behind a saved FC
+quadcam-cli --json gear elrs read HOST [--port P] [--yes]       # the module behind a saved radio (stops its pulses; needs --yes) or the receiver behind a saved FC
 quadcam-cli --json gear elrs set DEVICE OPTION=VALUE [...]    # stage ELRS options (packet_rate, telemetry_ratio, power, dynamic_power, switch_mode, model_match); apply with gear apply
 quadcam-cli --json gear elrs flash DEVICE [--version V] [--sha256 H] [--port P]   # an ExpressLRS flash: checks, diff, digest
 quadcam-cli --json gear elrs flash DEVICE [--version V] --digest D --yes          # flash with the esptool module
@@ -247,7 +247,7 @@ quadcam-cli --json gear sim validate PROFILE --logs DIR [--poles N] [--text]    
 quadcam-cli --json gear flights [--day D] [--aircraft A] [--pack L] [--place P] [--logs DIR] [set <flight> --pack L --place P | folders --add DIR | folders --remove DIR]
 quadcam-cli gear report [--day D] --markdown                     # the session report
 quadcam-cli --json gear report [--day D] --summarize             # with a paragraph from the on-device model
-quadcam-cli --json gear report [--day D] --out FILE [--force]     # write the Markdown to FILE
+quadcam-cli --json gear report [--day D] --out FILE [--force]     # write the Markdown to FILE (.md or .markdown)
 quadcam-cli --json gear preflight                                # the Pack up check
 quadcam-cli --json gear packs [save L --type T --charged | delete L | type save T --cells N --capacity MAH ... | type delete T | notes TEXT]
 quadcam-cli --json gear crashes [--clip ID save --time S --broke TEXT --parts a,b | delete ID]

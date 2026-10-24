@@ -207,6 +207,79 @@ fn args<T: serde::de::DeserializeOwned + Default>(a: &Value) -> Result<T> {
     serde_json::from_value(a.clone()).context("bad arguments")
 }
 
+/// Refuses arguments past a limit the tool's schema states (sizes, counts, number ranges)
+/// before anything runs. The schema's limits reach the client only as words, and arguments
+/// some tools pass on as JSON (`suggestions`, `fields`, `values`) skip a typed check: 5,000
+/// cuts for one clip would be 5,000 encodes.
+fn within_limits(tool: &str, a: &Value) -> Result<()> {
+    static SCHEMAS: std::sync::OnceLock<Value> = std::sync::OnceLock::new();
+    let tools = SCHEMAS.get_or_init(super::tools::tools);
+    let Some(schema) = tools
+        .as_array()
+        .into_iter()
+        .flatten()
+        .find(|t| t["name"] == tool)
+        .map(|t| &t["inputSchema"])
+    else {
+        return Ok(());
+    };
+    check_limits(schema, a, "arguments").context("bad arguments")
+}
+
+fn check_limits(schema: &Value, v: &Value, at: &str) -> Result<()> {
+    let n = |k: &str| schema.get(k).and_then(Value::as_f64);
+    match v {
+        Value::String(s) => {
+            let len = s.chars().count() as f64;
+            if n("maxLength").is_some_and(|m| len > m) {
+                anyhow::bail!("{at} is longer than {} characters", n("maxLength").unwrap());
+            }
+            if n("minLength").is_some_and(|m| len < m) {
+                anyhow::bail!("{at} needs at least {} characters", n("minLength").unwrap());
+            }
+        }
+        Value::Number(x) => {
+            let x = x.as_f64().unwrap_or_default();
+            if n("maximum").is_some_and(|m| x > m) {
+                anyhow::bail!("{at} is above {}", n("maximum").unwrap());
+            }
+            if n("minimum").is_some_and(|m| x < m) {
+                anyhow::bail!("{at} is below {}", n("minimum").unwrap());
+            }
+        }
+        Value::Array(items) => {
+            let len = items.len() as f64;
+            if n("maxItems").is_some_and(|m| len > m) {
+                anyhow::bail!("{at} has more than {} items", n("maxItems").unwrap());
+            }
+            if n("minItems").is_some_and(|m| len < m) {
+                anyhow::bail!("{at} needs at least {} items", n("minItems").unwrap());
+            }
+            if let Some(item) = schema.get("items") {
+                for (i, x) in items.iter().enumerate() {
+                    check_limits(item, x, &format!("{at}[{i}]"))?;
+                }
+            }
+        }
+        Value::Object(m) => {
+            if let Some(props) = schema.get("properties").and_then(Value::as_object) {
+                for (k, x) in m {
+                    if let Some(p) = props.get(k) {
+                        let at = if at == "arguments" {
+                            k.clone()
+                        } else {
+                            format!("{at}.{k}")
+                        };
+                        check_limits(p, x, &at)?;
+                    }
+                }
+            }
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
 pub struct Server<B: Backend> {
     pub backend: B,
     /// What warns on use (`schema::DEPRECATIONS`; tests give their own).
@@ -329,6 +402,7 @@ impl<B: Backend> Server<B> {
     }
 
     fn run_tool(&mut self, name: &str, a: &Value) -> Result<(Vec<Value>, Value)> {
+        within_limits(name, a)?;
         if let Some(r) = super::gear::run(&mut self.backend, name, a) {
             return r;
         }
@@ -472,8 +546,9 @@ impl<B: Backend> Server<B> {
             }
             "quadcam_library_files" => {
                 let x: LibraryFilesArgs = args(a)?;
-                let action = x.action
-                    .context("action is required: cuts, split_by_flight, export_cuts, trash, photos, rebuild, apply_name_format, match_logs or analyze_video")?;
+                let action = x.action.with_context(|| {
+                    format!("action is required: {}", one_of(LIBRARY_FILES_ACTIONS))
+                })?;
                 let ids: Vec<String> = x.ids.unwrap_or_default();
                 let one = || -> Result<String> {
                     match ids.as_slice() {
@@ -584,8 +659,15 @@ impl<B: Backend> Server<B> {
                                 c["id"].as_str().unwrap_or(""),
                                 c["path"].as_str().unwrap_or(""),
                                 c["badge"].as_str().unwrap_or(""),
-                                c["reason"].as_str().map(|w| format!(" ({w})")).unwrap_or_default(),
-                                if c["applied"] == true { "; written" } else { "" }
+                                c["reason"]
+                                    .as_str()
+                                    .map(|w| format!(" ({w})"))
+                                    .unwrap_or_default(),
+                                if c["applied"] == true {
+                                    "; written"
+                                } else {
+                                    ""
+                                }
                             ));
                         }
                         Ok((vec![text(lines.join("\n"))], r))
@@ -602,10 +684,9 @@ impl<B: Backend> Server<B> {
                         Ok((vec![text(video_text(&r))], r))
                     }
                     "apply_name_format" => {
-                        let r = self.backend.call(
-                            "library_apply_name_format",
-                            json!({"ids": ids}),
-                        )?;
+                        let r = self
+                            .backend
+                            .call("library_apply_name_format", json!({"ids": ids}))?;
                         Ok((
                             vec![text(format!(
                                 "Renamed {} clips with their cuts and originals; {} already matched; {} do not start with a date{}.",
@@ -636,7 +717,8 @@ impl<B: Backend> Server<B> {
                         ))
                     }
                     other => Err(anyhow!(
-                        "unknown action {other:?}; use cuts, split_by_flight, export_cuts, trash, photos, rebuild, apply_name_format, match_logs or analyze_video"
+                        "unknown action {other:?}; use {}",
+                        one_of(LIBRARY_FILES_ACTIONS)
                     )),
                 }
             }
@@ -746,7 +828,8 @@ impl<B: Backend> Server<B> {
                         ))
                     }
                     other => Err(anyhow!(
-                        "unknown action {other:?}; use list, search, save or delete"
+                        "unknown action {other:?}; use {}",
+                        one_of(PLACES_ACTIONS)
                     )),
                 }
             }
@@ -795,7 +878,8 @@ impl<B: Backend> Server<B> {
                     }
                     other => {
                         return Err(anyhow!(
-                            "unknown action {other:?}; use list, save, delete or set_default"
+                            "unknown action {other:?}; use {}",
+                            one_of(PROFILES_ACTIONS)
                         ))
                     }
                 };
@@ -854,12 +938,21 @@ impl<B: Backend> Server<B> {
                             .context(
                                 "values is required: {setting: value}; null resets a setting",
                             )?;
+                        if let Some(k) = PERSON_ONLY_SETTINGS
+                            .iter()
+                            .find(|k| values.get(**k).is_some())
+                        {
+                            anyhow::bail!(
+                                "{k} is set by the person, not over MCP: in the app's Settings window, or `quadcam-cli settings set {k}=...`"
+                            );
+                        }
                         self.backend
                             .call("settings_set", json!({"values": values}))?
                     }
                     other => {
                         return Err(anyhow!(
-                            "unknown action {other:?}; use read, write, modules, module_install or module_remove"
+                            "unknown action {other:?}; use {}",
+                            one_of(SETTINGS_ACTIONS)
                         ))
                     }
                 };
@@ -1275,7 +1368,8 @@ impl<B: Backend> Server<B> {
             }
             other => {
                 return Err(anyhow!(
-                    "unknown action {other:?}; use read, write, modules, module_install or module_remove"
+                    "unknown action {other:?}; use {}",
+                    one_of(SETTINGS_ACTIONS)
                 ))
             }
         };
@@ -1333,6 +1427,10 @@ impl<B: Backend> Server<B> {
 
 /// Settings by name, in `settings::KEYS` order.
 type Named = Vec<(&'static str, Value)>;
+
+/// Settings MCP never writes: `modules` names a program the app runs, `tts_base_url` the
+/// server the stored `tts_key` is sent to.
+const PERSON_ONLY_SETTINGS: &[&str] = &["modules", "tts_base_url"];
 
 /// The settings a `quadcam_settings` read shows: every named setting of `settings::KEYS`
 /// with its value in effect (`named`; an older app without it gives `effective`, then the

@@ -314,10 +314,27 @@ fn bench_with(
     (b, tx, rx)
 }
 
+/// A read stops a radio's pulses: without `confirm` it is refused before the port opens.
+#[test]
+fn reading_a_radios_module_needs_confirm() {
+    let (b, _, _) = bench(true, true);
+    let e = b
+        .core
+        .gear_elrs_read(&ElrsReadParams {
+            host: b.radio.clone(),
+            port: None,
+            confirm: false,
+        })
+        .unwrap_err();
+    let t = format!("{e:#}");
+    assert!(t.contains("failsafe") && t.contains("confirm"), "{t}");
+}
+
 fn read(b: &Bench, host: &str) -> anyhow::Result<quadcam_lib::core::ElrsReadReport> {
     b.core.gear_elrs_read(&ElrsReadParams {
         host: host.into(),
         port: None,
+        confirm: true,
     })
 }
 
@@ -466,6 +483,7 @@ fn an_fc_with_the_wrong_receiver_settings_never_starts_a_passthrough() {
         .gear_elrs_read(&ElrsReadParams {
             host: b.fc.clone(),
             port: None,
+            confirm: true,
         })
         .unwrap_err();
     let text = format!("{e:#}");
@@ -498,6 +516,7 @@ fn an_fc_that_is_not_the_host_or_does_not_identify_itself_refuses() {
         .gear_elrs_read(&ElrsReadParams {
             host: b.fc.clone(),
             port: None,
+            confirm: true,
         })
         .unwrap_err();
     let r = refusal(e);
@@ -513,6 +532,7 @@ fn an_fc_that_is_not_the_host_or_does_not_identify_itself_refuses() {
         .gear_elrs_read(&ElrsReadParams {
             host: b.fc.clone(),
             port: None,
+            confirm: true,
         })
         .unwrap_err();
     let r = refusal(e);
@@ -542,6 +562,7 @@ fn a_device_that_does_not_answer_is_an_error_with_a_hint() {
         .gear_elrs_read(&ElrsReadParams {
             host: b.radio.clone(),
             port: None,
+            confirm: true,
         })
         .unwrap_err();
     assert!(

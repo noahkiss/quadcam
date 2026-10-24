@@ -421,9 +421,15 @@ pub(super) fn edit<B: Backend>(
             let to =
                 x.to.clone()
                     .context("to is required for report_save: the Markdown file to write")?;
+            let overwrite = x.overwrite.unwrap_or(false);
+            if overwrite && x.confirm != Some(true) {
+                anyhow::bail!(
+                    "overwrite replaces a file that is already there: pass confirm=true too, only after the person agreed to replace {to}"
+                );
+            }
             let r = backend.call(
                 "gear_session_report_save",
-                json!({"day": x.day, "path": to, "overwrite": x.overwrite.unwrap_or(false)}),
+                json!({"day": x.day, "path": to, "overwrite": overwrite}),
             )?;
             Ok((
                 vec![text(format!(

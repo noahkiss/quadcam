@@ -7,6 +7,46 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::Value;
 
+// ----- actions -----
+
+/// `quadcam_library_files`'s actions: its schema's `enum` and its errors name the same list.
+pub const LIBRARY_FILES_ACTIONS: &[&str] = &[
+    "cuts",
+    "split_by_flight",
+    "export_cuts",
+    "trash",
+    "photos",
+    "rebuild",
+    "apply_name_format",
+    "match_logs",
+    "analyze_video",
+    "weather",
+];
+
+/// `quadcam_places`'s actions: its schema's `enum` and its errors name the same list.
+pub const PLACES_ACTIONS: &[&str] = &["list", "search", "save", "delete", "here", "reverse"];
+
+/// `quadcam_profiles`'s actions: its schema's `enum` and its errors name the same list.
+pub const PROFILES_ACTIONS: &[&str] = &["list", "save", "delete", "set_default"];
+
+/// `quadcam_settings`'s actions: its schema's `enum` and its errors name the same list.
+pub const SETTINGS_ACTIONS: &[&str] = &[
+    "read",
+    "write",
+    "modules",
+    "module_install",
+    "module_remove",
+];
+
+/// The actions as words for an error: "a, b or c".
+pub fn one_of(actions: &[&str]) -> String {
+    match actions {
+        [] => String::new(),
+        [one] => one.to_string(),
+        [rest @ .., last] => format!("{} or {last}", rest.join(", ")),
+    }
+}
+
 // ----- shared shapes -----
 
 // A location in decimal degrees.
@@ -185,7 +225,7 @@ pub struct AddToPhotosArgs {
 #[derive(Debug, Clone, Default, Deserialize, JsonSchema)]
 #[schemars(deny_unknown_fields)]
 pub struct EjectArgs {
-    /// Mount point or /dev/diskN. Omit for the session's card.
+    /// Mount point or /dev/diskN of a card or a DJI device; another disk is refused. Omit for the session's card.
     pub target: Option<String>,
 }
 
@@ -275,7 +315,7 @@ pub struct LibraryEditArgs {
 #[derive(Debug, Clone, Default, Deserialize, JsonSchema)]
 #[schemars(deny_unknown_fields)]
 pub struct LibraryFilesArgs {
-    #[schemars(required, extend("enum" = ["cuts", "split_by_flight", "export_cuts", "trash", "photos", "rebuild", "apply_name_format", "match_logs", "analyze_video", "weather"]))]
+    #[schemars(required, extend("enum" = LIBRARY_FILES_ACTIONS))]
     pub action: Option<String>,
     /// Library clip ids from quadcam_library. cuts, split_by_flight and export_cuts take exactly one; rebuild takes none; apply_name_format, match_logs, analyze_video and weather take some or none (every clip).
     #[schemars(length(max = 500))]
@@ -305,7 +345,7 @@ pub struct LibraryFilesArgs {
 #[derive(Debug, Clone, Default, Deserialize, JsonSchema)]
 #[schemars(deny_unknown_fields)]
 pub struct PlacesArgs {
-    #[schemars(required, extend("enum" = ["list", "search", "save", "delete", "here", "reverse"]))]
+    #[schemars(required, extend("enum" = PLACES_ACTIONS))]
     pub action: Option<String>,
     /// For search: an address or a place name.
     #[schemars(length(max = 200))]
@@ -350,7 +390,7 @@ pub struct ProfileFields {
 #[derive(Debug, Clone, Default, Deserialize, JsonSchema)]
 #[schemars(deny_unknown_fields)]
 pub struct ProfilesArgs {
-    #[schemars(required, extend("enum" = ["list", "save", "delete", "set_default"]))]
+    #[schemars(required, extend("enum" = PROFILES_ACTIONS))]
     pub action: Option<String>,
     #[schemars(length(max = 80))]
     pub name: Option<String>,
@@ -492,7 +532,7 @@ pub struct SettingsValues {
     /// Gear: the voice provider: say (default, macOS), openai or elevenlabs. ElevenLabs renders only in the Voice studio (voice_render with sets); its tts_model and tts_voice are the studio's defaults.
     #[schemars(extend("x-nullable" = true))]
     pub tts_provider: Option<String>,
-    /// Gear: the address of an OpenAI-compatible voice server (for tts_provider openai), such as http://127.0.0.1:8880.
+    /// Gear: the address of an OpenAI-compatible voice server (for tts_provider openai), such as http://127.0.0.1:8880. The person sets it; a write here is refused.
     #[schemars(extend("x-nullable" = true))]
     pub tts_base_url: Option<String>,
     /// Gear: the voice server's model name.
@@ -510,7 +550,7 @@ pub struct SettingsValues {
     /// Where ffmpeg comes from: QuadCam's module when installed, else Homebrew (module), or Homebrew only.
     #[schemars(extend("x-nullable" = true, "enum" = ["module", "homebrew", null]))]
     pub ffmpeg_source: Option<String>,
-    /// {tool: absolute path}: an executable that replaces a module's tool (ffmpeg, ffprobe, esptool).
+    /// {tool: absolute path}: an executable that replaces a module's tool (ffmpeg, ffprobe, esptool). The person sets it; a write here is refused.
     #[schemars(extend("x-nullable" = true))]
     pub modules: Option<std::collections::BTreeMap<String, String>>,
 }
@@ -518,7 +558,7 @@ pub struct SettingsValues {
 #[derive(Debug, Clone, Default, Deserialize, JsonSchema)]
 #[schemars(deny_unknown_fields)]
 pub struct SettingsArgs {
-    #[schemars(required, extend("enum" = ["read", "write", "modules", "module_install", "module_remove"]))]
+    #[schemars(required, extend("enum" = SETTINGS_ACTIONS))]
     pub action: Option<String>,
     /// For write: {setting: value}.
     // Passed on as they are: null resets a setting, and the settings file checks each value.

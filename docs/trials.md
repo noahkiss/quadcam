@@ -263,7 +263,7 @@ QuadCam has not tried on any real device. Do not select **Flash …** in this tr
 4. Unplug the radio. Plug in the FC. Select **Read the receiver in <FC name>**.
 5. When it ends, unplug the FC.
 
-CLI: `quadcam-cli --json gear elrs read <saved radio or FC>`.
+CLI: `quadcam-cli --json gear elrs read <saved radio or FC>` (a radio also needs `--yes`).
 
 **Pass**
 

@@ -18,6 +18,138 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{json, Value};
 
+/// `quadcam_gear`'s actions: its schema's `enum` and its errors name the same list.
+pub const GEAR_ACTIONS: &[&str] = &[
+    "status",
+    "devices",
+    "fc_identify",
+    "board_notes",
+    "radio_boards",
+    "usb_timers",
+    "osd",
+    "model",
+    "radio_settings",
+    "radio_setup",
+    "post_flash_plan",
+    "voice",
+    "voice_sets",
+    "voice_catalog",
+    "voice_estimate",
+    "rates",
+    "sims",
+    "card",
+    "card_preview",
+    "model_import",
+    "storage",
+    "backups",
+    "backup_read",
+    "backup_diff",
+    "card_checks",
+    "blackbox",
+    "blackbox_summary",
+    "flights",
+    "packs",
+    "session_report",
+    "preflight",
+    "crashes",
+    "switch_map",
+    "radio",
+    "sim_calibration",
+    "sim_defaults",
+    "sim_validate",
+    "changes",
+    "apply_plan",
+    "copy_plan",
+    "sim_sync_plan",
+    "sim_restore_plan",
+    "firmware_check",
+    "firmware_read",
+    "firmware_copies",
+    "firmware_restore_plan",
+    "splash",
+    "flash_plan",
+    "elrs",
+    "elrs_flash_plan",
+    "voice_preview",
+    "voice_library",
+    "voice_samples",
+    "voice_flags",
+];
+
+/// `quadcam_gear_edit`'s actions: its schema's `enum` and its errors name the same list.
+pub const GEAR_EDIT_ACTIONS: &[&str] = &[
+    "device_save",
+    "device_forget",
+    "fc_read",
+    "backup",
+    "backup_pin",
+    "blackbox_export",
+    "prune",
+    "export",
+    "import_backups",
+    "card_check",
+    "card_clean",
+    "radio_cli",
+    "dfu_link",
+    "stop",
+    "poll_pause",
+    "flight_set",
+    "flight_folders",
+    "pack_save",
+    "pack_delete",
+    "pack_type_save",
+    "pack_type_delete",
+    "pack_notes",
+    "crash_save",
+    "crash_delete",
+    "report_save",
+    "sim_calibration_save",
+    "stage",
+    "osd_edit",
+    "model_edit",
+    "radio_settings_edit",
+    "radio_setup_edit",
+    "post_flash_stage",
+    "voice_edit",
+    "voice_render",
+    "voice_sample",
+    "voice_check",
+    "voice_import_takes",
+    "voice_key_set",
+    "voice_key_delete",
+    "voice_add",
+    "voice_install",
+    "voice_choose",
+    "voice_delete",
+    "voice_publish",
+    "voice_flag",
+    "voice_samples_delete",
+    "voice_retake",
+    "update",
+    "discard",
+    "restore_stage",
+    "copy_stage",
+    "keep",
+    "revert_stage",
+    "card_mount",
+    "card_unmount",
+    "elrs_read",
+];
+
+/// `quadcam_gear_apply`'s actions: its schema's `enum` and its errors name the same list.
+pub const GEAR_APPLY_ACTIONS: &[&str] = &[
+    "card_repair",
+    "apply",
+    "sim_sync",
+    "sim_restore",
+    "flash",
+    "firmware_restore",
+    "elrs_flash",
+    "blackbox_pull",
+    "blackbox_erase",
+    "volume_label",
+];
+
 /// What Gear says when nothing is plugged in. On Apple silicon, macOS keeps a new USB
 /// accessory off the bus until the person allows it, and no app can see that prompt.
 pub const NOTHING_FOUND: &str = "Nothing found. If macOS asked to allow an accessory, click Allow.";
@@ -27,7 +159,7 @@ pub const NOTHING_FOUND: &str = "Nothing found. If macOS asked to allow an acces
 #[derive(Debug, Clone, Default, Deserialize, JsonSchema)]
 #[schemars(deny_unknown_fields)]
 pub struct GearArgs {
-    #[schemars(required, extend("enum" = ["status", "devices", "fc_identify", "board_notes", "radio_boards", "usb_timers", "osd", "model", "radio_settings", "radio_setup", "post_flash_plan", "voice", "voice_sets", "voice_catalog", "voice_estimate", "rates", "sims", "card", "card_preview", "model_import", "storage", "backups", "backup_read", "backup_diff", "card_checks", "blackbox", "blackbox_summary", "flights", "packs", "session_report", "preflight", "crashes", "switch_map", "radio", "sim_calibration", "sim_defaults", "sim_validate", "changes", "apply_plan", "copy_plan", "sim_sync_plan", "sim_restore_plan", "firmware_check", "firmware_read", "firmware_copies", "firmware_restore_plan", "splash", "flash_plan", "elrs", "elrs_flash_plan", "voice_preview", "voice_library", "voice_samples", "voice_flags"]))]
+    #[schemars(required, extend("enum" = GEAR_ACTIONS))]
     pub action: Option<String>,
     /// For firmware_check: false reads the last saved answer without the network; default true (checks now). For flash_plan and splash see image.
     pub check: Option<bool>,
@@ -185,7 +317,7 @@ pub struct GearArgs {
 #[derive(Debug, Clone, Default, Deserialize, JsonSchema)]
 #[schemars(deny_unknown_fields)]
 pub struct GearEditArgs {
-    #[schemars(required, extend("enum" = ["device_save", "device_forget", "fc_read", "backup", "backup_pin", "blackbox_export", "prune", "export", "import_backups", "card_check", "card_clean", "radio_cli", "dfu_link", "stop", "poll_pause", "flight_set", "flight_folders", "pack_save", "pack_delete", "pack_type_save", "pack_type_delete", "pack_notes", "crash_save", "crash_delete", "report_save", "sim_calibration_save", "stage", "osd_edit", "model_edit", "radio_settings_edit", "radio_setup_edit", "post_flash_stage", "voice_edit", "voice_render", "voice_sample", "voice_check", "voice_import_takes", "voice_key_set", "voice_key_delete", "voice_add", "voice_install", "voice_choose", "voice_delete", "voice_publish", "voice_flag", "voice_samples_delete", "voice_retake", "update", "discard", "restore_stage", "copy_stage", "keep", "revert_stage", "card_mount", "card_unmount", "elrs_read"]))]
+    #[schemars(required, extend("enum" = GEAR_EDIT_ACTIONS))]
     pub action: Option<String>,
     /// For copy_stage: the FC to copy from, a device id (its latest backup) or a backup id.
     #[schemars(length(max = 200))]
@@ -235,7 +367,7 @@ pub struct GearEditArgs {
     pub digest: Option<String>,
     /// For voice_sample and voice_render: the take's seed (default 0). A batched re-render with another seed redoes only the batches with a line that needs a re-take.
     pub seed: Option<u64>,
-    /// For voice_render, voice_retake and voice_edit: allow a render that sends text to a provider that may charge. For voice_samples_delete: must be true, after the person agreed. Only after the person agreed to the characters and the provider. For voice_delete: must be true, after the person agreed. For voice_add: adds the voice to the ElevenLabs account (it takes a voice slot); only after the person agreed. For card_clean: true deletes the `._` files it lists; omit to only list them. For radio_cli reboot: must be true.
+    /// For voice_render, voice_retake and voice_edit: allow a render that sends text to a provider that may charge. For voice_samples_delete: must be true, after the person agreed. Only after the person agreed to the characters and the provider. For voice_delete: must be true, after the person agreed. For voice_add: adds the voice to the ElevenLabs account (it takes a voice slot); only after the person agreed. For card_clean: true deletes the `._` files it lists; omit to only list them. For radio_cli reboot: must be true. For elrs_read on a radio: must be true, after the person agreed. For report_save with overwrite: must be true, after the person agreed to replace the file.
     pub confirm: Option<bool>,
     /// For voice_choose: keep the lines the person overrode (default true).
     pub keep_overrides: Option<bool>,
@@ -362,7 +494,7 @@ pub struct GearEditArgs {
     /// For voice_retake with `grouped`: the ways one group's line is tried at most (default 6, at most 12).
     pub tries: Option<u32>,
     /// For export and blackbox_export: an existing folder (absolute path) to write into.
-    /// For report_save: the Markdown file (absolute path) to write; its folder must exist.
+    /// For report_save: the Markdown file (absolute path, .md or .markdown) to write; its folder must exist.
     /// For copy_stage: the FC that gets the settings (a device id).
     #[schemars(length(max = 1024))]
     pub to: Option<String>,
@@ -437,7 +569,7 @@ pub struct GearEditArgs {
     pub clip: Option<String>,
     /// For crash_save: seconds into the clip.
     pub time_s: Option<f64>,
-    /// For report_save: true replaces a file that is already there.
+    /// For report_save: true replaces a file that is already there; it needs confirm=true, after the person agreed.
     pub overwrite: Option<bool>,
     /// For crash_save: the day, YYYY-MM-DD (default: the clip's). For report_save: the day (default: the last import's days).
     #[schemars(length(max = 10))]
@@ -463,7 +595,7 @@ pub struct GearEditArgs {
 #[derive(Debug, Clone, Default, Deserialize, JsonSchema)]
 #[schemars(deny_unknown_fields)]
 pub struct GearApplyArgs {
-    #[schemars(required, extend("enum" = ["card_repair", "apply", "sim_sync", "sim_restore", "flash", "firmware_restore", "elrs_flash", "blackbox_pull", "blackbox_erase", "volume_label"]))]
+    #[schemars(required, extend("enum" = GEAR_APPLY_ACTIONS))]
     pub action: Option<String>,
     /// For flash: the radio, a saved device id; the version defaults to the one it reports.
     #[schemars(length(max = 120))]
@@ -530,12 +662,12 @@ pub fn tools() -> Vec<Value> {
         ),
         tool::<GearEditArgs>(
             "quadcam_gear_edit",
-            "Change QuadCam's own gear data, never a device's settings, a sim or a card (`elrs_read` stops a radio's RF output; see below): `device_save` names a device, links it to an aircraft profile (an FC to its one aircraft; a radio gets the aircraft added to its list, which the profiles hold; a device QuadCam does not know yet must be plugged in; use its id from quadcam_gear status or fc_identify) or sets an FC's `firmware_channel` (vendor, official or auto), `device_forget` removes a device from QuadCam's list (its backups stay), `fc_read` reads a Betaflight FC through its CLI (read-only commands; the FC reboots when the read ends, so the person should expect it; returns the text, writes nothing), `backup` backs up a radio card (`device` or `mount`; files whose size and time did not change are not read) or an FC (`port` or `device`; the FC reboots) into QuadCam's gear folder (nothing is written when nothing changed), `backup_pin` keeps a `backup` through pruning (`pinned`), `blackbox_export` writes a pull `id` as .bbl into the folder `to` (`split` also writes each log), `prune` thins backups by the retention settings and removes stored files nothing uses (`dry_run` to see first), `export` writes a `backup`, or every backup of a `device`, as plain folders into `to`, `import_backups` takes an old backup `folder` (radio card copies, Betaflight diff all and dump all files, LOGS folders, dated by YYYY-MM-DD in folder names; `dry_run` to see first; it never changes the folder), `card_check` checks a card's file system (diskutil verifyVolume, read-only, about 30 s over a radio's USB; the card unmounts and mounts again), `dfu_link` links the radio in DFU mode (the bootloader shows a chip serial the other modes do not) to a saved radio: `device` is the pick, and without it QuadCam takes the radio seen most recently and says so; `unlink`=true removes the link; a flash plan then checks that the radio in DFU mode is the one picked, `radio_cli` talks to an EdgeTX radio on its USB serial port (the radio's USB serial port set to CLI), with `command`: `identify` (the firmware board and version the radio runs now, and the saved radios of that board), `ls` (a card folder `path`), `play` (a sound file `path` on the radio's speaker, for a voice line preview), `beep`, `reboot` (restarts the radio; needs `confirm`=true) or `verify` (lists each folder of a saved radio's latest backup, `device`, and reports the files the radio lacks or holds at another size; use it after a card apply, with the card back in the radio); it writes no file and refuses a port another program has open, `card_clean` lists the `._` AppleDouble files macOS left on a radio card (`device` or `mount`); with `confirm`=true it deletes them (only files that start with the AppleDouble magic) and unmounts the card, `stop` stops a running backup or card check by its `handle`, `poll_pause` pauses (`paused` true) or resumes (false) QuadCam's own background reads of an FC's `port`: the USB timer's battery probe, which then stops counting, and the on-connect FC backup (QuadCam already skips a port another program has open; pause it when you want a tool to have the port without any chance of a probe; jobs you start still run, and the pause lasts until QuadCam quits), `flight_set` (a flight's pack or place), `flight_folders` (add or remove a folder of radio logs the flights read), `pack_save` / `pack_delete` (a pack by `name`, its label; `charged=true` marks it charged now), `pack_type_save` / `pack_type_delete` (a pack type by `name`: chemistry, cells, capacity, connector, charge volts per cell, charge current, mAh warning), `pack_notes` (the charging sheet's notes), `crash_save` / `crash_delete` (a crash on a library clip: the time in the clip, what broke, the parts used; no `id` logs a new one), `report_save` (writes the session report for a `day`, by default the last import's days, as Markdown to the file `to`; `overwrite` replaces an existing file), `sim_calibration_save` (the sim's calibration of a `radio`, keyed by its Gear radio id), `stage` (queues FC edits for a `device`: raw CLI `lines` or typed `edits`; refuses a setting the FC's latest backup does not hold; writes only QuadCam's own data), `osd_edit` (moves, toggles or a profile `copy` of the OSD layout for an FC `device`, joined into its one OSD layout change; check the result with quadcam_gear osd and `staged`), `voice_edit` (override one `line` of a radio `device` with another installed voice `pack`'s take or the person's own `text`, or neither to clear it; for `text` on a provider that may charge, run it with `dry_run` first, show the person the characters, then `confirm` with that call's `digest` after they agreed; ElevenLabs renders only in the studio, with `sets`), `voice_render` (QuadCam's lines, or the card paths in `lines`, rendered with the tts_provider (say or openai) into a local pack; with `sets` and `voice_model`, the line sets rendered as carrier-sentence batches with ElevenLabs instead, priced first and refused when the credits fall short; `voice` picks the voice; `dry_run` reports the plan and the characters; a provider that may charge needs `confirm` after the person agreed, and with `sets` the `digest` the call without confirm returned; lines whose cut fails a check stay out of the pack as re-takes, and a run with another `seed` redoes only their batches), `voice_sample` (renders the `sample` set (the risky lines: one per word voices got wrong before; sample a new voice with it before a pack), or `sets` and `lines`, in every one of `voices` x `voice_models` for A/B listening and keeps the WAVs in the sample gallery (quadcam_gear voice_samples); a paid ElevenLabs call: run with `dry_run` first, show the person the credits, then `confirm` with that call's `digest` after they agreed; it refuses when the credits do not cover it or the plan changed), `voice_check` (hears each line of the voice `pack`, or the card paths in `lines`, with the on-device speech recognizer (macOS 26 or later) and compares what it heard with the line's text; free and local; in a pack the studio rendered, a line heard wrong leaves the pack as a re-take, which a voice_render with another `seed` prices and redoes; `accept` keeps what was heard for those card paths and puts them back; `install` first installs the recognizer's assets for the pack's language; it runs by itself after every voice_render and voice_sample when the recognizer is available), `voice_flag` (flags one take, `line`, of a `sample` (an id from quadcam_gear voice_samples) or a `pack` with a `reason` (mispronounced, clipped, wrong_tone, noise or other) and an optional `note`; `clear`=true removes the flag; a flagged studio take stays out of later renders with the same seed), `voice_retake` (makes the flagged takes of one `sample` or one studio `pack` again with another seed, only the flagged `lines` (default all of them), or a studio pack's re-take `lines` (a line the speech check heard wrong, or whose cut failed), named without a flag; a paid ElevenLabs call: run it without `confirm` first, show the person the cost, then `confirm` with that call's `digest` after they agreed; a line with a new take loses its flag; with `grouped`, a pack's re-take lines (or a `sample` voice's lines heard wrong) are grouped by the word each got wrong, one line per group is tried other ways (seed, carrier, spelling, at most `tries`) until the speech check hears it right, and the rest of the group is made the way that won), `voice_samples_delete` (removes a `sample`, or with `all_samples` every sample, from this Mac; the takes stay in the cache; needs `confirm`=true after the person agreed), `voice_import_takes` (copies earlier ElevenLabs takes of single lines from a `folder` into QuadCam's cache, so the studio counts them as rendered and never sends their lines again at that voice, model and speed; a take is a .json with text, voice, model, speed and seed beside a .pcm of the same name, 16-bit mono at 32000 Hz unless the JSON names a rate; the folder is only read; `dry_run` reports and copies nothing), `voice_key_set` (stores the ElevenLabs `key` in the macOS Keychain, as the Voice studio and `quadcam-cli gear voice key set` do; the answer shows only its hint: first and last characters and length; a key passed here sits in the agent's transcript, while `quadcam-cli gear voice key set` reads it from stdin, for example piped from a password manager, and keeps it out), `voice_key_delete` (removes the stored ElevenLabs key), `voice_install` (a `pack` from the index after a hash check; `source` names the index), `voice_publish` (prepares a `pack` on this Mac for the QuadCam voices repo: refuses unless the speech check heard every line right or the person accepted each line it flagged, a pack made with say, and the person's own lines; builds the zip, about ten AAC preview lines and the index entry in QuadCam's cache, with `id`, `version`, `name` (the voice's name), `license` and `attribution`; answers the review: every line with what was heard, accepted lines first, a random spot check of 10 to 15 lines to listen to, and a digest; it publishes nothing, and no MCP call can publish: show the person the review and the spot check, and they approve on QuadCam's Voices page or at a terminal), `voice_choose` (stages one card change that puts the installed `pack`'s sounds on a radio `device`, or on each of `radios`, or with `all_radios` on every saved EdgeTX radio; `keep_overrides` keeps the lines the person overrode; read the result with quadcam_gear changes), `voice_delete` (removes an installed or rendered `pack` from this Mac and clears the choice of each radio that chose it, and each line override that takes its take; without `confirm`=true it only says what would go, those radios included; `takes` also removes the raw takes it was made from; cards keep its sounds), `model_edit` (`ops` and a `checklist` for one `model` of a radio `device`, joined into its one \"Model edits\" change; read the result with quadcam_gear model; a callout is owned by its track name, so a second callout with that track replaces the first), `radio_settings_edit` (`ops` for a radio `device`'s own settings, joined into its one \"Radio settings\" change: set_scalar {key, value} in the file's own units (quadcam_gear radio_settings lists the keys and values; a value out of range refuses; QuadCam never adds a key the file lacks) and select_model {file}; a later op on the same setting replaces the earlier one), `radio_setup_edit` (saves a radio `device`'s setup: a whole `setup`, `reset` to the board's default, or controls for jobs in `assign` ({job, control, high}) and jobs to `free`; refuses a control that does not fit a job or does two jobs; with `stage`, puts the generated edits in the radio's one \"Radio setup\" change, or says the card already matches), `post_flash_stage` (stages the steps after a flash for a radio `device` as card changes: the storage pack (`pack_version`) and the ELRS Lua (`elrs_version`), downloaded from upstream; the volume label is not a card file and is only planned), `update` and `discard` (a staged `change`), `restore_stage` (stages a `backup` back as a change: an FC backup's settings, or for a radio card backup the card files named in `paths`), `copy_stage` (stages the settings quadcam_gear copy_plan showed as one change for the FC `to`), `keep` (an applied Try `change` becomes Verified), `revert_stage` (stages a restore of the backup an applied `change` took; the change becomes Reverted when that restore verifies), `card_mount` / `card_unmount` (mounts an unmounted radio card for the person to browse, for `minutes` (default 10), and unmounts it; neither writes the card). `update` also sets a change's status: draft, ready, try or read_first.\n\nBest for: naming a radio or quad the person just plugged in, and linking it to its aircraft profile; reading an FC's settings as text; backing gear up and importing old backups; putting flights on packs; logging a crash and its repair.\nReturns: the saved or forgotten device, the FC's identity and each command's answer, a summary of the backup, prune, export, import or check, or the saved flight, pack, pack type or crash. `elrs_read` (device = a saved radio for its internal module, or an FC for its receiver; optional port) reads the ExpressLRS device behind it and saves its version, target and options. It is the one action here that acts on a device: on a radio it stops the pulses and powers the internal module off and on, so the radio stops sending at once and a quad linked to it goes to failsafe; ask the person first, with no quad powered on that radio. The radio or FC then stays in passthrough until it is restarted or unplugged. Stage ELRS option changes with `stage` and an elrs_options edit; apply them with quadcam_gear_apply apply.",
+            "Change QuadCam's own gear data, never a device's settings, a sim or a card (`elrs_read` stops a radio's RF output; see below): `device_save` names a device, links it to an aircraft profile (an FC to its one aircraft; a radio gets the aircraft added to its list, which the profiles hold; a device QuadCam does not know yet must be plugged in; use its id from quadcam_gear status or fc_identify) or sets an FC's `firmware_channel` (vendor, official or auto), `device_forget` removes a device from QuadCam's list (its backups stay), `fc_read` reads a Betaflight FC through its CLI (read-only commands; the FC reboots when the read ends, so the person should expect it; returns the text, writes nothing), `backup` backs up a radio card (`device` or `mount`; files whose size and time did not change are not read) or an FC (`port` or `device`; the FC reboots) into QuadCam's gear folder (nothing is written when nothing changed), `backup_pin` keeps a `backup` through pruning (`pinned`), `blackbox_export` writes a pull `id` as .bbl into the folder `to` (`split` also writes each log), `prune` thins backups by the retention settings and removes stored files nothing uses (`dry_run` to see first), `export` writes a `backup`, or every backup of a `device`, as plain folders into `to`, `import_backups` takes an old backup `folder` (radio card copies, Betaflight diff all and dump all files, LOGS folders, dated by YYYY-MM-DD in folder names; `dry_run` to see first; it never changes the folder), `card_check` checks a card's file system (diskutil verifyVolume, read-only, about 30 s over a radio's USB; the card unmounts and mounts again), `dfu_link` links the radio in DFU mode (the bootloader shows a chip serial the other modes do not) to a saved radio: `device` is the pick, and without it QuadCam takes the radio seen most recently and says so; `unlink`=true removes the link; a flash plan then checks that the radio in DFU mode is the one picked, `radio_cli` talks to an EdgeTX radio on its USB serial port (the radio's USB serial port set to CLI), with `command`: `identify` (the firmware board and version the radio runs now, and the saved radios of that board), `ls` (a card folder `path`), `play` (a sound file `path` on the radio's speaker, for a voice line preview), `beep`, `reboot` (restarts the radio; needs `confirm`=true) or `verify` (lists each folder of a saved radio's latest backup, `device`, and reports the files the radio lacks or holds at another size; use it after a card apply, with the card back in the radio); it writes no file and refuses a port another program has open, `card_clean` lists the `._` AppleDouble files macOS left on a radio card (`device` or `mount`); with `confirm`=true it deletes them (only files that start with the AppleDouble magic) and unmounts the card, `stop` stops a running backup or card check by its `handle`, `poll_pause` pauses (`paused` true) or resumes (false) QuadCam's own background reads of an FC's `port`: the USB timer's battery probe, which then stops counting, and the on-connect FC backup (QuadCam already skips a port another program has open; pause it when you want a tool to have the port without any chance of a probe; jobs you start still run, and the pause lasts until QuadCam quits), `flight_set` (a flight's pack or place), `flight_folders` (add or remove a folder of radio logs the flights read), `pack_save` / `pack_delete` (a pack by `name`, its label; `charged=true` marks it charged now), `pack_type_save` / `pack_type_delete` (a pack type by `name`: chemistry, cells, capacity, connector, charge volts per cell, charge current, mAh warning), `pack_notes` (the charging sheet's notes), `crash_save` / `crash_delete` (a crash on a library clip: the time in the clip, what broke, the parts used; no `id` logs a new one), `report_save` (writes the session report for a `day`, by default the last import's days, as Markdown to the file `to`, a .md or .markdown file; `overwrite` replaces an existing file and needs `confirm`=true after the person agreed), `sim_calibration_save` (the sim's calibration of a `radio`, keyed by its Gear radio id), `stage` (queues FC edits for a `device`: raw CLI `lines` or typed `edits`; refuses a setting the FC's latest backup does not hold; writes only QuadCam's own data), `osd_edit` (moves, toggles or a profile `copy` of the OSD layout for an FC `device`, joined into its one OSD layout change; check the result with quadcam_gear osd and `staged`), `voice_edit` (override one `line` of a radio `device` with another installed voice `pack`'s take or the person's own `text`, or neither to clear it; for `text` on a provider that may charge, run it with `dry_run` first, show the person the characters, then `confirm` with that call's `digest` after they agreed; ElevenLabs renders only in the studio, with `sets`), `voice_render` (QuadCam's lines, or the card paths in `lines`, rendered with the tts_provider (say or openai) into a local pack; with `sets` and `voice_model`, the line sets rendered as carrier-sentence batches with ElevenLabs instead, priced first and refused when the credits fall short; `voice` picks the voice; `dry_run` reports the plan and the characters; a provider that may charge needs `confirm` after the person agreed, and with `sets` the `digest` the call without confirm returned; lines whose cut fails a check stay out of the pack as re-takes, and a run with another `seed` redoes only their batches), `voice_sample` (renders the `sample` set (the risky lines: one per word voices got wrong before; sample a new voice with it before a pack), or `sets` and `lines`, in every one of `voices` x `voice_models` for A/B listening and keeps the WAVs in the sample gallery (quadcam_gear voice_samples); a paid ElevenLabs call: run with `dry_run` first, show the person the credits, then `confirm` with that call's `digest` after they agreed; it refuses when the credits do not cover it or the plan changed), `voice_check` (hears each line of the voice `pack`, or the card paths in `lines`, with the on-device speech recognizer (macOS 26 or later) and compares what it heard with the line's text; free and local; in a pack the studio rendered, a line heard wrong leaves the pack as a re-take, which a voice_render with another `seed` prices and redoes; `accept` keeps what was heard for those card paths and puts them back; `install` first installs the recognizer's assets for the pack's language; it runs by itself after every voice_render and voice_sample when the recognizer is available), `voice_flag` (flags one take, `line`, of a `sample` (an id from quadcam_gear voice_samples) or a `pack` with a `reason` (mispronounced, clipped, wrong_tone, noise or other) and an optional `note`; `clear`=true removes the flag; a flagged studio take stays out of later renders with the same seed), `voice_retake` (makes the flagged takes of one `sample` or one studio `pack` again with another seed, only the flagged `lines` (default all of them), or a studio pack's re-take `lines` (a line the speech check heard wrong, or whose cut failed), named without a flag; a paid ElevenLabs call: run it without `confirm` first, show the person the cost, then `confirm` with that call's `digest` after they agreed; a line with a new take loses its flag; with `grouped`, a pack's re-take lines (or a `sample` voice's lines heard wrong) are grouped by the word each got wrong, one line per group is tried other ways (seed, carrier, spelling, at most `tries`) until the speech check hears it right, and the rest of the group is made the way that won), `voice_samples_delete` (removes a `sample`, or with `all_samples` every sample, from this Mac; the takes stay in the cache; needs `confirm`=true after the person agreed), `voice_import_takes` (copies earlier ElevenLabs takes of single lines from a `folder` into QuadCam's cache, so the studio counts them as rendered and never sends their lines again at that voice, model and speed; a take is a .json with text, voice, model, speed and seed beside a .pcm of the same name, 16-bit mono at 32000 Hz unless the JSON names a rate; the folder is only read; `dry_run` reports and copies nothing), `voice_key_set` (stores the ElevenLabs `key` in the macOS Keychain, as the Voice studio and `quadcam-cli gear voice key set` do; the answer shows only its hint: first and last characters and length; a key passed here sits in the agent's transcript, while `quadcam-cli gear voice key set` reads it from stdin, for example piped from a password manager, and keeps it out), `voice_key_delete` (removes the stored ElevenLabs key), `voice_install` (a `pack` from the index after a hash check; `source` names the index), `voice_publish` (prepares a `pack` on this Mac for the QuadCam voices repo: refuses unless the speech check heard every line right or the person accepted each line it flagged, a pack made with say, and the person's own lines; builds the zip, about ten AAC preview lines and the index entry in QuadCam's cache, with `id`, `version`, `name` (the voice's name), `license` and `attribution`; answers the review: every line with what was heard, accepted lines first, a random spot check of 10 to 15 lines to listen to, and a digest; it publishes nothing, and no MCP call can publish: show the person the review and the spot check, and they approve on QuadCam's Voices page or at a terminal), `voice_choose` (stages one card change that puts the installed `pack`'s sounds on a radio `device`, or on each of `radios`, or with `all_radios` on every saved EdgeTX radio; `keep_overrides` keeps the lines the person overrode; read the result with quadcam_gear changes), `voice_delete` (removes an installed or rendered `pack` from this Mac and clears the choice of each radio that chose it, and each line override that takes its take; without `confirm`=true it only says what would go, those radios included; `takes` also removes the raw takes it was made from; cards keep its sounds), `model_edit` (`ops` and a `checklist` for one `model` of a radio `device`, joined into its one \"Model edits\" change; read the result with quadcam_gear model; a callout is owned by its track name, so a second callout with that track replaces the first), `radio_settings_edit` (`ops` for a radio `device`'s own settings, joined into its one \"Radio settings\" change: set_scalar {key, value} in the file's own units (quadcam_gear radio_settings lists the keys and values; a value out of range refuses; QuadCam never adds a key the file lacks) and select_model {file}; a later op on the same setting replaces the earlier one), `radio_setup_edit` (saves a radio `device`'s setup: a whole `setup`, `reset` to the board's default, or controls for jobs in `assign` ({job, control, high}) and jobs to `free`; refuses a control that does not fit a job or does two jobs; with `stage`, puts the generated edits in the radio's one \"Radio setup\" change, or says the card already matches), `post_flash_stage` (stages the steps after a flash for a radio `device` as card changes: the storage pack (`pack_version`) and the ELRS Lua (`elrs_version`), downloaded from upstream; the volume label is not a card file and is only planned), `update` and `discard` (a staged `change`), `restore_stage` (stages a `backup` back as a change: an FC backup's settings, or for a radio card backup the card files named in `paths`), `copy_stage` (stages the settings quadcam_gear copy_plan showed as one change for the FC `to`), `keep` (an applied Try `change` becomes Verified), `revert_stage` (stages a restore of the backup an applied `change` took; the change becomes Reverted when that restore verifies), `card_mount` / `card_unmount` (mounts an unmounted radio card for the person to browse, for `minutes` (default 10), and unmounts it; neither writes the card). `update` also sets a change's status: draft, ready, try or read_first.\n\nBest for: naming a radio or quad the person just plugged in, and linking it to its aircraft profile; reading an FC's settings as text; backing gear up and importing old backups; putting flights on packs; logging a crash and its repair.\nReturns: the saved or forgotten device, the FC's identity and each command's answer, a summary of the backup, prune, export, import or check, or the saved flight, pack, pack type or crash. `elrs_read` (device = a saved radio for its internal module, or an FC for its receiver; optional port) reads the ExpressLRS device behind it and saves its version, target and options. It is the one action here that acts on a device: on a radio it stops the pulses and powers the internal module off and on, so the radio stops sending at once and a quad linked to it goes to failsafe; on a radio it needs `confirm`=true, only after the person agreed, with no quad powered on that radio. The radio or FC then stays in passthrough until it is restarted or unplugged. Stage ELRS option changes with `stage` and an elrs_options edit; apply them with quadcam_gear_apply apply.",
             json!({"destructiveHint": false, "idempotentHint": true, "openWorldHint": false, "readOnlyHint": false, "title": "Edit gear data"}),
         ),
         tool::<GearApplyArgs>(
             "quadcam_gear_apply",
-            "Write to a device, a sim or the radio firmware: each action needs a digest and confirm=true (volume_label needs confirm only). `volume_label` renames a radio `device`'s mounted volume (diskutil rename) to `label`, default one from the radio's saved name as quadcam_gear post_flash_plan shows it; QuadCam knows the card by its marker, so the label is for the person. `card_repair` repairs a card whose latest check failed (diskutil repairVolume): `digest` is that check's id (quadcam_gear card_checks or status); QuadCam backs the card up first when it reads, repairs it, and checks it again. A repair cannot be stopped once it starts. `apply` writes a staged FC or radio card `change`: call quadcam_gear apply_plan first, show the person the diff, then pass its `digest` and confirm=true; for an FC QuadCam backs it up (always kept), sends the lines, saves, waits for the reboot and checks every line against `dump all`, and nothing is saved when a line fails; for a radio card it mounts the card if needed, backs it up (always kept), writes file by file, reads each back, puts every file back if one reads wrong, and unmounts it (safe to unplug only after the unmount). `flash` flashes an EdgeTX radio over DFU: call quadcam_gear flash_plan first, show the person the checks, the warnings and the image, then pass the same arguments, its `digest` and confirm=true; the radio must be in DFU mode (off, trims held, USB plugged in); QuadCam reads the firmware it runs now and keeps it as a backup, erases, writes, reads back and compares, then restarts the radio; a mismatch leaves it in DFU mode. `firmware_restore` writes a saved firmware copy back to its radio over DFU: call quadcam_gear firmware_restore_plan first, show the person the checks, the warnings and the copy, then pass the same `device` and `id`, its `digest` and confirm=true; QuadCam reads the firmware the radio runs now and keeps it as a copy unless a saved copy already holds it, erases, writes, reads back and compares, then restarts the radio; a mismatch leaves it in DFU mode. `sim_sync` writes a quad's rate profile into sim profiles (Liftoff, Micro Drones, Uncrashed, The Zone): call quadcam_gear sim_sync_plan first, show the person the diff and the warnings, then pass the same arguments, its `digest` and confirm=true; QuadCam refuses while the game runs, backs each file up (kept), writes it atomically, reads it back and parses it, and puts every file back if one fails. `sim_restore` puts a sim's file back from a backup: call quadcam_gear sim_restore_plan first, then pass the same arguments, its `digest` and confirm=true; QuadCam backs the current file up first (so a restore can be undone), writes the backup's bytes atomically and reads them back. With the app running, the person must also click Apply in its sheet (3 minutes, else refused).\n\nBest for: repairing a radio or DVR card after a failed card check, and applying a staged FC or radio card change the person has seen, when they ask.\nReturns: the backup taken first, the repair's result and the check after it; for blackbox_pull the pull, its logs and what happened to the flash. `elrs_flash` writes an ExpressLRS device with the esptool module: device, optional version, sha256 and port as in quadcam_gear elrs_flash_plan, the plan's digest and confirm=true; it keeps the chip's current flash as a backup first.",
+            "Write to a device, a sim or the radio firmware: each action needs a digest and confirm=true (volume_label needs confirm only). `volume_label` renames a radio `device`'s mounted volume (diskutil rename) to `label`, default one from the radio's saved name as quadcam_gear post_flash_plan shows it; QuadCam knows the card by its marker, so the label is for the person. `card_repair` repairs a card whose latest check failed (diskutil repairVolume): `digest` is that check's id (quadcam_gear card_checks or status); QuadCam backs the card up first when it reads, repairs it, and checks it again. A repair cannot be stopped once it starts. `apply` writes a staged FC or radio card `change`: call quadcam_gear apply_plan first, show the person the diff, then pass its `digest` and confirm=true; for an FC QuadCam backs it up (always kept), sends the lines, saves, waits for the reboot and checks every line against `dump all`, and nothing is saved when a line fails; for a radio card it mounts the card if needed, backs it up (always kept), writes file by file, reads each back, puts every file back if one reads wrong, and unmounts it (safe to unplug only after the unmount). `flash` flashes an EdgeTX radio over DFU: call quadcam_gear flash_plan first, show the person the checks, the warnings and the image, then pass the same arguments, its `digest` and confirm=true; the radio must be in DFU mode (off, trims held, USB plugged in); QuadCam reads the firmware it runs now and keeps it as a backup, erases, writes, reads back and compares, then restarts the radio; a mismatch leaves it in DFU mode. `firmware_restore` writes a saved firmware copy back to its radio over DFU: call quadcam_gear firmware_restore_plan first, show the person the checks, the warnings and the copy, then pass the same `device` and `id`, its `digest` and confirm=true; QuadCam reads the firmware the radio runs now and keeps it as a copy unless a saved copy already holds it, erases, writes, reads back and compares, then restarts the radio; a mismatch leaves it in DFU mode. `sim_sync` writes a quad's rate profile into sim profiles (Liftoff, Micro Drones, Uncrashed, The Zone): call quadcam_gear sim_sync_plan first, show the person the diff and the warnings, then pass the same arguments, its `digest` and confirm=true; QuadCam refuses while the game runs, backs each file up (kept), writes it atomically, reads it back and parses it, and puts every file back if one fails. `sim_restore` puts a sim's file back from a backup: call quadcam_gear sim_restore_plan first, then pass the same arguments, its `digest` and confirm=true; QuadCam backs the current file up first (so a restore can be undone), writes the backup's bytes atomically and reads them back. With the app running, the person must also click Apply in its sheet (3 minutes, else refused). `card_repair`, `blackbox_pull`, `blackbox_erase` and `volume_label` show no sheet: confirm=true is their only gate, so ask the person first.\n\nBest for: repairing a radio or DVR card after a failed card check, and applying a staged FC or radio card change the person has seen, when they ask.\nReturns: the backup taken first, the repair's result and the check after it; for blackbox_pull the pull, its logs and what happened to the flash. `elrs_flash` writes an ExpressLRS device with the esptool module: device, optional version, sha256 and port as in quadcam_gear elrs_flash_plan, the plan's digest and confirm=true; it keeps the chip's current flash as a backup first.",
             json!({"destructiveHint": true, "idempotentHint": false, "openWorldHint": false, "readOnlyHint": false, "title": "Apply to gear"}),
         ),
     ]
@@ -801,7 +933,9 @@ fn gear<B: Backend>(backend: &mut B, a: &Value) -> Result<(Vec<Value>, Value)> {
                 line.push_str(&format!(
                     "\n{} failed on {}: {}",
                     f["step"].as_str().unwrap_or("?"),
-                    f["device"].as_str().unwrap_or(f["handle"].as_str().unwrap_or("?")),
+                    f["device"]
+                        .as_str()
+                        .unwrap_or(f["handle"].as_str().unwrap_or("?")),
                     f["message"].as_str().unwrap_or("")
                 ));
             }
@@ -900,10 +1034,9 @@ fn gear<B: Backend>(backend: &mut B, a: &Value) -> Result<(Vec<Value>, Value)> {
             Ok((vec![text(crate::gear::osd::render_text(&view))], v))
         }
         "model" => {
-            let device = x
-                .device
-                .clone()
-                .context("device is required for model: a radio's device id from quadcam_gear devices")?;
+            let device = x.device.clone().context(
+                "device is required for model: a radio's device id from quadcam_gear devices",
+            )?;
             let v = backend.call(
                 "gear_model",
                 json!({"device": device, "model": x.model, "staged": x.staged.unwrap_or(true)}),
@@ -955,10 +1088,16 @@ fn gear<B: Backend>(backend: &mut B, a: &Value) -> Result<(Vec<Value>, Value)> {
             Ok((vec![text(crate::core::voice_view_text(&view))], v))
         }
         "voice_preview" => {
-            let pack = x.pack.clone().context("pack is required for voice_preview: a pack id from the index (quadcam_gear voice)")?;
+            let pack = x.pack.clone().context(
+                "pack is required for voice_preview: a pack id from the index (quadcam_gear voice)",
+            )?;
             let v = backend.call("gear_voice_pack_preview", json!({"pack": pack}))?;
-            let t: Vec<crate::core::PreviewTake> = serde_json::from_value(v.clone()).context("bad voice answer")?;
-            Ok((vec![text(crate::core::voice_preview_text(&pack, &t))], json!({"lines": v})))
+            let t: Vec<crate::core::PreviewTake> =
+                serde_json::from_value(v.clone()).context("bad voice answer")?;
+            Ok((
+                vec![text(crate::core::voice_preview_text(&pack, &t))],
+                json!({"lines": v}),
+            ))
         }
         "voice_sets" => {
             let v = backend.call(
@@ -1098,9 +1237,9 @@ fn gear<B: Backend>(backend: &mut B, a: &Value) -> Result<(Vec<Value>, Value)> {
                 .unwrap_or_default()
                 .iter()
                 .map(|l| {
-                    let (f, t) = l
-                        .split_once('=')
-                        .with_context(|| format!("{l:?} is not a link: SOURCE=TARGET, such as SE=SH"))?;
+                    let (f, t) = l.split_once('=').with_context(|| {
+                        format!("{l:?} is not a link: SOURCE=TARGET, such as SE=SH")
+                    })?;
                     Ok(json!({"from": f.trim(), "to": t.trim()}))
                 })
                 .collect::<Result<Vec<_>>>()?;
@@ -1153,9 +1292,15 @@ fn gear<B: Backend>(backend: &mut B, a: &Value) -> Result<(Vec<Value>, Value)> {
                         .join(", "),
                     {
                         let b = f["buttons"].as_u64().unwrap_or(0);
-                        let on: Vec<String> =
-                            (0..24).filter(|i| b >> i & 1 == 1).map(|i| (i + 1).to_string()).collect();
-                        if on.is_empty() { "none".to_string() } else { on.join(", ") }
+                        let on: Vec<String> = (0..24)
+                            .filter(|i| b >> i & 1 == 1)
+                            .map(|i| (i + 1).to_string())
+                            .collect();
+                        if on.is_empty() {
+                            "none".to_string()
+                        } else {
+                            on.join(", ")
+                        }
                     }
                 ),
                 None => v["message"].as_str().unwrap_or("No radio.").to_string(),
@@ -1209,24 +1354,33 @@ fn gear<B: Backend>(backend: &mut B, a: &Value) -> Result<(Vec<Value>, Value)> {
             let line = if arr.is_empty() {
                 "No blackbox pulls.".to_string()
             } else {
-                arr.iter().map(blackbox_text).collect::<Vec<_>>().join("\n\n")
+                arr.iter()
+                    .map(blackbox_text)
+                    .collect::<Vec<_>>()
+                    .join("\n\n")
             };
             Ok((vec![text(line)], json!({"blackbox": list})))
         }
         "backup_read" => {
-            let id = x.id.context("id is required for backup_read: a backup id from backups")?;
+            let id =
+                x.id.context("id is required for backup_read: a backup id from backups")?;
             let v = backend.call("gear_backup_read", json!({"id": id, "path": x.path}))?;
             Ok((vec![text(backup_read_text(&v))], v))
         }
         "backup_diff" => {
-            let id = x.id.context("id is required for backup_diff: a backup id from backups")?;
+            let id =
+                x.id.context("id is required for backup_diff: a backup id from backups")?;
             let v = backend.call(
                 "gear_backup_diff",
                 json!({"a": x.against.clone().unwrap_or_else(|| id.clone()), "b": x.against.as_ref().map(|_| id.clone()), "path": x.path}),
             )?;
             let t = diff_text(&v);
             Ok((
-                vec![text(if t.is_empty() { "No changes.".into() } else { t })],
+                vec![text(if t.is_empty() {
+                    "No changes.".into()
+                } else {
+                    t
+                })],
                 json!({"diff": v}),
             ))
         }
@@ -1245,8 +1399,11 @@ fn gear<B: Backend>(backend: &mut B, a: &Value) -> Result<(Vec<Value>, Value)> {
         }
         "copy_plan" => {
             let (from, to) = (
-                x.from.clone().context("from is required for copy_plan: a device id or a backup id")?,
-                x.to.clone().context("to is required for copy_plan: the FC that would get the settings")?,
+                x.from
+                    .clone()
+                    .context("from is required for copy_plan: a device id or a backup id")?,
+                x.to.clone()
+                    .context("to is required for copy_plan: the FC that would get the settings")?,
             );
             let v = backend.call(
                 "gear_copy_plan",
@@ -1265,7 +1422,10 @@ fn gear<B: Backend>(backend: &mut B, a: &Value) -> Result<(Vec<Value>, Value)> {
                 t.push_str(&format!(
                     "{}: done{}\n",
                     st["name"].as_str().unwrap_or("?"),
-                    st["detail"].as_str().map(|d| format!(" ({d})")).unwrap_or_default()
+                    st["detail"]
+                        .as_str()
+                        .map(|d| format!(" ({d})"))
+                        .unwrap_or_default()
                 ));
             }
             t.push_str(&format!(
@@ -1281,11 +1441,19 @@ fn gear<B: Backend>(backend: &mut B, a: &Value) -> Result<(Vec<Value>, Value)> {
             Ok((vec![text(firmware_copies_text(&v))], v))
         }
         "firmware_restore_plan" => {
-            let device = x.device.clone().context("device is required for firmware_restore_plan: the saved radio's device id")?;
+            let device = x.device.clone().context(
+                "device is required for firmware_restore_plan: the saved radio's device id",
+            )?;
             let copy = x.id.clone().context("id is required for firmware_restore_plan: the copy id from quadcam_gear firmware_copies")?;
-            let v = backend.call("gear_firmware_restore_plan", json!({"device": device, "copy": copy}))?;
+            let v = backend.call(
+                "gear_firmware_restore_plan",
+                json!({"device": device, "copy": copy}),
+            )?;
             let mut t = sim_plan_text(&v);
-            if v["checks"].as_array().is_some_and(|c| c.iter().all(|c| c["ok"] == true)) {
+            if v["checks"]
+                .as_array()
+                .is_some_and(|c| c.iter().all(|c| c["ok"] == true))
+            {
                 t.push_str(&format!(
                     "\nTo restore: show the person the checks, the warnings and the copy, then call quadcam_gear_apply firmware_restore with the same device and id, digest={} and confirm=true.",
                     v["digest"].as_str().unwrap_or("?")
@@ -1294,19 +1462,33 @@ fn gear<B: Backend>(backend: &mut B, a: &Value) -> Result<(Vec<Value>, Value)> {
             Ok((vec![text(t)], v))
         }
         "splash" => {
-            let image = x.image.clone().context("image is required for splash: a PNG file (absolute path)")?;
+            let image = x
+                .image
+                .clone()
+                .context("image is required for splash: a PNG file (absolute path)")?;
             let v = backend.call(
                 "gear_splash",
                 json!({"image": image, "threshold": x.threshold, "invert": x.invert.unwrap_or(false), "board": x.board}),
             )?;
             let mut t = format!(
                 "{} x {}, 1 bit, threshold {}{}: {} dark pixels of 8192.",
-                v["width"], v["height"], v["threshold"],
-                if v["invert"] == true { ", inverted" } else { "" },
+                v["width"],
+                v["height"],
+                v["threshold"],
+                if v["invert"] == true {
+                    ", inverted"
+                } else {
+                    ""
+                },
                 v["dark"]
             );
             if v["supported"] == false {
-                t.push_str(&format!("\nRefused: {}", v["reason"].as_str().unwrap_or("this board is not supported")));
+                t.push_str(&format!(
+                    "\nRefused: {}",
+                    v["reason"]
+                        .as_str()
+                        .unwrap_or("this board is not supported")
+                ));
             }
             // The PNG preview is data, not text.
             let mut v = v;
@@ -1324,7 +1506,10 @@ fn gear<B: Backend>(backend: &mut B, a: &Value) -> Result<(Vec<Value>, Value)> {
                 json!({"device": device, "version": x.version, "sha256": x.sha256, "port": x.port}),
             )?;
             let mut t = sim_plan_text(&v);
-            if v["checks"].as_array().is_some_and(|c| c.iter().all(|c| c["ok"] == true)) {
+            if v["checks"]
+                .as_array()
+                .is_some_and(|c| c.iter().all(|c| c["ok"] == true))
+            {
                 t.push_str(&format!(
                     "\nTo flash: show the person the checks and warnings, then call quadcam_gear_apply elrs_flash with the same arguments, digest={} and confirm=true.",
                     v["digest"].as_str().unwrap_or("?")
@@ -1333,13 +1518,18 @@ fn gear<B: Backend>(backend: &mut B, a: &Value) -> Result<(Vec<Value>, Value)> {
             Ok((vec![text(t)], v))
         }
         "flash_plan" => {
-            let device = x.device.clone().context("device is required for flash_plan: the saved device id of the radio or FC")?;
+            let device = x.device.clone().context(
+                "device is required for flash_plan: the saved device id of the radio or FC",
+            )?;
             let v = backend.call(
                 "gear_flash_plan",
                 json!({"device": device, "version": x.version, "splash": splash_arg(x.image.as_deref(), x.threshold, x.invert)}),
             )?;
             let mut t = sim_plan_text(&v);
-            if v["checks"].as_array().is_some_and(|c| c.iter().all(|c| c["ok"] == true)) {
+            if v["checks"]
+                .as_array()
+                .is_some_and(|c| c.iter().all(|c| c["ok"] == true))
+            {
                 t.push_str(&format!(
                     "\nTo flash: show the person the checks and warnings, then call quadcam_gear_apply flash with the same arguments, digest={} and confirm=true.",
                     v["digest"].as_str().unwrap_or("?")
@@ -1359,7 +1549,10 @@ fn gear<B: Backend>(backend: &mut B, a: &Value) -> Result<(Vec<Value>, Value)> {
                 }),
             )?;
             let mut t = sim_plan_text(&v);
-            if v["checks"].as_array().is_some_and(|c| c.iter().all(|c| c["ok"] == true)) {
+            if v["checks"]
+                .as_array()
+                .is_some_and(|c| c.iter().all(|c| c["ok"] == true))
+            {
                 t.push_str(&format!(
                     "\nTo write: show the person the diff and the warnings, then call quadcam_gear_apply sim_sync with the same arguments, digest={} and confirm=true.",
                     v["digest"].as_str().unwrap_or("?")
@@ -1368,13 +1561,15 @@ fn gear<B: Backend>(backend: &mut B, a: &Value) -> Result<(Vec<Value>, Value)> {
             Ok((vec![text(t)], v))
         }
         "sim_restore_plan" => {
-            let sim = x
-                .sim
-                .clone()
-                .context("sim is required for sim_restore_plan: liftoff, micro, uncrashed or zone")?;
+            let sim = x.sim.clone().context(
+                "sim is required for sim_restore_plan: liftoff, micro, uncrashed or zone",
+            )?;
             let v = backend.call("gear_sim_restore_plan", json!({"sim": sim, "backup": x.id}))?;
             let mut t = sim_plan_text(&v);
-            if v["checks"].as_array().is_some_and(|c| c.iter().all(|c| c["ok"] == true)) {
+            if v["checks"]
+                .as_array()
+                .is_some_and(|c| c.iter().all(|c| c["ok"] == true))
+            {
                 t.push_str(&format!(
                     "\nTo restore: show the person the diff and the warnings, then call quadcam_gear_apply sim_restore with the same arguments, digest={} and confirm=true.",
                     v["digest"].as_str().unwrap_or("?")
@@ -1388,7 +1583,10 @@ fn gear<B: Backend>(backend: &mut B, a: &Value) -> Result<(Vec<Value>, Value)> {
                 .context("change is required for apply_plan: a staged change id from changes")?;
             let v = backend.call("gear_apply_plan", json!({"id": id, "port": x.port}))?;
             let mut t = preview_text(&v);
-            if v["checks"].as_array().is_some_and(|c| c.iter().all(|c| c["ok"] == true)) {
+            if v["checks"]
+                .as_array()
+                .is_some_and(|c| c.iter().all(|c| c["ok"] == true))
+            {
                 t.push_str(&format!(
                     "\nTo apply: show the person the diff, then call quadcam_gear_apply apply with change={id}, digest={} and confirm=true.",
                     v["digest"].as_str().unwrap_or("?")
@@ -1409,9 +1607,12 @@ fn gear<B: Backend>(backend: &mut B, a: &Value) -> Result<(Vec<Value>, Value)> {
             };
             Ok((vec![text(line)], json!({"checks": list})))
         }
-        other => super::gear_flights::read(backend, other, &x).unwrap_or_else(|| Err(anyhow!(
-            "unknown action {other:?}; use status, devices, fc_identify, board_notes, radio_boards, usb_timers, osd, rates, sims, card, card_preview, storage, backups, backup_read, backup_diff, card_checks, blackbox, blackbox_summary, switch_map, radio, sim_calibration, sim_defaults, sim_validate, flights, packs, session_report, preflight or crashes"
-        ))),
+        other => super::gear_flights::read(backend, other, &x).unwrap_or_else(|| {
+            Err(anyhow!(
+                "unknown action {other:?}; use {}",
+                super::params::one_of(GEAR_ACTIONS)
+            ))
+        }),
     }
 }
 
@@ -2442,7 +2643,10 @@ fn gear_edit<B: Backend>(backend: &mut B, a: &Value) -> Result<(Vec<Value>, Valu
                 "gear_sim_calibration_save",
                 json!({"radio": radio, "calibration": cal, "product": x.product, "remember": x.product.is_some()}),
             )?;
-            Ok((vec![text(format!("Saved the sim calibration of {radio}."))], v))
+            Ok((
+                vec![text(format!("Saved the sim calibration of {radio}."))],
+                v,
+            ))
         }
         "device_forget" => {
             let id =
@@ -2458,7 +2662,10 @@ fn gear_edit<B: Backend>(backend: &mut B, a: &Value) -> Result<(Vec<Value>, Valu
         }
         "elrs_read" => {
             let host = x.device.clone().context("device is required for elrs_read: the saved radio (its internal module) or FC (its receiver)")?;
-            let v = backend.call("gear_elrs_read", json!({"host": host, "port": x.port}))?;
+            let v = backend.call(
+                "gear_elrs_read",
+                json!({"host": host, "port": x.port, "confirm": x.confirm.unwrap_or(false)}),
+            )?;
             Ok((vec![text(elrs_read_text(&v))], v))
         }
         "fc_read" => {
@@ -2485,27 +2692,39 @@ fn gear_edit<B: Backend>(backend: &mut B, a: &Value) -> Result<(Vec<Value>, Valu
             Ok((vec![text(backup_result_text(&v))], v))
         }
         "blackbox_export" => {
-            let id = x
-                .id
-                .context("id is required for blackbox_export: a pull id from quadcam_gear blackbox")?;
-            let to = x
-                .to
-                .context("to is required for blackbox_export: an existing folder (absolute path)")?;
+            let id = x.id.context(
+                "id is required for blackbox_export: a pull id from quadcam_gear blackbox",
+            )?;
+            let to = x.to.context(
+                "to is required for blackbox_export: an existing folder (absolute path)",
+            )?;
             let v = backend.call(
                 "gear_blackbox_export",
                 json!({"id": id, "to": to, "split": x.split.unwrap_or(false)}),
             )?;
-            let files: Vec<&str> = v["files"].as_array().into_iter().flatten().filter_map(Value::as_str).collect();
+            let files: Vec<&str> = v["files"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(Value::as_str)
+                .collect();
             Ok((
-                vec![text(format!("Wrote {} file(s), {}:\n{}", files.len(), size(&v["bytes"]), files.join("\n")))],
+                vec![text(format!(
+                    "Wrote {} file(s), {}:\n{}",
+                    files.len(),
+                    size(&v["bytes"]),
+                    files.join("\n")
+                ))],
                 v,
             ))
         }
         "backup_pin" => {
-            let id = x
-                .backup
-                .context("backup is required for backup_pin: a backup id from quadcam_gear backups")?;
-            let pinned = x.pinned.context("pinned is required for backup_pin: true or false")?;
+            let id = x.backup.context(
+                "backup is required for backup_pin: a backup id from quadcam_gear backups",
+            )?;
+            let pinned = x
+                .pinned
+                .context("pinned is required for backup_pin: true or false")?;
             let v = backend.call("gear_backup_pin", json!({"id": id, "pinned": pinned}))?;
             Ok((vec![text(backup_line(&v))], v))
         }
@@ -2529,7 +2748,8 @@ fn gear_edit<B: Backend>(backend: &mut B, a: &Value) -> Result<(Vec<Value>, Valu
             ))
         }
         "export" => {
-            let to = x.to.context("to is required for export: an existing folder")?;
+            let to =
+                x.to.context("to is required for export: an existing folder")?;
             let v = backend.call(
                 "gear_export",
                 json!({"device": x.device, "snapshot": x.backup, "to": to}),
@@ -2576,21 +2796,32 @@ fn gear_edit<B: Backend>(backend: &mut B, a: &Value) -> Result<(Vec<Value>, Valu
                 "gear_dfu_link",
                 json!({"device": x.device, "serial": x.serial, "unlink": x.unlink.unwrap_or(false)}),
             )?;
-            let name = v["device"]["name"].as_str().filter(|n| !n.is_empty()).unwrap_or("the radio");
+            let name = v["device"]["name"]
+                .as_str()
+                .filter(|n| !n.is_empty())
+                .unwrap_or("the radio");
             let mut t = match v["serial"].as_str() {
-                Some(_) => format!("The radio in DFU mode is linked to {name} ({}).", v["how"].as_str().unwrap_or("")),
+                Some(_) => format!(
+                    "The radio in DFU mode is linked to {name} ({}).",
+                    v["how"].as_str().unwrap_or("")
+                ),
                 None => format!("{name} has no DFU link now."),
             };
-            for n in v["notes"].as_array().into_iter().flatten().filter_map(Value::as_str) {
+            for n in v["notes"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(Value::as_str)
+            {
                 t.push('\n');
                 t.push_str(n);
             }
             Ok((vec![text(t)], v))
         }
         "radio_cli" => {
-            let command = x
-                .command
-                .context("command is required for radio_cli: identify, ls, play, beep, reboot or verify")?;
+            let command = x.command.context(
+                "command is required for radio_cli: identify, ls, play, beep, reboot or verify",
+            )?;
             let v = backend.call(
                 "gear_radio_cli",
                 json!({"port": x.port, "action": command, "path": x.path, "device": x.device, "confirm": x.confirm.unwrap_or(false)}),
@@ -2625,13 +2856,15 @@ fn gear_edit<B: Backend>(backend: &mut B, a: &Value) -> Result<(Vec<Value>, Valu
                 .context("handle is required for stop: a job's handle from quadcam_gear status")?;
             let v = backend.call("gear_stop", json!({"handle": handle}))?;
             Ok((
-                vec![text(if v.as_bool() == Some(true) && handle == crate::core::STUDIO_JOB {
-                    "Stopping: it ends after the current batch.".to_string()
-                } else if v.as_bool() == Some(true) {
-                    "Stopping: it ends after the file being read.".to_string()
-                } else {
-                    "Nothing is running on that device.".to_string()
-                })],
+                vec![text(
+                    if v.as_bool() == Some(true) && handle == crate::core::STUDIO_JOB {
+                        "Stopping: it ends after the current batch.".to_string()
+                    } else if v.as_bool() == Some(true) {
+                        "Stopping: it ends after the file being read.".to_string()
+                    } else {
+                        "Nothing is running on that device.".to_string()
+                    },
+                )],
                 json!({"stopping": v}),
             ))
         }
@@ -2659,10 +2892,9 @@ fn gear_edit<B: Backend>(backend: &mut B, a: &Value) -> Result<(Vec<Value>, Valu
             Ok((vec![text(format!("Staged. {}\nNothing is written until quadcam_gear apply_plan and quadcam_gear_apply.", change_line(&v)))], v))
         }
         "model_edit" => {
-            let device = x
-                .device
-                .clone()
-                .context("device is required for model_edit: a radio's device id from quadcam_gear")?;
+            let device = x.device.clone().context(
+                "device is required for model_edit: a radio's device id from quadcam_gear",
+            )?;
             let model = x
                 .model
                 .clone()
@@ -2674,10 +2906,9 @@ fn gear_edit<B: Backend>(backend: &mut B, a: &Value) -> Result<(Vec<Value>, Valu
             Ok((vec![text(format!("Staged. {}\nNothing is written until quadcam_gear apply_plan and quadcam_gear_apply.", change_line(&v)))], v))
         }
         "radio_settings_edit" => {
-            let device = x
-                .device
-                .clone()
-                .context("device is required for radio_settings_edit: a radio's device id from quadcam_gear")?;
+            let device = x.device.clone().context(
+                "device is required for radio_settings_edit: a radio's device id from quadcam_gear",
+            )?;
             let v = backend.call(
                 "gear_radio_settings_edit",
                 json!({"device": device, "ops": x.ops.clone().unwrap_or_default(), "editor": "agent"}),
@@ -2685,10 +2916,9 @@ fn gear_edit<B: Backend>(backend: &mut B, a: &Value) -> Result<(Vec<Value>, Valu
             Ok((vec![text(format!("Staged. {}\nNothing is written until quadcam_gear apply_plan and quadcam_gear_apply.", change_line(&v)))], v))
         }
         "radio_setup_edit" => {
-            let device = x
-                .device
-                .clone()
-                .context("device is required for radio_setup_edit: a radio's device id from quadcam_gear")?;
+            let device = x.device.clone().context(
+                "device is required for radio_setup_edit: a radio's device id from quadcam_gear",
+            )?;
             let v = backend.call(
                 "gear_radio_setup_edit",
                 json!({"device": device, "setup": x.setup, "reset": x.reset.unwrap_or(false), "assign": x.assign.clone().unwrap_or_default(), "free": x.free.clone().unwrap_or_default(), "stage": x.stage.unwrap_or(false), "editor": "agent"}),
@@ -2703,10 +2933,9 @@ fn gear_edit<B: Backend>(backend: &mut B, a: &Value) -> Result<(Vec<Value>, Valu
             Ok((vec![text(out)], v))
         }
         "post_flash_stage" => {
-            let device = x
-                .device
-                .clone()
-                .context("device is required for post_flash_stage: a radio's device id from quadcam_gear")?;
+            let device = x.device.clone().context(
+                "device is required for post_flash_stage: a radio's device id from quadcam_gear",
+            )?;
             let steps = x
                 .steps
                 .clone()
@@ -2715,16 +2944,27 @@ fn gear_edit<B: Backend>(backend: &mut B, a: &Value) -> Result<(Vec<Value>, Valu
                 "gear_radio_post_flash",
                 json!({"device": device, "steps": steps, "pack_version": x.pack_version, "elrs_version": x.elrs_version, "stage": true, "editor": "agent"}),
             )?;
-            Ok((vec![text(format!("{}\nNothing is written until quadcam_gear apply_plan and quadcam_gear_apply.", post_flash_text(&v)))], v))
+            Ok((
+                vec![text(format!(
+                    "{}\nNothing is written until quadcam_gear apply_plan and quadcam_gear_apply.",
+                    post_flash_text(&v)
+                ))],
+                v,
+            ))
         }
         "voice_edit" => {
-            let radio = x.device.clone().context("device is required for voice_edit: a radio's device id from quadcam_gear")?;
-            let line = x.line.clone().context("line is required for voice_edit: a sound's card path such as SOUNDS/en/armed.wav")?;
+            let radio = x.device.clone().context(
+                "device is required for voice_edit: a radio's device id from quadcam_gear",
+            )?;
+            let line = x.line.clone().context(
+                "line is required for voice_edit: a sound's card path such as SOUNDS/en/armed.wav",
+            )?;
             let v = backend.call(
                 "gear_voice_edit",
                 json!({"radio": radio, "line": line, "text": x.text, "pack": x.pack, "confirm": x.confirm.unwrap_or(false), "dry_run": x.dry_run.unwrap_or(false), "digest": x.digest}),
             )?;
-            let line: crate::core::VoiceLine = serde_json::from_value(v.clone()).context("bad voice answer")?;
+            let line: crate::core::VoiceLine =
+                serde_json::from_value(v.clone()).context("bad voice answer")?;
             if let Some(c) = &line.cost {
                 let t = if c.paid {
                     format!("Not rendered: {} characters would go to {}, which may charge for them. Ask the person, then call again with confirm=true and digest={}.", c.chars, c.provider, c.digest)
@@ -2734,7 +2974,9 @@ fn gear_edit<B: Backend>(backend: &mut B, a: &Value) -> Result<(Vec<Value>, Valu
                 return Ok((vec![text(t)], v));
             }
             let what = match &line.override_ {
-                Some(o) if o.kind == "pack" => format!("takes {}'s take", o.pack.clone().unwrap_or_default()),
+                Some(o) if o.kind == "pack" => {
+                    format!("takes {}'s take", o.pack.clone().unwrap_or_default())
+                }
                 Some(o) => format!("speaks {:?}", o.text.clone().unwrap_or_default()),
                 None => "has no override".to_string(),
             };
@@ -2759,7 +3001,9 @@ fn gear_edit<B: Backend>(backend: &mut B, a: &Value) -> Result<(Vec<Value>, Valu
             Ok((vec![text(crate::core::voice_sample_text(&r))], v))
         }
         "voice_flag" => {
-            let line = x.line.clone().context("voice_flag needs `line`: the take's card path from quadcam_gear voice_samples")?;
+            let line = x.line.clone().context(
+                "voice_flag needs `line`: the take's card path from quadcam_gear voice_samples",
+            )?;
             let v = backend.call(
                 "gear_voice_flag",
                 json!({
@@ -2771,7 +3015,11 @@ fn gear_edit<B: Backend>(backend: &mut B, a: &Value) -> Result<(Vec<Value>, Valu
                     "clear": x.clear.unwrap_or(false),
                 }),
             )?;
-            let what = if x.clear == Some(true) { "Cleared the flag on" } else { "Flagged" };
+            let what = if x.clear == Some(true) {
+                "Cleared the flag on"
+            } else {
+                "Flagged"
+            };
             Ok((vec![text(format!("{what} {line}. quadcam_gear voice_flags lists every flag; voice_retake makes a flagged studio take again (priced first)."))], v))
         }
         "voice_samples_delete" => {
@@ -2781,13 +3029,23 @@ fn gear_edit<B: Backend>(backend: &mut B, a: &Value) -> Result<(Vec<Value>, Valu
                 anyhow::bail!("voice_samples_delete needs `sample` (an id from quadcam_gear voice_samples) or all_samples=true");
             }
             if x.confirm != Some(true) {
-                let what = if all { "Every sample".to_string() } else { format!("The sample {}", ids.join(", ")) };
+                let what = if all {
+                    "Every sample".to_string()
+                } else {
+                    format!("The sample {}", ids.join(", "))
+                };
                 return Ok((vec![text(format!("Not deleted. {what} would be removed from this Mac; the takes stay in the cache, so sampling again costs nothing. Ask the person, then call again with confirm=true."))], json!({"deleted": false})));
             }
             let v = backend.call("gear_voice_samples_delete", json!({"ids": ids, "all": all}))?;
             let g: crate::core::SampleGallery =
                 serde_json::from_value(v.clone()).context("bad voice answer")?;
-            Ok((vec![text(format!("Deleted.\n{}", crate::core::voice_samples_text(&g)))], v))
+            Ok((
+                vec![text(format!(
+                    "Deleted.\n{}",
+                    crate::core::voice_samples_text(&g)
+                ))],
+                v,
+            ))
         }
         "voice_retake" => {
             let v = backend.call(
@@ -2891,39 +3149,66 @@ fn gear_edit<B: Backend>(backend: &mut B, a: &Value) -> Result<(Vec<Value>, Valu
                 "gear_voice_render",
                 json!({"voice": x.voice.clone().unwrap_or_default(), "lines": x.lines.clone().unwrap_or_default(), "dry_run": x.dry_run.unwrap_or(false), "confirm": x.confirm.unwrap_or(false), "sets": x.sets.clone().unwrap_or_default(), "model": x.voice_model.clone().unwrap_or_default(), "digest": x.digest, "settings": x.seed.map(voice_seed)}),
             )?;
-            let r: crate::core::RenderReport = serde_json::from_value(v.clone()).context("bad voice answer")?;
+            let r: crate::core::RenderReport =
+                serde_json::from_value(v.clone()).context("bad voice answer")?;
             Ok((vec![text(crate::core::voice_report_text(&r))], v))
         }
         "voice_publish" => {
-            let pack = x.pack.clone().context("pack is required for voice_publish: a pack on this Mac from quadcam_gear voice")?;
+            let pack = x.pack.clone().context(
+                "pack is required for voice_publish: a pack on this Mac from quadcam_gear voice",
+            )?;
             let v = backend.call(
                 "gear_voice_publish",
                 json!({"pack": pack, "id": x.id, "version": x.version, "voice_name": x.name, "license": x.license, "attribution": x.attribution}),
             )?;
-            let r: crate::core::PublishReview = serde_json::from_value(v.clone()).context("bad voice answer")?;
+            let r: crate::core::PublishReview =
+                serde_json::from_value(v.clone()).context("bad voice answer")?;
             Ok((vec![text(crate::core::voice_review_text(&r))], v))
         }
         "voice_install" => {
-            let pack = x.pack.clone().context("pack is required for voice_install: a pack id from quadcam_gear voice (refresh)")?;
-            let v = backend.call("gear_voice_pack_install", json!({"pack": pack, "source": x.source}))?;
-            Ok((vec![text(format!("Installed pack {}.", v["id"].as_str().unwrap_or("?")))], v))
+            let pack = x.pack.clone().context(
+                "pack is required for voice_install: a pack id from quadcam_gear voice (refresh)",
+            )?;
+            let v = backend.call(
+                "gear_voice_pack_install",
+                json!({"pack": pack, "source": x.source}),
+            )?;
+            Ok((
+                vec![text(format!(
+                    "Installed pack {}.",
+                    v["id"].as_str().unwrap_or("?")
+                ))],
+                v,
+            ))
         }
-        "voice_choose" if x.device.is_none() && (x.radios.is_some() || x.all_radios == Some(true)) => {
-            let pack = x.pack.clone().context("pack is required for voice_choose: an installed pack id from quadcam_gear voice")?;
+        "voice_choose"
+            if x.device.is_none() && (x.radios.is_some() || x.all_radios == Some(true)) =>
+        {
+            let pack = x.pack.clone().context(
+                "pack is required for voice_choose: an installed pack id from quadcam_gear voice",
+            )?;
             let v = backend.call(
                 "gear_voice_choose_radios",
                 json!({"pack": pack, "radios": x.radios.clone().unwrap_or_default(), "all": x.all_radios.unwrap_or(false), "keep_overrides": x.keep_overrides.unwrap_or(true), "editor": "agent"}),
             )?;
-            let lines: Vec<String> = v["staged"].as_array().map(|a| a.iter().map(change_line).collect()).unwrap_or_default();
+            let lines: Vec<String> = v["staged"]
+                .as_array()
+                .map(|a| a.iter().map(change_line).collect())
+                .unwrap_or_default();
             Ok((vec![text(format!("Staged on {} radios.\n{}\nNothing is written until quadcam_gear apply_plan and quadcam_gear_apply for each radio.", lines.len(), lines.join("\n")))], v))
         }
         "voice_delete" => {
-            let pack = x.pack.clone().context("pack is required for voice_delete: an installed pack id from quadcam_gear voice")?;
+            let pack = x.pack.clone().context(
+                "pack is required for voice_delete: an installed pack id from quadcam_gear voice",
+            )?;
             if x.confirm != Some(true) {
                 let view = backend.call("gear_voice", json!({}))?;
                 let k = view["packs"]
                     .as_array()
-                    .and_then(|a| a.iter().find(|k| k["id"] == pack.as_str() && k["installed"] == true))
+                    .and_then(|a| {
+                        a.iter()
+                            .find(|k| k["id"] == pack.as_str() && k["installed"] == true)
+                    })
                     .with_context(|| format!("Pack {pack:?} is not installed."))?
                     .clone();
                 let radios = radio_names(backend, &k["radios"])?;
@@ -2939,16 +3224,27 @@ fn gear_edit<B: Backend>(backend: &mut B, a: &Value) -> Result<(Vec<Value>, Valu
                     k,
                 ));
             }
-            let v = backend.call("gear_voice_pack_delete", json!({"pack": pack, "takes": x.takes.unwrap_or(false)}))?;
+            let v = backend.call(
+                "gear_voice_pack_delete",
+                json!({"pack": pack, "takes": x.takes.unwrap_or(false)}),
+            )?;
             let radios = radio_names(backend, &v["radios"])?;
             Ok((
                 vec![text(format!(
                     "Deleted pack {pack}: {} bytes, {} raw takes removed.{}{}",
                     v["bytes"],
                     v["takes"],
-                    if radios.is_empty() { String::new() } else { format!(" Cleared the choice on {}; their cards keep its sounds.", radios.join(", ")) },
+                    if radios.is_empty() {
+                        String::new()
+                    } else {
+                        format!(
+                            " Cleared the choice on {}; their cards keep its sounds.",
+                            radios.join(", ")
+                        )
+                    },
                     match v["overrides"].as_array().map(Vec::len) {
-                        Some(n) if n > 0 => format!(" Cleared {n} line overrides that took its takes."),
+                        Some(n) if n > 0 =>
+                            format!(" Cleared {n} line overrides that took its takes."),
                         _ => String::new(),
                     }
                 ))],
@@ -2957,7 +3253,9 @@ fn gear_edit<B: Backend>(backend: &mut B, a: &Value) -> Result<(Vec<Value>, Valu
         }
         "voice_choose" => {
             let radio = x.device.clone().context("device is required for voice_choose: a radio's device id from quadcam_gear (or radios, or all_radios)")?;
-            let pack = x.pack.clone().context("pack is required for voice_choose: an installed pack id from quadcam_gear voice")?;
+            let pack = x.pack.clone().context(
+                "pack is required for voice_choose: an installed pack id from quadcam_gear voice",
+            )?;
             let v = backend.call(
                 "gear_voice_choose",
                 json!({"radio": radio, "pack": pack, "keep_overrides": x.keep_overrides.unwrap_or(true), "editor": "agent"}),
@@ -2965,7 +3263,10 @@ fn gear_edit<B: Backend>(backend: &mut B, a: &Value) -> Result<(Vec<Value>, Valu
             Ok((vec![text(format!("Staged. {}\nNothing is written until quadcam_gear apply_plan and quadcam_gear_apply.", change_line(&v)))], v))
         }
         "update" => {
-            let id = x.change.clone().context("change is required for update: a staged change id")?;
+            let id = x
+                .change
+                .clone()
+                .context("change is required for update: a staged change id")?;
             let edits = if x.lines.is_some() || x.edits.is_some() {
                 Some(change_edits(&x)?)
             } else {
@@ -2978,19 +3279,27 @@ fn gear_edit<B: Backend>(backend: &mut B, a: &Value) -> Result<(Vec<Value>, Valu
             Ok((vec![text(format!("Updated. {}", change_line(&v)))], v))
         }
         "discard" => {
-            let id = x.change.clone().context("change is required for discard: a staged change id")?;
+            let id = x
+                .change
+                .clone()
+                .context("change is required for discard: a staged change id")?;
             let v = backend.call("gear_change_discard", json!({"id": id}))?;
             Ok((vec![text(format!("Discarded. {}", change_line(&v)))], v))
         }
         "restore_stage" => {
-            let b = x.backup.clone().context("backup is required for restore_stage: a backup id from quadcam_gear backups")?;
+            let b = x.backup.clone().context(
+                "backup is required for restore_stage: a backup id from quadcam_gear backups",
+            )?;
             let v = backend.call("gear_restore_stage", json!({"backup": b, "paths": x.paths.clone().unwrap_or_default(), "editor": "agent"}))?;
             Ok((vec![text(format!("Staged. {}", change_line(&v)))], v))
         }
         "copy_stage" => {
             let (from, to) = (
-                x.from.clone().context("from is required for copy_stage: a device id or a backup id")?,
-                x.to.clone().context("to is required for copy_stage: the FC's device id")?,
+                x.from
+                    .clone()
+                    .context("from is required for copy_stage: a device id or a backup id")?,
+                x.to.clone()
+                    .context("to is required for copy_stage: the FC's device id")?,
             );
             let v = backend.call(
                 "gear_copy_stage",
@@ -2999,24 +3308,49 @@ fn gear_edit<B: Backend>(backend: &mut B, a: &Value) -> Result<(Vec<Value>, Valu
             Ok((vec![text(format!("Staged. {}\nNothing is written until quadcam_gear apply_plan and quadcam_gear_apply.", change_line(&v)))], v))
         }
         "keep" => {
-            let id = x.change.clone().context("change is required for keep: an applied Try change id")?;
+            let id = x
+                .change
+                .clone()
+                .context("change is required for keep: an applied Try change id")?;
             let v = backend.call("gear_change_keep", json!({"id": id}))?;
             Ok((vec![text(format!("Kept. {}", change_line(&v)))], v))
         }
         "revert_stage" => {
-            let id = x.change.clone().context("change is required for revert_stage: an applied change id")?;
+            let id = x
+                .change
+                .clone()
+                .context("change is required for revert_stage: an applied change id")?;
             let v = backend.call("gear_change_revert", json!({"id": id}))?;
             Ok((vec![text(format!("Staged a revert. {}\nNothing is written until quadcam_gear apply_plan and quadcam_gear_apply.", change_line(&v)))], v))
         }
         "card_mount" => {
-            let device = x.device.clone().context("device is required for card_mount: a radio card's device id")?;
-            let v = backend.call("gear_card_mount", json!({"device": device, "minutes": x.minutes}))?;
-            Ok((vec![text(format!("Mounted at {}. QuadCam unmounts it at {} unless you call card_unmount first.", v["mount"].as_str().unwrap_or("?"), v["until"].as_str().unwrap_or("?")))], v))
+            let device = x
+                .device
+                .clone()
+                .context("device is required for card_mount: a radio card's device id")?;
+            let v = backend.call(
+                "gear_card_mount",
+                json!({"device": device, "minutes": x.minutes}),
+            )?;
+            Ok((
+                vec![text(format!(
+                    "Mounted at {}. QuadCam unmounts it at {} unless you call card_unmount first.",
+                    v["mount"].as_str().unwrap_or("?"),
+                    v["until"].as_str().unwrap_or("?")
+                ))],
+                v,
+            ))
         }
         "card_unmount" => {
-            let device = x.device.clone().context("device is required for card_unmount: a radio card's device id")?;
+            let device = x
+                .device
+                .clone()
+                .context("device is required for card_unmount: a radio card's device id")?;
             let v = backend.call("gear_card_unmount", json!({"device": device}))?;
-            Ok((vec![text("Unmounted: safe to unplug.".to_string())], json!({"unmounted": v})))
+            Ok((
+                vec![text("Unmounted: safe to unplug.".to_string())],
+                json!({"unmounted": v}),
+            ))
         }
         "poll_pause" => {
             let paused = x.paused.unwrap_or(true);
@@ -3031,9 +3365,12 @@ fn gear_edit<B: Backend>(backend: &mut B, a: &Value) -> Result<(Vec<Value>, Valu
             };
             Ok((vec![text(line.to_string())], json!({"paused": v})))
         }
-        other => super::gear_flights::edit(backend, other, &x).unwrap_or_else(|| Err(anyhow!(
-            "unknown action {other:?}; use device_save, device_forget, fc_read, backup, backup_pin, blackbox_export, prune, export, import_backups, card_check, card_clean, radio_cli, dfu_link, stop, poll_pause, flight_set, flight_folders, pack_save, pack_delete, pack_type_save, pack_type_delete, pack_notes, crash_save, crash_delete, report_save, sim_calibration_save, stage, update, discard, restore_stage, copy_stage, keep, revert_stage, card_mount or card_unmount"
-        ))),
+        other => super::gear_flights::edit(backend, other, &x).unwrap_or_else(|| {
+            Err(anyhow!(
+                "unknown action {other:?}; use {}",
+                super::params::one_of(GEAR_EDIT_ACTIONS)
+            ))
+        }),
     }
 }
 
@@ -3048,7 +3385,7 @@ fn gear_apply<B: Backend>(backend: &mut B, a: &Value) -> Result<(Vec<Value>, Val
             }
             let v = backend.call(
                 "gear_blackbox_pull",
-                json!({"port": x.port, "keep": x.keep.unwrap_or(false), "mode": x.mode, "force": x.force.unwrap_or(false)}),
+                json!({"port": x.port, "keep": x.keep.unwrap_or(false), "mode": x.mode, "force": x.force.unwrap_or(false), "confirm": x.confirm.unwrap_or(false)}),
             )?;
             Ok((vec![text(blackbox_pull_text(&v))], v))
         }
@@ -3058,7 +3395,10 @@ fn gear_apply<B: Backend>(backend: &mut B, a: &Value) -> Result<(Vec<Value>, Val
                     "Refused: blackbox_erase deletes the FC's logs for good; it needs confirm=true."
                 ));
             }
-            let v = backend.call("gear_blackbox_erase", json!({"port": x.port, "confirm": true}))?;
+            let v = backend.call(
+                "gear_blackbox_erase",
+                json!({"port": x.port, "confirm": true}),
+            )?;
             Ok((
                 vec![text(format!(
                     "Erased the FC's blackbox flash in {:.0} s. Its logs are kept in pull {}. Safe to unplug.",
@@ -3092,7 +3432,10 @@ fn gear_apply<B: Backend>(backend: &mut B, a: &Value) -> Result<(Vec<Value>, Val
                         r["after"].as_str().unwrap_or("?")
                     )
                 } else {
-                    format!("The volume is already {}.", r["after"].as_str().unwrap_or("?"))
+                    format!(
+                        "The volume is already {}.",
+                        r["after"].as_str().unwrap_or("?")
+                    )
                 })],
                 v,
             ))
@@ -3165,10 +3508,9 @@ fn gear_apply<B: Backend>(backend: &mut B, a: &Value) -> Result<(Vec<Value>, Val
             Ok((vec![text(apply_text(&v))], v))
         }
         "sim_restore" => {
-            let sim = x
-                .sim
-                .clone()
-                .context("sim is required for sim_restore: the sim from quadcam_gear sim_restore_plan")?;
+            let sim = x.sim.clone().context(
+                "sim is required for sim_restore: the sim from quadcam_gear sim_restore_plan",
+            )?;
             let digest = x.digest.context(
                 "digest is required for sim_restore: the digest from quadcam_gear sim_restore_plan",
             )?;
@@ -3235,10 +3577,9 @@ fn gear_apply<B: Backend>(backend: &mut B, a: &Value) -> Result<(Vec<Value>, Val
                 .device
                 .clone()
                 .context("device is required for elrs_flash: the saved ELRS device id")?;
-            let digest = x
-                .digest
-                .clone()
-                .context("digest is required for elrs_flash: the digest from quadcam_gear elrs_flash_plan")?;
+            let digest = x.digest.clone().context(
+                "digest is required for elrs_flash: the digest from quadcam_gear elrs_flash_plan",
+            )?;
             if x.confirm != Some(true) {
                 return Err(anyhow!(
                     "Refused: elrs_flash writes the device's firmware; it needs the plan's digest and confirm=true."
@@ -3258,7 +3599,8 @@ fn gear_apply<B: Backend>(backend: &mut B, a: &Value) -> Result<(Vec<Value>, Val
             Ok((vec![text(apply_text(&v))], v))
         }
         other => Err(anyhow!(
-            "Refused: {other:?} is not an apply action; use card_repair, apply, sim_sync, sim_restore, flash, firmware_restore, blackbox_pull, blackbox_erase or elrs_flash."
+            "Refused: {other:?} is not an apply action; use {}.",
+            super::params::one_of(GEAR_APPLY_ACTIONS)
         )),
     }
 }

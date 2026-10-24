@@ -207,6 +207,13 @@ fn session_report_preflight_and_crashes() {
     assert!(save(&out, true).is_ok());
     assert!(save(dir.path(), true).is_err());
     assert!(save(&dir.path().join("nope/r.md"), true).is_err());
+    // Only a Markdown file: never another file the person owns, even with overwrite.
+    let rc = dir.path().join(".zshrc");
+    std::fs::write(&rc, "keep").unwrap();
+    assert!(save(&rc, true).is_err());
+    assert_eq!(std::fs::read_to_string(&rc).unwrap(), "keep");
+    assert!(save(&dir.path().join("notes.txt"), false).is_err());
+    assert!(save(&dir.path().join("Report.MARKDOWN"), false).is_ok());
 
     let p = c.gear_preflight().unwrap();
     let ids: Vec<&str> = p.rows.iter().map(|r| r.id.as_str()).collect();
@@ -286,6 +293,19 @@ fn mcp_actions() {
         json!({"action":"report_save","day":"2026-10-04","to":file}),
     );
     assert_eq!(again["isError"], true, "{again}");
+    // Over MCP, overwrite replaces the file only with confirm, after the person agreed.
+    let r = s.call_tool(
+        "quadcam_gear_edit",
+        json!({"action":"report_save","day":"2026-10-04","to":file,"overwrite":true}),
+    );
+    assert_eq!(r["isError"], true, "{r}");
+    assert!(text(&r).contains("confirm"), "{}", text(&r));
+    let r = call(
+        &mut s,
+        "quadcam_gear_edit",
+        json!({"action":"report_save","day":"2026-10-04","to":file,"overwrite":true,"confirm":true}),
+    );
+    assert!(text(&r).starts_with("Wrote"), "{}", text(&r));
     let r = call(&mut s, "quadcam_gear", json!({"action":"preflight"}));
     assert!(text(&r).contains("Packs charged"), "{}", text(&r));
     let r = call(

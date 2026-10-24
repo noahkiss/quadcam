@@ -260,3 +260,33 @@ fn the_cli_sets_secrets_from_stdin_and_shows_only_hints() {
     }
     no_secret("files", &files_but_settings(h));
 }
+
+/// `modules` picks a program the app runs and `tts_base_url` the server `tts_key` goes to:
+/// an agent may not write either; the person sets them in the app or the CLI.
+#[test]
+fn mcp_refuses_the_settings_that_run_a_program_or_send_a_key() {
+    let dir = tempfile::tempdir().unwrap();
+    let c = core(dir.path(), Arc::new(MemKeys::default()));
+    let mut s = Server::new(LocalBackend(c.clone()));
+    for values in [
+        json!({"modules": {"ffmpeg": "/tmp/x"}}),
+        json!({"tts_base_url": "http://example.invalid/"}),
+        json!({"tts_model": "m", "modules": null}),
+    ] {
+        let r = s.call_tool(
+            "quadcam_settings",
+            json!({"action": "write", "values": values}),
+        );
+        assert_eq!(r["isError"], true, "{r}");
+        let t = r["content"][0]["text"].as_str().unwrap();
+        assert!(
+            t.contains("Settings window") && t.contains("quadcam-cli"),
+            "{t}"
+        );
+    }
+    let r = s.call_tool("quadcam_settings", json!({"action": "read"}));
+    let st = &r["structuredContent"]["settings"];
+    assert_ne!(st["tts_model"], "m", "{r}");
+    assert!(!r.to_string().contains("/tmp/x"), "{r}");
+    assert!(!r.to_string().contains("example.invalid"), "{r}");
+}

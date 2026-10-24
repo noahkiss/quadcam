@@ -711,3 +711,79 @@ fn add_to_photos_and_eject_through_mcp() {
     assert_eq!(r["isError"], true, "{r}");
     assert!(r.to_string().contains("came from a folder"), "{r}");
 }
+
+/// An unknown action's error names every action the tool's schema lists, so an agent that
+/// recovers from it is never steered to a subset.
+#[test]
+fn an_unknown_action_lists_every_action() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut s = Server::new(LocalBackend(core(
+        dir.path(),
+        Arc::new(NoHooks),
+        Arc::default(),
+    )));
+    let list = s
+        .handle(&json!({"jsonrpc": "2.0", "id": 1, "method": "tools/list"}))
+        .unwrap();
+    let mut checked = 0;
+    for t in list["result"]["tools"].as_array().unwrap() {
+        let Some(actions) = t["inputSchema"]["properties"]["action"]["enum"].as_array() else {
+            continue;
+        };
+        let name = t["name"].as_str().unwrap();
+        let r = s.call_tool(name, json!({"action": "nope"}));
+        assert_eq!(r["isError"], true, "{name}: {r}");
+        let text = r["content"][0]["text"].as_str().unwrap();
+        for a in actions {
+            let a = a.as_str().unwrap();
+            assert!(
+                text.split(|c: char| !c.is_ascii_alphanumeric() && c != '_')
+                    .any(|w| w == a),
+                "{name}: {a} missing from {text}"
+            );
+        }
+        checked += 1;
+    }
+    assert_eq!(checked, 7, "every tool with actions");
+}
+
+/// The schema's limits hold for arguments a tool passes on as JSON: too many cuts for one
+/// clip is refused before anything changes, not exported as that many files.
+#[test]
+fn schema_limits_are_enforced_before_a_call() {
+    let dir = tempfile::tempdir().unwrap();
+    let c = core(dir.path(), Arc::new(NoHooks), Arc::default());
+    let mut s = Server::new(LocalBackend(c.clone()));
+    let src = clips_folder();
+    call(&mut s, "quadcam_load_clips", json!({"source": src.path()}));
+    let cuts: Vec<Value> = (0..21)
+        .map(|i| json!({"start": i as f64 * 0.1, "end": i as f64 * 0.1 + 0.5}))
+        .collect();
+    let r = s.call_tool(
+        "quadcam_suggest",
+        json!({"suggestions": [{"id": 0, "cuts": cuts}]}),
+    );
+    assert_eq!(r["isError"], true, "{r}");
+    let t = r["content"][0]["text"].as_str().unwrap();
+    assert!(
+        t.contains("suggestions[0].cuts has more than 20 items"),
+        "{t}"
+    );
+    assert!(c.session().unwrap().plans[0].cuts.is_empty());
+    let r = s.call_tool(
+        "quadcam_suggest",
+        json!({"suggestions": [{"id": 0, "keywords": ["x".repeat(61)]}]}),
+    );
+    assert!(
+        r["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .contains("keywords[0] is longer than 60 characters"),
+        "{r}"
+    );
+    call(
+        &mut s,
+        "quadcam_suggest",
+        json!({"suggestions": [{"id": 0, "name": "Dive", "keywords": ["pond"]}]}),
+    );
+}

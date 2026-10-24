@@ -89,6 +89,8 @@ pub fn run(core: &Core, cmd: BlackboxCmd) -> Result<Value> {
                     Mode::Msc => PullMode::Msc,
                 }),
                 force,
+                // A person at a terminal asked for it; `pull` takes no --yes.
+                confirm: true,
             },
         )?)?,
         BlackboxCmd::Summary { port } => serde_json::to_value(call::gear_blackbox_summary(

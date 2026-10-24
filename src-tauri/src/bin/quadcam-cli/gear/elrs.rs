@@ -29,6 +29,9 @@ pub enum ElrsCmd {
         /// The host's serial port; omit when one is plugged in.
         #[arg(long)]
         port: Option<String>,
+        /// Needed for a radio: the read stops its pulses, so a quad linked to it goes to failsafe.
+        #[arg(long)]
+        yes: bool,
     },
     /// Stage option changes for a read ELRS device, as one change (apply it with `gear
     /// apply`). Options: packet_rate, telemetry_ratio, power, dynamic_power, switch_mode,
@@ -92,9 +95,13 @@ pub fn run(core: &Core, cmd: Option<ElrsCmd>) -> Result<Value> {
                 check: check.then_some(true),
             },
         )?)?,
-        ElrsCmd::Read { host, port } => serde_json::to_value(call::gear_elrs_read(
+        ElrsCmd::Read { host, port, yes } => serde_json::to_value(call::gear_elrs_read(
             core,
-            api::ElrsReadParams { host, port },
+            api::ElrsReadParams {
+                host,
+                port,
+                confirm: yes,
+            },
         )?)?,
         ElrsCmd::Set {
             device,

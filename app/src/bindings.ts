@@ -1291,6 +1291,11 @@ export type BlackboxPullParams = {
 	 *  could not finish still does not start.
 	 */
 	force?: boolean,
+	/**
+	 *  The person agreed: a pull holds the FC for minutes and, with the
+	 *  `gear_erase_blackbox` setting on, erases its flash after. Needs true.
+	 */
+	confirm?: boolean,
 };
 
 /**  `gear_blackbox_pull`'s answer. */
@@ -2903,6 +2908,11 @@ export type ElrsReadParams = {
 	host: string,
 	/**  The host's serial port; omit when only one is plugged in. */
 	port?: string | null,
+	/**
+	 *  For a radio host: the read stops the radio's pulses, so a quad linked to it goes to
+	 *  failsafe. Needs true, after the person agreed. An FC host needs none.
+	 */
+	confirm?: boolean,
 };
 
 export type ElrsReadReport = {
@@ -6784,7 +6794,7 @@ export type ReportParams = {
 /**  `gear_session_report_save`: the report for a day, written as a Markdown file. */
 export type ReportSaveParams = {
 	day?: string | null,
-	/**  The file to write. Its folder must exist. */
+	/**  The file to write: a `.md` or `.markdown` file whose folder exists. */
 	path: string,
 	/**  Replace a file that is already there. The GUI's save dialog has asked already. */
 	overwrite?: boolean,

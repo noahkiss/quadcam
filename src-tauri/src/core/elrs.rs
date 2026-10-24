@@ -99,6 +99,10 @@ pub struct ElrsReadParams {
     /// The host's serial port; omit when only one is plugged in.
     #[serde(default)]
     pub port: Option<String>,
+    /// For a radio host: the read stops the radio's pulses, so a quad linked to it goes to
+    /// failsafe. Needs true, after the person agreed. An FC host needs none.
+    #[serde(default)]
+    pub confirm: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Type)]
@@ -464,6 +468,12 @@ impl Core {
     pub fn gear_elrs_read(&self, p: &ElrsReadParams) -> Result<ElrsReadReport> {
         self.elrs_require()?;
         let host = self.elrs_host(&p.host)?;
+        if host.kind == DeviceKind::Radio && !p.confirm {
+            bail!(
+                "Refused: reading the module behind {} stops the radio's pulses, so a quad linked to it goes to failsafe. It needs confirm=true, after the person agreed.",
+                host.display_name()
+            );
+        }
         let port = self.elrs_host_port(&host, p.port.as_deref())?;
         let mut notes = Vec::new();
         let (info, params, host_board) = {

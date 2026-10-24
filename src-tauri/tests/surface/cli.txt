@@ -357,6 +357,7 @@ cli.flag gear elrs flash --sha256 VALUE
 cli.flag gear elrs flash --version VALUE
 cli.flag gear elrs flash --yes
 cli.flag gear elrs read --port VALUE
+cli.flag gear elrs read --yes
 cli.flag gear elrs set --draft
 cli.flag gear elrs set --note VALUE
 cli.flag gear elrs status --check

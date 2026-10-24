@@ -106,7 +106,7 @@ export const api = {
   gearBackup: (target: { device?: string | null; port?: string | null; mount?: string | null }) => ok(commands.gearBackup(target)),
   gearBlackbox: (device: string | null) => ok(commands.gearBlackbox({ device })),
   gearBlackboxSummary: (port: string | null) => ok(commands.gearBlackboxSummary({ port })),
-  gearBlackboxPull: (port: string | null, keep = false) => ok(commands.gearBlackboxPull({ port, keep })),
+  gearBlackboxPull: (port: string | null, keep = false) => ok(commands.gearBlackboxPull({ port, keep, confirm: true })),
   gearBlackboxErase: (port: string | null) => ok(commands.gearBlackboxErase({ port, confirm: true })),
   gearBackups: (device: string | null) => ok(commands.gearBackups({ device })),
   gearBackupRead: (id: string, path: string | null) => ok(commands.gearBackupRead({ id, path })),
@@ -209,7 +209,7 @@ export const api = {
   /** The apply sheet's own Apply click for a firmware flash: the click is the confirm. */
   gearFlashClick: (p: FlashParams, digest: string) => ok(commands.gearFlashClick({ ...p, digest, confirm: true })),
   gearElrs: (check: boolean | null = null) => ok(commands.gearElrs({ check })),
-  gearElrsRead: (host: string, port: string | null = null) => ok(commands.gearElrsRead({ host, port })),
+  gearElrsRead: (host: string, port: string | null = null) => ok(commands.gearElrsRead({ host, port, confirm: true })),
   gearElrsFlashPlan: (p: ElrsFlashParams) => ok(commands.gearElrsFlashPlan(p)),
   /** The ELRS flash sheet's own Apply click: the click is the confirm. */
   gearElrsFlashClick: (p: ElrsFlashParams, digest: string) => ok(commands.gearElrsFlashClick({ ...p, digest, confirm: true })),
