@@ -7,7 +7,7 @@ use crate::core::Core;
 use crate::paths::support_dir;
 use anyhow::{bail, Context, Result};
 use serde_json::{json, Value};
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader, Read, Write};
 use std::os::unix::fs::PermissionsExt;
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::{Path, PathBuf};
@@ -42,15 +42,39 @@ pub fn serve(core: Arc<Core>, path: &Path) -> Result<()> {
     Ok(())
 }
 
+/// The longest request line the app reads. A longer one closes the connection.
+const MAX_LINE: u64 = 16 << 20;
+
+/// How long a connection may sit without sending its next request. A client sends each
+/// request as soon as it connects; a long job runs while the app is not reading.
+const IDLE: Duration = Duration::from_secs(60);
+
 fn handle(core: Arc<Core>, stream: UnixStream) {
     let Ok(mut out) = stream.try_clone() else {
         return;
     };
-    for line in BufReader::new(stream).lines().map_while(Result::ok) {
+    if stream.set_read_timeout(Some(IDLE)).is_err() {
+        return;
+    }
+    let mut reader = BufReader::new(stream);
+    loop {
+        let mut buf = Vec::new();
+        match (&mut reader).take(MAX_LINE + 1).read_until(b'\n', &mut buf) {
+            Ok(0) | Err(_) => return,
+            Ok(_) => {}
+        }
+        if buf.last() != Some(&b'\n') && buf.len() as u64 > MAX_LINE {
+            let reply = json!({"jsonrpc": "2.0", "id": null, "error": {"code": -32600, "message": format!("request longer than {MAX_LINE} bytes")}});
+            let _ = writeln!(out, "{reply}");
+            return;
+        }
+        let Ok(line) = String::from_utf8(buf) else {
+            return;
+        };
         if line.trim().is_empty() {
             continue;
         }
-        let reply = respond(&core, &line);
+        let reply = respond(&core, line.trim_end_matches(['\r', '\n']));
         if writeln!(out, "{reply}").is_err() {
             return;
         }

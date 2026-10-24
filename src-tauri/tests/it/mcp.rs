@@ -442,6 +442,32 @@ fn survives_an_app_restart() {
     assert_eq!(st["structuredContent"]["mode"], "app");
 }
 
+/// The control socket answers a request line too long to read with an error and closes the
+/// connection; the next connection works.
+#[test]
+fn the_control_socket_refuses_an_endless_line() {
+    use std::io::{BufRead, BufReader, Write};
+    let dir = tempfile::tempdir().unwrap();
+    let app = core(dir.path(), Arc::new(MockGui::default()), Arc::default());
+    let sock = dir.path().join("support/control.sock");
+    control::serve(app, &sock).unwrap();
+    let mut raw = std::os::unix::net::UnixStream::connect(&sock).unwrap();
+    let mut reader = BufReader::new(raw.try_clone().unwrap());
+    let chunk = vec![b'x'; 1 << 20];
+    for _ in 0..17 {
+        if raw.write_all(&chunk).is_err() {
+            break;
+        }
+    }
+    let mut line = String::new();
+    reader.read_line(&mut line).unwrap();
+    assert!(line.contains("request longer than"), "{line}");
+    line.clear();
+    assert_eq!(reader.read_line(&mut line).unwrap_or(0), 0, "closed");
+    let mut c = control::Client::connect(&sock).unwrap();
+    assert!(c.call("status", Value::Null).is_ok());
+}
+
 /// Format through MCP in app mode: every guard, explicit device + UUID + confirm, and the
 /// person's click in the GUI.
 #[test]
