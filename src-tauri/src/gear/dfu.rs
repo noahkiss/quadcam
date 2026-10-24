@@ -437,12 +437,12 @@ pub fn read_verified(
     let second = dfu.read(base, len, &mut |n| progress(len + n, total))?;
     if let Some(i) = first.iter().zip(&second).position(|(a, b)| a != b) {
         bail!(
-            "Two reads of the radio's flash differ (first difference at {:#010x}). The USB link is not reliable; try another cable or port.",
+            "Two reads of the device's flash differ (first difference at {:#010x}). The USB link is not reliable; try another cable or port.",
             base as usize + i
         );
     }
     if first.iter().all(|b| *b == 0) {
-        bail!("The radio's flash reads as all zeros; it may be read-protected. The copy would restore nothing.");
+        bail!("The device's flash reads as all zeros; it may be read-protected. The copy would restore nothing.");
     }
     Ok(VerifiedCopy { base, bytes: first })
 }
@@ -466,7 +466,7 @@ pub fn flash(
     }
     if !copy.covers(base, image.len()) {
         bail!(
-            "Refused: the verified copy of the radio's firmware does not cover the range to erase."
+            "Refused: the verified copy of the device's firmware does not cover the range to erase."
         );
     }
     let mut dfu = if quick {
