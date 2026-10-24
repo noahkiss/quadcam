@@ -166,18 +166,29 @@ impl Layout {
                 .split_once('*')
                 .ok_or_else(|| anyhow!("Unreadable sector group `{seg}`"))?;
             let count: u32 = count.trim().parse().context("sector count")?;
-            let kind = rest.chars().last().unwrap_or('a');
-            let body = &rest[..rest.len() - kind.len_utf8()];
+            let unreadable = || anyhow!("Unreadable sector group `{seg}`");
+            // The last letter is the sector type, `a` to `g`.
+            let kind = rest
+                .chars()
+                .last()
+                .filter(|k| ('a'..='g').contains(k))
+                .ok_or_else(unreadable)?;
+            let body = &rest[..rest.len() - 1];
             let (digits, mult) = match body.chars().last() {
                 Some('K') => (&body[..body.len() - 1], 1024),
                 Some('M') => (&body[..body.len() - 1], 1024 * 1024),
                 Some('B') => (&body[..body.len() - 1], 1),
                 _ => (body.trim(), 1),
             };
-            let size: u32 = digits.trim().parse::<u32>().context("sector size")? * mult;
+            let size = digits
+                .trim()
+                .parse::<u32>()
+                .context("sector size")?
+                .checked_mul(mult)
+                .ok_or_else(unreadable)?;
             let erasable = (kind as u8).wrapping_sub(b'a').wrapping_add(1) & 2 != 0;
             if size == 0 || count == 0 || count > 4096 {
-                bail!("Unreadable sector group `{seg}`");
+                return Err(unreadable());
             }
             for _ in 0..count {
                 sectors.push(Sector {
@@ -185,7 +196,9 @@ impl Layout {
                     size,
                     erasable,
                 });
-                addr += size;
+                addr = addr
+                    .checked_add(size)
+                    .ok_or_else(|| anyhow!("The memory layout runs past 4 GB: {s}"))?;
             }
         }
         Ok(Layout { name, sectors })
@@ -313,7 +326,7 @@ impl<'a> Dfu<'a> {
                 block.push(0xFF);
             }
             self.download(2 + n as u16, &block)?;
-            progress((n + 1) * self.transfer);
+            progress(n * self.transfer + chunk.len());
         }
         Ok(())
     }
@@ -335,6 +348,15 @@ impl<'a> Dfu<'a> {
             if b.is_empty() {
                 bail!(
                     "The DFU device sent no data at {:#010x}.",
+                    addr as usize + out.len()
+                );
+            }
+            // Block n is read from `addr + n * transfer`: a short block would shift every
+            // later one, and two reads that shift alike would still agree.
+            if b.len() < want {
+                bail!(
+                    "The DFU device sent {} bytes at {:#010x}, not {want}.",
+                    b.len(),
                     addr as usize + out.len()
                 );
             }
@@ -686,6 +708,8 @@ pub struct Faults {
     /// After this many uploads, every upload flips the low bit of byte 0 (a link that went
     /// bad part way).
     pub flip_after_reads: Option<usize>,
+    /// The upload of this block (0 = the first) answers half its bytes.
+    pub short_block: Option<usize>,
 }
 
 enum Pending {
@@ -883,7 +907,10 @@ impl Usb for FakeDfu {
                 if from >= self.flash.len() {
                     return Ok(Vec::new());
                 }
-                let to = (from + len.min(TRANSFER)).min(self.flash.len());
+                let mut to = (from + len.min(TRANSFER)).min(self.flash.len());
+                if self.faults.short_block == Some(value as usize - 2) {
+                    to = from + (to - from) / 2;
+                }
                 let mut b = self.flash[from..to].to_vec();
                 self.log
                     .push(format!("upload {at:#010x} {} bytes", b.len()));
@@ -940,6 +967,26 @@ mod tests {
         // A read-only sector type is not erasable.
         let ro = Layout::parse("@Option /0x1FFFC000/01*016Ka").unwrap();
         assert!(!ro.sectors[0].erasable);
+        // The string comes from the USB device: a malformed one is an error, never a panic.
+        for bad in [
+            "@x /0x08000000/04*",
+            "@x /0x08000000/04*016K",
+            "@x /0x08000000/04*016Kz",
+            "@x /0x08000000/04*g",
+            "@x /0x08000000/01*4096Mg",
+            "@x /0xFFFFC000/02*016Kg",
+        ] {
+            assert!(Layout::parse(bad).is_err(), "{bad}");
+        }
+    }
+
+    #[test]
+    fn a_short_upload_block_before_the_end_is_an_error() {
+        let mut dev = FakeDfu::with_firmware(&image(1000));
+        dev.faults.short_block = Some(1);
+        let mut d = Dfu::new(&mut dev);
+        let e = d.read(FLASH_BASE, 3 * TRANSFER, &mut |_| {}).unwrap_err();
+        assert!(format!("{e:#}").contains("bytes at"), "{e:#}");
     }
 
     #[test]
