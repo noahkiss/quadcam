@@ -3038,9 +3038,9 @@ fn gear_edit<B: Backend>(backend: &mut B, a: &Value) -> Result<(Vec<Value>, Valu
                         .unwrap_or_default()
                         .iter()
                         .map(|l| {
-                            let (f, t) = l
-                                .split_once('=')
-                                .with_context(|| format!("{l:?} is not a link: SOURCE=TARGET, such as SE=SH"))?;
+                            let (f, t) = l.split_once('=').with_context(|| {
+                                format!("{l:?} is not a link: SOURCE=TARGET, such as SE=SH")
+                            })?;
                             Ok(json!({"from": f.trim(), "to": t.trim()}))
                         })
                         .collect::<Result<Vec<_>>>()?;
