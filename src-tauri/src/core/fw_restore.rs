@@ -263,6 +263,7 @@ impl Core {
             )
         });
         let dfu = self.radio_dfu_checks(&device, "restore", &mut checks, &mut warnings);
+        let dfu_link = self.dfu_link_offer(&device, &dfu);
 
         if let Some(v) = &version {
             if compat::check_writable(Product::EdgetxFlash, Some(&board), Some(v)).is_err() {
@@ -321,6 +322,7 @@ impl Core {
                 diff,
                 digest,
                 warnings,
+                dfu_link,
             },
             device,
             copy,

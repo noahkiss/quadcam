@@ -942,6 +942,11 @@ export type ApplyPlan = {
 	digest: string,
 	/**  Things to know that do not refuse (a sim file shape not yet seen loading). */
 	warnings?: string[],
+	/**
+	 *  A radio flash or restore: the serial of the radio in DFU mode when no saved radio is
+	 *  linked to it yet, so the sheet can link it to this radio (`gear_dfu_link`) first.
+	 */
+	dfu_link?: string | null,
 };
 
 /**  `gear_apply_plan`: the change to plan. `port` picks the FC when several are plugged in. */

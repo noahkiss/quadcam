@@ -1187,6 +1187,7 @@ impl Core {
                 diff,
                 digest,
                 warnings,
+                dfu_link: None,
             },
             device,
             host,
@@ -1496,6 +1497,7 @@ fn plan_of(
         diff,
         digest: if ready { digest } else { String::new() },
         warnings,
+        dfu_link: None,
     }
 }
 

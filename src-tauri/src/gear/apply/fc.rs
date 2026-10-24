@@ -313,6 +313,7 @@ pub fn plan(
             diff,
             digest,
             warnings: Vec::new(),
+            dfu_link: None,
         },
         port: chosen.map(|c| c.port.clone()),
         render,

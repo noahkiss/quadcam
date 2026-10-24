@@ -278,6 +278,7 @@ impl Core {
                 diff,
                 digest,
                 warnings,
+                dfu_link: None,
             },
             writes: if ready { writes } else { Vec::new() },
             sim,

@@ -131,6 +131,9 @@ export interface GearSlice {
   /** Saved firmware copies, newest first; null before the first load. */
   fwCopies: FirmwareCopy[] | null;
   loadFwCopies: () => Promise<void>;
+  /** The flash or restore sheet's link step: links the radio in DFU mode to the sheet's radio,
+   *  then plans again. */
+  linkDfu: () => Promise<void>;
   closeApply: () => void;
   /** Apply in the open sheet. */
   runApply: () => Promise<void>;
@@ -263,6 +266,21 @@ export const createGearSlice: StateCreator<State, [], [], GearSlice> = (set, get
     } finally {
       firmwareBusy--;
     }
+  },
+  linkDfu: async () => {
+    const a = get().applySheet;
+    if (!a?.plan?.dfu_link || a.agent != null || a.busy) return;
+    try {
+      await api.gearDfuLink(a.device, a.plan.dfu_link);
+    } catch (e) {
+      set((s) => (same(s, a.token) ? { applySheet: { ...s.applySheet!, error: errText(e) } } : {}));
+      return;
+    }
+    await get().loadGear();
+    // The link changes the plan: plan again in the same sheet.
+    if (!same(get(), a.token)) return;
+    if (a.flash) await get().openFlash(a.flash);
+    else if (a.fwRestore) await get().openFirmwareRestore(a.fwRestore);
   },
   closeApply: () => {
     const a = get().applySheet;

@@ -77,3 +77,13 @@
   gap: var(--s-1);
   font-size: var(--t-md);
 }
+.link {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2) var(--s-3);
+}
+.link p {
+  flex: 1;
+  min-width: 16em;
+}

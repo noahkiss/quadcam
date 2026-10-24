@@ -679,7 +679,7 @@ export class MockCore {
       case "gear_radio_cli":
         throw "No device: no radio on a USB serial port. Plug it in and pick USB Serial on the radio.";
       case "gear_dfu_link":
-        throw "No radio is in DFU mode. Turn the radio off, then plug in the USB cable (do not hold the trim buttons, which start the EdgeTX bootloader instead). Wait a few seconds.";
+        return this.gearChanged(firmware.link(this.firmware, this.gear.devices, p as never));
       case "gear_firmware":
         return firmware.view(this.firmware, this.gear.devices, (p.check as boolean | null) ?? null, "2026-10-09T12:00:00Z", this.settings.values.bfFlashPreview === true);
       case "gear_elrs":

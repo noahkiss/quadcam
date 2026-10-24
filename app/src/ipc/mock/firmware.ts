@@ -7,7 +7,7 @@
 // `core/firmware.rs`, `core/fw_restore.rs` and `gear/firmware/check.rs`.
 import * as bf from "./bfflash";
 import type { ApplyPlan, ApplyReport, Check, Device, FirmwareCopy, FirmwareRead, FirmwareRestoreParams, FirmwareStatus, FirmwareView, FlashParams, FwCopy, SplashParams, SplashPreview } from "../types";
-import type { VendorFile } from "../../bindings";
+import type { DfuLinked, VendorFile } from "../../bindings";
 
 /** The DFU steps of each radio profile (`gear::radios` in the core). */
 const DFU_STEPS: Record<string, string[]> = {
@@ -29,6 +29,8 @@ export interface MockFirmware {
   mode: "manual" | "daily";
   /** STM32 DFU devices plugged in. */
   dfu: number;
+  /** The chip serial of the one radio in DFU mode. */
+  dfuSerial: string;
   /** Sources that fail the next check. */
   failing: string[];
   /** The EdgeTX version the radio's image names (`gear_firmware_read`). */
@@ -81,6 +83,7 @@ export const freshFirmware = (): MockFirmware => ({
   seen: {},
   mode: "manual",
   dfu: 1,
+  dfuSerial: "3A0F00125431",
   readVersion: "2.12.4",
   reads: 0,
   failing: [],
@@ -254,6 +257,24 @@ export function read(st: MockFirmware, devices: Device[], device: string | null)
 }
 
 /** `gear_flash_plan`. */
+/** `Core::dfu_link_offer`: the serial of the one radio in DFU mode when no saved radio holds it. */
+const linkOffer = (st: MockFirmware, devices: Device[], d: Device) => (st.dfu === 1 && !d.dfu_serial && !devices.some((x) => x.dfu_serial === st.dfuSerial) ? st.dfuSerial : null);
+
+/** `gear_dfu_link`: links the one radio in DFU mode to a saved radio (the one named). */
+export function link(st: MockFirmware, devices: Device[], p: { device?: string | null; serial?: string | null; unlink?: boolean }): DfuLinked {
+  const d = devices.find((x) => x.id === p.device && x.kind === "radio");
+  if (!d) throw `No saved radio ${p.device ?? ""}.`;
+  if (p.unlink) {
+    d.dfu_serial = null;
+    return { device: structuredClone(d), serial: null, how: "picked", notes: [] };
+  }
+  if (st.dfu !== 1) throw st.dfu ? `${st.dfu} radios are in DFU mode; unplug all but one, or name the serial.` : "No radio is in DFU mode. Turn the radio off, then plug in the USB cable (do not hold the trim buttons, which start the EdgeTX bootloader instead). Wait a few seconds.";
+  const serial = p.serial ?? st.dfuSerial;
+  for (const x of devices) if (x.dfu_serial === serial) x.dfu_serial = null;
+  d.dfu_serial = serial;
+  return { device: structuredClone(d), serial, how: "picked", notes: [] };
+}
+
 export function plan(st: MockFirmware, devices: Device[], p: FlashParams, bfPreview = false): ApplyPlan {
   const d = devices.find((x) => x.id === p.device);
   if (!d) throw `No saved device ${p.device}.`;
@@ -290,8 +311,9 @@ export function plan(st: MockFirmware, devices: Device[], p: FlashParams, bfPrev
     device: idOf(d),
     checks,
     diff,
-    digest: ready ? `flash-${d.id}-${target}-${p.splash ? splash(p.splash).hash : "none"}` : "",
-    warnings: ["A radio in DFU mode shows no name. QuadCam writes the one radio in DFU mode; check it is the radio you picked.", "QuadCam reads the radio's current firmware over DFU twice first and keeps it as a copy; it erases nothing until both reads agree and the saved file reads back. If a flash fails, the radio's ROM bootloader still answers over USB (turn it off, plug in USB) and you can flash again. Flashing has not been tried on a real radio yet."],
+    digest: ready ? `flash-${d.id}-${target}-${p.splash ? splash(p.splash).hash : "none"}-${d.dfu_serial ?? ""}` : "",
+    dfu_link: linkOffer(st, devices, d),
+    warnings: [...(linkOffer(st, devices, d) ? [`This DFU device is not linked to a radio yet. A verified flash links it to ${d.name}.`] : []), "A radio in DFU mode shows no name. QuadCam writes the one radio in DFU mode; check it is the radio you picked.", "QuadCam reads the radio's current firmware over DFU twice first and keeps it as a copy; it erases nothing until both reads agree and the saved file reads back. If a flash fails, the radio's ROM bootloader still answers over USB (turn it off, plug in USB) and you can flash again. Flashing has not been tried on a real radio yet."],
   };
 }
 
@@ -323,6 +345,8 @@ export function flash(st: MockFirmware, devices: Device[], p: FlashParams, diges
     };
   }
   st.flashed.push(p.device);
+  // A verified flash links the DFU device to the radio.
+  if (pl.dfu_link) link(st, devices, { device: p.device, serial: pl.dfu_link });
   return {
     ...base,
     status: "verified",
@@ -384,8 +408,9 @@ export function restorePlan(st: MockFirmware, devices: Device[], p: FirmwareRest
       { kind: "version", label: "EdgeTX firmware", before: idOf(d).version ?? null, after: copy.image_version ?? "unknown" },
       { kind: "files", label: "Firmware image", put: [`${copy.id} (${Math.floor(copy.size / 1024)} KB)`, `SHA-256 ${copy.sha256}`], delete: [] },
     ],
-    digest: ready ? `restore-${d.id}-${copy.id}` : "",
-    warnings,
+    digest: ready ? `restore-${d.id}-${copy.id}-${d.dfu_serial ?? ""}` : "",
+    dfu_link: linkOffer(st, devices, d),
+    warnings: [...(linkOffer(st, devices, d) ? [`This DFU device is not linked to a radio yet. A verified restore links it to ${d.name}.`] : []), ...warnings],
   };
 }
 
@@ -417,6 +442,7 @@ export function restore(st: MockFirmware, devices: Device[], p: FirmwareRestoreP
   }
   st.current = copy.sha256;
   st.restored.push(copy.id);
+  if (pl.dfu_link) link(st, devices, { device: p.device, serial: pl.dfu_link });
   return {
     ...base,
     status: "verified",

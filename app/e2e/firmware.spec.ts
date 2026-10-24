@@ -85,6 +85,25 @@ test("a flash shows its checks, needs the DFU radio, and writes only on Apply", 
   expect((await app.calls("gear_flash_click")).length).toBe(1);
 });
 
+test("the flash sheet links an unlinked DFU device to the radio, then plans again", async ({ app, page }) => {
+  await openFirmware(app, page);
+  await makePocket(app);
+  await page.getByRole("button", { name: "Check for updates" }).click();
+  await page.getByRole("button", { name: "Flash 2.12.4…" }).click();
+  const sheet = page.getByRole("dialog", { name: "Flash Field radio" });
+  const link = sheet.getByRole("region", { name: "DFU device" });
+  await expect(link).toContainText("3A0F00125431");
+  await expect(sheet.getByRole("region", { name: "Warnings" })).toContainText("This DFU device is not linked to a radio yet.");
+  const plans = (await app.method("gear_flash_plan")).length;
+  await link.getByRole("button", { name: "Link to Field radio" }).click();
+  await expect(link).toBeHidden();
+  expect(await app.method("gear_dfu_link")).toEqual([{ device: RADIO_ID, serial: "3A0F00125431", unlink: false }]);
+  expect((await app.method("gear_flash_plan")).length).toBe(plans + 1);
+  await expect(sheet.getByRole("region", { name: "Warnings" })).not.toContainText("not linked");
+  await expect(sheet.getByRole("button", { name: "Apply" })).toBeEnabled();
+  expect(await app.calls("gear_flash_click")).toEqual([]);
+});
+
 test("a bad read back is reported and the radio stays in DFU", async ({ app, page }) => {
   await openFirmware(app, page);
   await makePocket(app);

@@ -986,6 +986,11 @@ fn a_blank_radio_can_be_flashed_once_linked_and_a_wrong_sized_chip_cannot() {
     let p = params(&b, None);
     // A blank chip names no board: only a linked DFU device may take the image.
     let plan = b.core.gear_flash_plan(&p).unwrap();
+    // The plan offers the unlinked DFU device to the sheet's link step.
+    let serial = plan
+        .dfu_link
+        .clone()
+        .expect("an unlinked DFU device is offered");
     let e = b.core.gear_flash(&request(&p, &plan)).unwrap_err();
     let why = refusal(e);
     assert_eq!(why.code, RefusalCode::DeviceChanged);
@@ -994,10 +999,15 @@ fn a_blank_radio_can_be_flashed_once_linked_and_a_wrong_sized_chip_cannot() {
     b.core
         .gear_dfu_link(&quadcam_lib::core::DfuLinkParams {
             device: Some(b.radio.clone()),
+            serial: Some(serial),
             ..Default::default()
         })
         .unwrap();
     let plan = b.core.gear_flash_plan(&p).unwrap();
+    assert_eq!(
+        plan.dfu_link, None,
+        "a linked DFU device needs no link step"
+    );
     let r = b.core.gear_flash(&request(&p, &plan)).unwrap();
     assert_eq!(r.status, ChangeStatus::Verified, "{}", r.message);
     assert!(r.backup.is_none(), "there was nothing to keep");

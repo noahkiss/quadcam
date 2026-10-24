@@ -208,6 +208,8 @@ export const api = {
   gearFirmwareRestoreClick: (p: FirmwareRestoreParams, digest: string) => ok(commands.gearFirmwareRestoreClick({ ...p, digest, confirm: true })),
   gearSplash: (p: SplashParams) => ok(commands.gearSplash(p)),
   gearFlashPlan: (p: FlashParams) => ok(commands.gearFlashPlan(p)),
+  /** Links the one radio in DFU mode (`serial`) to the saved radio `device`. */
+  gearDfuLink: (device: string, serial: string | null) => ok(commands.gearDfuLink({ device, serial, unlink: false })),
   /** The apply sheet's own Apply click for a firmware flash: the click is the confirm. */
   gearFlashClick: (p: FlashParams, digest: string) => ok(commands.gearFlashClick({ ...p, digest, confirm: true })),
   gearElrs: (check: boolean | null = null) => ok(commands.gearElrs({ check })),

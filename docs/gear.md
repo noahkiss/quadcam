@@ -112,6 +112,9 @@ same saved radio, with its name, aircraft and backups.
 stable id, but no name. QuadCam cannot match it to the storage-mode radio by itself, so the
 serial is linked to a saved radio once and kept in that radio's record:
 
+- In the flash or restore sheet, **DFU device** shows the serial of an unlinked radio in DFU
+  mode; **Link to RADIO** links it to the sheet's radio and plans again. The plan names that
+  serial in `dfu_link`.
 - `gear dfu-link --device RADIO` links the radio now in DFU mode to the radio you name.
   Without `--device` QuadCam takes the saved radio seen most recently and says so. A serial
   belongs to one radio; linking it to another moves it. `--unlink` removes it.
@@ -1851,7 +1854,7 @@ lists the profiles.
      DFU device not yet linked to a radio;
    - refuses a blank flash, or firmware that names no board, on a DFU device not linked to
      this radio: the flash size alone does not tell two radios apart. Link it first
-     (`quadcam-cli gear dfu-link --device <radio id>`, or the MCP action `dfu_link`);
+     (**Link to RADIO** in the sheet, `quadcam-cli gear dfu-link --device <radio id>`, or the MCP action `dfu_link`);
    - erases the sectors it needs and writes the image in 16 KB segments, reading each segment
      back before it writes the next;
    - reads the whole image back and compares every byte;
@@ -1885,7 +1888,8 @@ missing or broken can still be put in DFU mode, and QuadCam can flash it again.
 2. Plug in the USB cable, with no button held (a GX12: top port, hold SG, tap power, let go
    of SG). Wait a few seconds.
 3. Open **Firmware > Flash…** and select **Apply**, or **Restore…** on a saved copy. A blank
-   flash is allowed once the DFU device is linked to the radio (`gear dfu-link`).
+   flash is allowed once the DFU device is linked to the radio (**Link to RADIO** in the
+   sheet, or `gear dfu-link`).
 4. If QuadCam cannot do it, use a DFU tool on the copy in `firmware/<radio>/`. Another
    option is STM32CubeProgrammer with the release's `<board>-<hash>.bin` at address
    `0x08000000`.

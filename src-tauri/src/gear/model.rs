@@ -692,6 +692,10 @@ pub struct ApplyPlan {
     /// Things to know that do not refuse (a sim file shape not yet seen loading).
     #[serde(default)]
     pub warnings: Vec<String>,
+    /// A radio flash or restore: the serial of the radio in DFU mode when no saved radio is
+    /// linked to it yet, so the sheet can link it to this radio (`gear_dfu_link`) first.
+    #[serde(default)]
+    pub dfu_link: Option<String>,
 }
 
 impl ApplyPlan {

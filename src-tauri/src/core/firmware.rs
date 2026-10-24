@@ -345,6 +345,7 @@ impl Core {
         });
 
         let dfu = self.radio_dfu_checks(&device, "flash", &mut checks, &mut warnings);
+        let dfu_link = self.dfu_link_offer(&device, &dfu);
         warnings.push(
             "A radio in DFU mode shows no name. QuadCam writes the one radio in DFU mode; check it is the radio you picked.".into(),
         );
@@ -380,11 +381,24 @@ impl Core {
                 diff,
                 digest,
                 warnings,
+                dfu_link,
             },
             device,
             image,
             dfu: dfu.into_iter().next(),
         })
+    }
+
+    /// The serial of the one radio in DFU mode when neither `device` nor any other saved radio
+    /// is linked to it, for the sheet's link step.
+    pub(super) fn dfu_link_offer(&self, device: &Device, dfu: &[DfuInfo]) -> Option<String> {
+        let [one] = dfu else { return None };
+        let serial = one.serial.clone().filter(|s| !s.is_empty())?;
+        let saved = self.gear_store().devices().unwrap_or_default();
+        let owned = saved
+            .iter()
+            .any(|d| d.dfu_serial.as_deref() == Some(serial.as_str()));
+        (device.dfu_serial.is_none() && !owned).then_some(serial)
     }
 
     /// The DFU checks a flash and a restore share: exactly one radio in DFU mode, and that it
@@ -758,7 +772,7 @@ impl Core {
             return Err(refuse(
                 RefusalCode::DeviceChanged,
                 format!(
-                    "{what}, so QuadCam cannot tell the radio in DFU mode is {name}. Link this DFU device to {name} first (gear_dfu_link), then plan again. Nothing was erased."
+                    "{what}, so QuadCam cannot tell the radio in DFU mode is {name}. Link this DFU device to {name} first (Link to {name} in the flash sheet, or gear_dfu_link), then plan again. Nothing was erased."
                 ),
             ));
         }

@@ -119,6 +119,7 @@ pub fn plan(
             diff: Vec::new(),
             digest: String::new(),
             warnings: Vec::new(),
+            dfu_link: None,
         },
         cand,
         files: None,
@@ -238,6 +239,7 @@ pub fn plan(
             // What the sheet shows before the apply (a haptic mode that drops special-function
             // haptics, a new stick mode).
             warnings: cp.warnings.clone(),
+            dfu_link: None,
         },
         cand: Some(cand.clone()),
         warnings: cp.warnings.clone(),

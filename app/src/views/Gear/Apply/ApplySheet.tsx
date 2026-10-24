@@ -20,6 +20,7 @@ export function ApplySheet() {
   const connected = useStore((s) => s.gear?.connected);
   const changes = useStore((s) => s.changes);
   const close = useStore((s) => s.closeApply);
+  const linkDfu = useStore((s) => s.linkDfu);
   const run = useStore((s) => s.runApply);
   const restore = useStore((s) => s.restoreBeforeApply);
   const next = useStore((s) => s.nextApply);
@@ -101,6 +102,19 @@ export function ApplySheet() {
                 <h4>Checks</h4>
                 <ChecksList checks={a.plan.checks} />
               </section>
+              {(kind === "firmware" || kind === "restore") && a.plan.dfu_link && a.agent == null && (
+                <section aria-label="DFU device">
+                  <h4>DFU device</h4>
+                  <div className={styles.link}>
+                    <p className={styles.muted}>
+                      The radio in DFU mode (serial <span className="mono selectable">{a.plan.dfu_link}</span>) is not linked to {name}.
+                    </p>
+                    <Button size="sm" disabled={working} onClick={() => void linkDfu()}>
+                      Link to {name}
+                    </Button>
+                  </div>
+                </section>
+              )}
               {(a.plan.warnings ?? []).length > 0 && (
                 <section aria-label="Warnings">
                   <h4>Warnings</h4>

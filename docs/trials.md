@@ -620,7 +620,8 @@ can always be put back in DFU mode.
 
 **Steps**
 
-1. Link the radio to its DFU identity once. Put the radio in DFU mode (below), then run
+1. Link the radio to its DFU identity once. Put the radio in DFU mode (below), then select
+   **Link to <radio>** under **DFU device** in the flash sheet, or run
    `quadcam-cli --json gear dfu-link --device <radio id>`. Check the answer names your radio.
 2. Open **Gear > Firmware**. In the radio's row select **Flash <version>…**. Read **Checks**: the
    board and version, the firmware image, the splash markers, the card backup, and exactly one

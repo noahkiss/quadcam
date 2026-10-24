@@ -490,6 +490,7 @@ impl Core {
                 diff,
                 digest,
                 warnings,
+                dfu_link: None,
             },
             device,
             port: chosen.map(|c| c.port.clone()),
