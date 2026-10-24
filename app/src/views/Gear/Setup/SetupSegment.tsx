@@ -16,6 +16,7 @@ import { api, errText } from "../../../ipc/api";
 import type { JobRow, RadioSetupDetail, SlotRow, SwitchMap } from "../../../ipc/types";
 import { assign, atText, controlChoices, controlText, defaultHigh, fit, generalProblems, hasPositions, kindsOf, learnBaseline, learnPick, learnResult, positionText, problemsFor, slotTypeText, sourceWords, statusText, type LearnBaseline } from "../../../lib/setup";
 import { useStore } from "../../../store";
+import { discardWithAsk } from "../Changes/discard";
 import type { DeviceRef } from "../slots";
 import { useRadio } from "../Switches/hooks";
 import { CopyDialog } from "./CopyDialog";
@@ -84,7 +85,6 @@ export function SetupSegment({ d }: { d: DeviceRef }) {
 function StatusBar({ device, detail, s }: { device: string; detail: RadioSetupDetail; s: UseSetup }) {
   const change = useStore((st) => openSetupChange(st.changes, device));
   const open = useStore((st) => st.openApply);
-  const discard = useStore((st) => st.discardChange);
   const review = async () => {
     const c = await s.edit({ stage: true });
     if (c) await open(device, c.id);
@@ -102,7 +102,7 @@ function StatusBar({ device, detail, s }: { device: string; detail: RadioSetupDe
             <Button size="sm" disabled={s.busy || s.draft} onClick={() => void review()}>
               Review…
             </Button>
-            <Button size="sm" variant="danger-ghost" onClick={() => discard(change.id)}>
+            <Button size="sm" variant="danger-ghost" onClick={() => void discardWithAsk(change, { title: "Discard the staged setup?" })}>
               Discard staged setup
             </Button>
           </>

@@ -4,7 +4,7 @@
 // sheet; Copy from another radio; Learn from the radio in USB Joystick mode; axe in both themes.
 import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
-import { axeSchemes, expect, test, type AppFixture } from "./fixtures";
+import { axeSchemes, dialog, expect, test, type AppFixture } from "./fixtures";
 
 const RADIO_ID = "radio-1f2e3d4c5b6a7980";
 const RADIO_LINK = `{ kind: "volume", mount: "/Volumes/RADIO", volume_uuid: null, bus_protocol: "USB", whole_disk: "disk4" }`;
@@ -97,6 +97,7 @@ test("Review stages one Radio setup change and opens the apply sheet", async ({ 
   await jobRow(page, "VTX power").getByLabel("VTX power: control").selectOption("SL1");
   await expect.poll(async () => ((await app.method("gear_radio_setup_edit")).at(-1) as { stage?: boolean }).stage).toBe(true);
   await page.getByRole("button", { name: "Discard staged setup" }).click();
+  await dialog(page, "Discard the staged setup?").getByRole("button", { name: "Discard" }).click();
   await expect(page.getByText(/The setup is staged/)).toHaveCount(0);
 });
 
