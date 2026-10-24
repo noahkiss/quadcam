@@ -282,14 +282,14 @@ struct LoadsDuringPhotos {
 }
 
 impl quadcam_lib::photos::PhotosLibrary for LoadsDuringPhotos {
-    fn add_videos(&self, _: &[PathBuf], _: Option<&str>) -> anyhow::Result<()> {
+    fn add_videos(&self, _: &[PathBuf], _: Option<&str>) -> anyhow::Result<Vec<PathBuf>> {
         let core = self.core.get().and_then(|w| w.upgrade()).unwrap();
         let r = core.load(Some(&self.other));
         *self.answer.lock().unwrap() = Some(match r {
             Ok(_) => "loaded".into(),
             Err(e) => format!("{e:#}"),
         });
-        Ok(())
+        Ok(Vec::new())
     }
 }
 
