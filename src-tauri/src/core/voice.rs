@@ -944,6 +944,12 @@ impl Core {
             std::fs::create_dir_all(&stage)?;
             if dir.is_dir() && !p.lines.is_empty() {
                 copy_dir(&dir, &stage)?;
+            } else if dir.join(super::voice_samples::FLAGS_FILE).is_file() {
+                // A full re-render makes every sound again; the person's flags stay.
+                std::fs::copy(
+                    dir.join(super::voice_samples::FLAGS_FILE),
+                    stage.join(super::voice_samples::FLAGS_FILE),
+                )?;
             }
             let done = packs::render_to(&opts, &ctx, &chosen, &spelling, &stage, &mut |_, _| {});
             match done {

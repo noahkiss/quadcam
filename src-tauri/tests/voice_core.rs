@@ -365,6 +365,24 @@ fn a_provider_that_may_charge_waits_for_confirm() {
 }
 
 #[test]
+fn a_full_line_by_line_render_keeps_the_packs_flags() {
+    let b = bench(Opts::default());
+    let r = render(&b, &[], false, false);
+    let flags = b
+        .dir
+        .path()
+        .join("support/gear/voices")
+        .join(&r.pack)
+        .join("flags.json");
+    std::fs::write(&flags, br#"{"SOUNDS/en/armed.wav":{"reason":"noise"}}"#).unwrap();
+    render(&b, &[], false, false);
+    assert_eq!(
+        std::fs::read(&flags).unwrap(),
+        br#"{"SOUNDS/en/armed.wav":{"reason":"noise"}}"#
+    );
+}
+
+#[test]
 fn a_paid_build_pack_confirms_with_its_digest() {
     let b = bench(Opts::default());
     b.paid.store(true, Ordering::SeqCst);

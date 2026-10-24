@@ -1331,7 +1331,10 @@ impl Core {
                 lines::check_path(&l.line.path)?;
                 let file = dir.join(&l.line.path);
                 std::fs::create_dir_all(file.parent().unwrap_or(&dir))?;
-                std::fs::write(&file, &wav)?;
+                // Through a temporary file: a crash never leaves a half WAV in the gallery.
+                let tmp = file.with_extension("tmp");
+                std::fs::write(&tmp, &wav)?;
+                std::fs::rename(&tmp, &file)?;
                 report.items.push(SampleItem {
                     voice: vid.clone(),
                     voice_name: vname.clone(),

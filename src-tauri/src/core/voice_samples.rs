@@ -34,7 +34,7 @@ pub const FLAG_REASONS: &[&str] = &["mispronounced", "clipped", "wrong_tone", "n
 /// The sample manifest in each sample folder.
 const SAMPLES_FILE: &str = "samples.json";
 /// The flags beside the takes, in a sample folder or a pack.
-const FLAGS_FILE: &str = "flags.json";
+pub(super) const FLAGS_FILE: &str = "flags.json";
 /// The longest note a flag keeps.
 const NOTE_MAX: usize = 500;
 /// A pack's card shows these many lines when it holds none of the `sample` set.

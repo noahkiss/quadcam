@@ -690,7 +690,8 @@ the voices, the models, the line sets, the cost, **Sample** and **Render pack**,
 - **Line sets.** A set is a list of lines to render. Sets combine, and a line in two sets is
   rendered once. Every line has a card path, its text, a tone and the sets that hold it.
   Four tones batch separately, so a calm word never picks up a warning's voice: `calm`,
-  `alert` (warnings), `number` (numbers and units) and `fun` (easter eggs).
+  `alert` (warnings), `number` (numbers and units) and `fun` (easter eggs). The same text
+  in two tones is rendered once, in the tone of the first line that holds it, and both lines use that take.
 
   | Set | Lines | Holds |
   |---|---|---|

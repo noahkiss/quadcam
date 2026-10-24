@@ -303,12 +303,6 @@ impl Core {
         }
         m.files.sort();
         for (path, heard, take) in &held {
-            if !was_held.contains(path) {
-                let to = self.held_dir(id).join(path);
-                std::fs::create_dir_all(to.parent().unwrap())?;
-                let _ = std::fs::remove_file(&to);
-                std::fs::rename(dir.join(path), &to)?;
-            }
             m.files.retain(|f| f != path);
             m.retakes.retain(|r| r.path != *path);
             m.retakes.push(Retake {
@@ -331,7 +325,15 @@ impl Core {
             }
         }
         m.lines = m.files.len() as u32;
+        // The manifest first: a file it no longer names may still sit in the pack, but one it
+        // names is never gone (Choose voice would find the pack lost).
         write_manifest(&dir, &m)?;
+        for (path, _, _) in held.iter().filter(|(p, _, _)| !was_held.contains(p)) {
+            let to = self.held_dir(id).join(path);
+            std::fs::create_dir_all(to.parent().unwrap())?;
+            let _ = std::fs::remove_file(&to);
+            std::fs::rename(dir.join(path), &to)?;
+        }
         if !takes.is_empty() {
             if let Err(e) = LineIndex::record(&scope, takes.into_values().collect()) {
                 report.notes.push(format!(
