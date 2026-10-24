@@ -140,32 +140,40 @@ impl Store {
     /// Adds a device or replaces the one with its id. Other devices and every other key
     /// stay as they are, unknown fields of the entries included.
     pub fn save_device(&self, device: &Device) -> Result<Device> {
-        let mut entry = serde_json::to_value(device)?;
-        // Worked out on every read, never saved: a radio's aircraft are in the profiles.
-        if let Value::Object(m) = &mut entry {
-            m.remove(RADIO_AIRCRAFT);
-            if device.kind == DeviceKind::Radio {
-                m.remove(AIRCRAFT);
-            }
-        }
+        let entry = entry_of(device)?;
         self.update(|v| {
-            let list = devices_mut(v)?;
-            match list
-                .iter_mut()
-                .find(|d| d.get("id").and_then(Value::as_str) == Some(device.id.as_str()))
-            {
-                // Keep fields a later version added to the entry.
-                Some(Value::Object(old)) => {
-                    if let Value::Object(new) = entry {
-                        old.extend(new);
-                    }
-                }
-                Some(other) => *other = entry,
-                None => list.push(entry),
-            }
+            put_entry(devices_mut(v)?, &device.id, entry);
             Ok(())
         })?;
         Ok(device.clone())
+    }
+
+    /// Changes one saved device under the lock, on the entry as the file holds it now, so
+    /// a write another process made since this one read the file (the app's poll, the CLI)
+    /// is never undone. `new` is the device to start from when it is not saved; None
+    /// refuses then. Returns the device as saved.
+    pub fn edit_device(
+        &self,
+        id: &str,
+        new: Option<Device>,
+        edit: impl FnOnce(&mut Device),
+    ) -> Result<Device> {
+        let (d, _) = self.update(|v| {
+            let list = devices_mut(v)?;
+            // An entry that does not parse is filled from `new`; its unknown keys stay.
+            let mut d = match list
+                .iter()
+                .find(|d| d.get("id").and_then(Value::as_str) == Some(id))
+                .and_then(|e| serde_json::from_value::<Device>(e.clone()).ok())
+            {
+                Some(d) => d,
+                None => new.with_context(|| format!("No device with id {id:?}."))?,
+            };
+            edit(&mut d);
+            put_entry(list, id, entry_of(&d)?);
+            Ok(d)
+        })?;
+        Ok(d)
     }
 
     /// Removes a device from `gear.json` and returns it. Its backups stay.
@@ -189,7 +197,7 @@ impl Store {
         identity: &super::model::Identity,
     ) -> Result<Device> {
         let now = chrono::Utc::now();
-        let mut d = self.device(id)?.unwrap_or(Device {
+        let new = Device {
             id: id.to_string(),
             kind,
             name: String::new(),
@@ -202,10 +210,41 @@ impl Store {
             dfu_serial: None,
             radio_aircraft: None,
             firmware_channel: None,
-        });
-        d.last_seen = Some(now);
-        merge_identity(&mut d.identity, identity);
-        self.save_device(&d)
+        };
+        self.edit_device(id, Some(new), |d| {
+            d.last_seen = Some(now);
+            merge_identity(&mut d.identity, identity);
+        })
+    }
+}
+
+/// A device as its `gear.json` entry.
+fn entry_of(device: &Device) -> Result<Value> {
+    let mut entry = serde_json::to_value(device)?;
+    // Worked out on every read, never saved: a radio's aircraft are in the profiles.
+    if let Value::Object(m) = &mut entry {
+        m.remove(RADIO_AIRCRAFT);
+        if device.kind == DeviceKind::Radio {
+            m.remove(AIRCRAFT);
+        }
+    }
+    Ok(entry)
+}
+
+/// Adds the entry, or replaces the one with its id.
+fn put_entry(list: &mut Vec<Value>, id: &str, entry: Value) {
+    match list
+        .iter_mut()
+        .find(|d| d.get("id").and_then(Value::as_str) == Some(id))
+    {
+        // Keep fields a later version added to the entry.
+        Some(Value::Object(old)) => {
+            if let Value::Object(new) = entry {
+                old.extend(new);
+            }
+        }
+        Some(other) => *other = entry,
+        None => list.push(entry),
     }
 }
 
@@ -378,6 +417,29 @@ mod tests {
         std::fs::write(s.gear_file(), r#"{"devices": 3}"#).unwrap();
         let e = s.save_device(&dev("fc-1")).unwrap_err();
         assert!(format!("{e:#}").contains("not a list"), "{e:#}");
+    }
+
+    /// The app's poll and the CLI each hold a copy read a moment ago: an edit changes the
+    /// entry the file holds now, so the other's write in between stays.
+    #[test]
+    fn an_edit_keeps_a_write_made_since_the_read() {
+        let d = tempfile::tempdir().unwrap();
+        let s = Store::new(d.path());
+        s.save_device(&dev("fc-1")).unwrap();
+        let stale = s.device("fc-1").unwrap().unwrap();
+        let mut named = stale.clone();
+        named.name = "Air".into();
+        s.save_device(&named).unwrap();
+        let id = stale.id.clone();
+        s.seen(&id, stale.kind, &stale.identity).unwrap();
+        s.edit_device(&id, None, |d| d.last_backup = Some("b1".into()))
+            .unwrap();
+        let now = s.device("fc-1").unwrap().unwrap();
+        assert_eq!(now.name, "Air");
+        assert_eq!(now.last_backup.as_deref(), Some("b1"));
+        assert!(now.last_seen.is_some());
+        assert!(s.edit_device("fc-9", None, |_| {}).is_err());
+        assert_eq!(s.devices().unwrap().len(), 1);
     }
 
     #[test]

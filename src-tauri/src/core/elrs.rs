@@ -1401,9 +1401,9 @@ impl Core {
                     StepState::Done,
                     Some("esptool: hash of data verified".into()),
                 ));
-                let mut d = prep.device.clone();
-                d.identity.version = Some(prep.version.clone());
-                let _ = self.gear_store().save_device(&d);
+                let _ = self.gear_store().edit_device(&prep.device.id, None, |d| {
+                    d.identity.version = Some(prep.version.clone());
+                });
                 (
                     ChangeStatus::Verified,
                     format!(

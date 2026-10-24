@@ -530,12 +530,13 @@ impl Core {
         space: Option<crate::gear::model::SpaceSeen>,
     ) -> Result<BackupResult> {
         let store = self.gear_store();
-        let mut d = store.seen(id, kind, identity)?;
-        d.last_backup = Some(report.backup.id.clone());
-        if space.is_some() {
-            d.last_space = space;
-        }
-        let d = store.save_device(&d)?;
+        store.seen(id, kind, identity)?;
+        let d = store.edit_device(id, None, |d| {
+            d.last_backup = Some(report.backup.id.clone());
+            if space.is_some() {
+                d.last_space = space;
+            }
+        })?;
         let pruned = if report.new && report.backup.trigger != Trigger::Import {
             let s = self.gear_settings();
             Some(
@@ -665,25 +666,21 @@ impl Core {
                 .collect::<std::collections::BTreeSet<_>>()
             {
                 let Some(latest) = s.latest(id) else { continue };
-                let mut d = match store.device(id)? {
-                    Some(d) => d,
-                    None => Device {
-                        id: id.clone(),
-                        kind: backup::kind_of_id(id).unwrap_or(DeviceKind::Fc),
-                        name: String::new(),
-                        aircraft: None,
-                        identity: latest.identity.clone(),
-                        last_seen: None,
-                        last_backup: None,
-                        last_space: None,
-                        aliases: Vec::new(),
-                        dfu_serial: None,
-                        radio_aircraft: None,
-                        firmware_channel: None,
-                    },
+                let new = Device {
+                    id: id.clone(),
+                    kind: backup::kind_of_id(id).unwrap_or(DeviceKind::Fc),
+                    name: String::new(),
+                    aircraft: None,
+                    identity: latest.identity.clone(),
+                    last_seen: None,
+                    last_backup: None,
+                    last_space: None,
+                    aliases: Vec::new(),
+                    dfu_serial: None,
+                    radio_aircraft: None,
+                    firmware_channel: None,
                 };
-                d.last_backup = Some(latest.id.clone());
-                store.save_device(&d)?;
+                store.edit_device(id, Some(new), |d| d.last_backup = Some(latest.id.clone()))?;
             }
             self.hooks.gear_changed();
         }

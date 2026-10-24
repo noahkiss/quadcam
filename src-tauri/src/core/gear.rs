@@ -187,8 +187,14 @@ impl Core {
             let mut seen: Vec<String> = c.id.iter().chain(c.also.iter()).cloned().collect();
             seen.retain(|id| *id != d.id && !d.aliases.contains(id));
             if !seen.is_empty() && !d.id.is_empty() {
-                d.aliases.extend(seen);
-                let _ = store.save_device(&d);
+                d.aliases.extend(seen.iter().cloned());
+                let _ = store.edit_device(&d.id, None, |saved| {
+                    for id in seen {
+                        if !saved.aliases.contains(&id) {
+                            saved.aliases.push(id);
+                        }
+                    }
+                });
             }
             c.id = Some(d.id.clone());
             // A radio detection could not name (in DFU mode) takes the saved radio's board.

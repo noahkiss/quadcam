@@ -827,9 +827,9 @@ impl Core {
                 }
                 if device.dfu_serial.is_none() {
                     if let Some(serial) = dfu_info.serial.clone().filter(|s| !s.is_empty()) {
-                        let mut d = device.clone();
-                        d.dfu_serial = Some(serial);
-                        let _ = self.gear_store().save_device(&d);
+                        let _ = self.gear_store().edit_device(&device.id, None, |d| {
+                            d.dfu_serial.get_or_insert(serial);
+                        });
                     }
                 }
                 (
