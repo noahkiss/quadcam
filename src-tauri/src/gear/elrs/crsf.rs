@@ -462,14 +462,20 @@ mod tests {
     #[test]
     fn frames_start_with_a_byte_the_device_takes() {
         // A module takes 0xC8 or 0xEE first, a receiver 0xC8, 0xEE or 0xEC.
-        assert_eq!(ping(), vec![0xC8, 0x04, 0x28, 0x00, 0xEA, crc8(&[0x28, 0x00, 0xEA])]);
+        assert_eq!(
+            ping(),
+            vec![0xC8, 0x04, 0x28, 0x00, 0xEA, crc8(&[0x28, 0x00, 0xEA])]
+        );
         assert_eq!(heartbeat()[..3], [0xC8, 0x04, 0x0B]);
         assert_eq!(read_request(ADDR_TX, 1, 0)[0], 0xEE);
         assert_eq!(read_request(ADDR_RX, 1, 0)[0], 0xEC);
         let mut p = FrameParser::new();
         p.push(&heartbeat());
         let f = p.take().unwrap();
-        assert_eq!((f.kind, f.payload.as_slice()), (T_HEARTBEAT, &[0x00, 0xEA][..]));
+        assert_eq!(
+            (f.kind, f.payload.as_slice()),
+            (T_HEARTBEAT, &[0x00, 0xEA][..])
+        );
         assert!(ext(&f).is_none(), "not a device message");
     }
 

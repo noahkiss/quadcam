@@ -358,7 +358,7 @@ impl CrsfLink {
                         && e.body.len() >= 2
                         && e.body[0] == id
                         && expect.is_none_or(|x| e.body[1] == x))
-                        .then(|| (e.body[1], e.body[2..].to_vec()))
+                    .then(|| (e.body[1], e.body[2..].to_vec()))
                 })?;
                 if got.is_some() {
                     break;

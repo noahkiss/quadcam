@@ -1450,7 +1450,11 @@ fn the_cli_flash_needs_yes_and_the_preview() {
 #[test]
 fn both_radios_modules_read_stage_and_plan_like_real_ones() {
     for (board, name, target) in [
-        ("pocket", "RM Pocket", "RadioMaster Pocket Internal 2.4GHz TX"),
+        (
+            "pocket",
+            "RM Pocket",
+            "RadioMaster Pocket Internal 2.4GHz TX",
+        ),
         ("gx12", "RM GX12 X-Band", "RadioMaster GX12 2.4/900 TX"),
     ] {
         let (b, tx, _) = bench_with(true, true, board, name);
@@ -1501,7 +1505,12 @@ fn both_quads_receivers_plan_the_betafpv_aio_target() {
         );
         rx.restart();
         let report = flash(&b, &p, &plan.digest).unwrap();
-        assert_eq!(report.status, ChangeStatus::Verified, "{quad}: {}", report.message);
+        assert_eq!(
+            report.status,
+            ChangeStatus::Verified,
+            "{quad}: {}",
+            report.message
+        );
         assert_eq!(rx.device().bootloader_requests(), 1);
     }
 }
@@ -1517,6 +1526,10 @@ fn a_ping_that_starts_with_zero_is_not_answered() {
     let mut old = quadcam_lib::gear::elrs::crsf::ping();
     old[0] = 0x00;
     link.write_all(&old).unwrap();
-    assert!(link.read_some(std::time::Duration::from_millis(5)).unwrap().iter().all(|b| *b != 0x29));
+    assert!(link
+        .read_some(std::time::Duration::from_millis(5))
+        .unwrap()
+        .iter()
+        .all(|b| *b != 0x29));
     assert_eq!(dev.received().len(), 1);
 }
