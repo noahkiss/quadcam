@@ -54,6 +54,7 @@ chrono = { version = "0.4", features = ["serde"] }
 anyhow = "1"
 clap = { version = "4", features = ["derive"] }
 base64 = "0.22"
+chrono-tz = "0.10"
 minisign-verify = "0.2"
 specta = { version = "=2.0.0-rc.25", features = ["derive", "chrono", "serde_json"] }
 tauri-specta = { version = "=2.0.0-rc.25", features = ["derive", "typescript"] }

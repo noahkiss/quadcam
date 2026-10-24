@@ -30,6 +30,14 @@ impl FakeMeteo {
 impl Fetch for FakeMeteo {
     fn download(&self, url: &str, dest: &Path) -> anyhow::Result<()> {
         self.asked.lock().unwrap().push(url.to_string());
+        // A place's time zone (`timezone=auto`): London's.
+        if url.starts_with(quadcam_lib::weather::FORECAST) {
+            std::fs::write(
+                dest,
+                r#"{"timezone":"Europe/London","utc_offset_seconds":3600}"#,
+            )?;
+            return Ok(());
+        }
         let day = url
             .split("start_date=")
             .nth(1)
@@ -371,4 +379,76 @@ impl Fetch for Refusing {
     fn download(&self, _url: &str, _dest: &Path) -> anyhow::Result<()> {
         anyhow::bail!("offline")
     }
+}
+
+/// A core on a settings file of its own (places live there), with weather on or off.
+fn core_on_file(dir: &Path, fake: &Arc<FakeMeteo>, weather: bool) -> Core {
+    let c = Core::new(
+        dir.join("cache"),
+        None,
+        Arc::new(NoHooks),
+        Arc::new(Recorder::default()),
+    )
+    .with_weather_fetch(fake.clone())
+    .with_settings(dir.join("support/settings.json"));
+    std::fs::create_dir_all(dir.join("out")).unwrap();
+    let mut v = serde_json::Map::new();
+    v.insert("outputDir".into(), json!(dir.join("out")));
+    v.insert("weather".into(), json!(weather));
+    v.insert("videoAnalysis".into(), json!(false));
+    c.settings_set(&v).unwrap();
+    c
+}
+
+/// A saved place gets its time zone once, while weather is on, and a clip there is read in
+/// it: 21:21 in London in June is 20:21 UTC, a sunset, whatever this Mac's zone.
+#[test]
+fn a_saved_place_brings_its_time_zone() {
+    let work = tempfile::tempdir().unwrap();
+    let fake = Arc::new(FakeMeteo::default());
+    let off = core_on_file(work.path(), &fake, false);
+    let p = off
+        .place_save("Park", Some(51.5), Some(-0.13), None)
+        .unwrap();
+    assert_eq!(p.tz, None);
+    assert!(fake.asked().is_empty(), "weather off asks nothing");
+
+    let work = tempfile::tempdir().unwrap();
+    let core = core_on_file(work.path(), &fake, true);
+    let p = core
+        .place_save("Park", Some(51.5), Some(-0.13), None)
+        .unwrap();
+    assert_eq!(p.tz.as_deref(), Some("Europe/London"));
+    assert_eq!(fake.asked().len(), 1);
+    assert_eq!(
+        core.places().unwrap()[0].tz.as_deref(),
+        Some("Europe/London")
+    );
+    // Saved again in place: no second lookup. Moved: the zone goes, and is asked again.
+    core.place_save("Park", None, None, None).unwrap();
+    assert_eq!(fake.asked().len(), 1);
+    let p = core.place_save("Park", Some(51.6), None, None).unwrap();
+    assert_eq!(p.tz.as_deref(), Some("Europe/London"));
+    assert_eq!(fake.asked().len(), 2);
+
+    let (_src, id) = imported(&core);
+    core.library_edit(
+        &id,
+        &LibEdit {
+            location: Some(Location {
+                lat: 51.6,
+                lon: -0.13,
+                name: Some("Park".into()),
+            }),
+            date: Some("2024-06-21".parse().unwrap()),
+            time: Some("21:21".into()),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    let it = core.library(&Default::default()).unwrap().clips[0].clone();
+    assert_eq!(it.sun, Some(quadcam_lib::sun::SunTag::Sunset));
+    let r = core.library_weather(&WeatherParams::default()).unwrap();
+    let w = r.clips[0].weather.clone().expect("weather found");
+    assert_eq!(w.hour, "2024-06-21T20:00Z");
 }

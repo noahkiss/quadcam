@@ -24,6 +24,39 @@ pub const HISTORICAL_FORECAST: &str = "https://historical-forecast-api.open-mete
 const HOURLY: &str = "temperature_2m,wind_speed_10m,wind_gusts_10m,wind_direction_10m,\
 cloud_cover,precipitation,rain,snowfall,weather_code,relative_humidity_2m,is_day,visibility";
 
+/// The forecast API, asked only for a place's time zone (`zone`).
+pub const FORECAST: &str = "https://api.open-meteo.com/v1/forecast";
+
+/// The request for a place's time zone: the location rounded as for weather, no values.
+pub fn zone_url(lat: f64, lon: f64) -> String {
+    format!("{FORECAST}?latitude={lat:.2}&longitude={lon:.2}&timezone=auto&forecast_days=1")
+}
+
+/// The IANA time zone in an Open-Meteo answer asked with `timezone=auto`; None when it
+/// names none that QuadCam knows.
+pub fn parse_zone(body: &[u8]) -> Result<Option<String>> {
+    #[derive(Deserialize)]
+    struct Answer {
+        #[serde(default)]
+        timezone: Option<String>,
+    }
+    let a: Answer =
+        serde_json::from_slice(body).context("Open-Meteo sent an answer QuadCam cannot read")?;
+    Ok(a.timezone.filter(|z| z.parse::<chrono_tz::Tz>().is_ok()))
+}
+
+/// A place's IANA time zone, from Open-Meteo (`timezone=auto`). `tmp` is a folder for the
+/// download.
+pub fn zone(fetch: &dyn Fetch, tmp: &Path, lat: f64, lon: f64) -> Result<Option<String>> {
+    std::fs::create_dir_all(tmp)?;
+    let dest = tmp.join(format!("open-meteo-zone-{}.json", std::process::id()));
+    let got = fetch
+        .download(&zone_url(lat, lon), &dest)
+        .and_then(|()| Ok(std::fs::read(&dest)?));
+    let _ = std::fs::remove_file(&dest);
+    parse_zone(&got?)
+}
+
 /// The sky of an hour, from its WMO weather code (`sky`).
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, specta::Type)]
 #[serde(rename_all = "snake_case")]
@@ -316,6 +349,32 @@ pub mod tests {
 
     fn utc(s: &str) -> DateTime<Utc> {
         DateTime::parse_from_rfc3339(s).unwrap().with_timezone(&Utc)
+    }
+
+    #[test]
+    fn a_zone_comes_from_the_answer_and_must_be_known() {
+        let z = |b: &str| parse_zone(b.as_bytes()).unwrap();
+        assert_eq!(
+            z(r#"{"latitude":51.5,"timezone":"Europe/London","utc_offset_seconds":3600}"#),
+            Some("Europe/London".into())
+        );
+        assert_eq!(z(r#"{"timezone":"Mars/Olympus"}"#), None);
+        assert_eq!(z(r#"{"latitude":1}"#), None);
+        assert!(parse_zone(b"not json").is_err());
+        let u = zone_url(51.5074, -0.1278);
+        assert!(
+            u.starts_with(FORECAST) && u.contains("latitude=51.51&longitude=-0.13&timezone=auto"),
+            "{u}"
+        );
+        let fake = FakeMeteo {
+            bodies: vec![(FORECAST.into(), r#"{"timezone":"Asia/Tokyo"}"#.into())],
+            ..Default::default()
+        };
+        let d = tempfile::tempdir().unwrap();
+        assert_eq!(
+            zone(&fake, d.path(), 35.7, 139.7).unwrap(),
+            Some("Asia/Tokyo".into())
+        );
     }
 
     #[test]

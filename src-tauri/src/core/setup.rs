@@ -220,9 +220,29 @@ impl Core {
         geocode::reverse(lat, lon)
     }
 
+    /// Saves a place (`place_save_only`), then, while the `weather` setting is on, looks up
+    /// its time zone (`place_zones`).
+    pub fn place_save(
+        &self,
+        name: &str,
+        lat: Option<f64>,
+        lon: Option<f64>,
+        new_name: Option<&str>,
+    ) -> Result<Place> {
+        let place = self.place_save_only(name, lat, lon, new_name)?;
+        if place.tz.is_some() {
+            return Ok(place);
+        }
+        let places = self.place_zones(&|p| p.name == place.name);
+        Ok(places
+            .into_iter()
+            .find(|p| p.name == place.name)
+            .unwrap_or(place))
+    }
+
     /// Saves a place: creates it, or updates the one with this name (any case). `new_name`
     /// renames it, and profiles that use it follow.
-    pub fn place_save(
+    fn place_save_only(
         &self,
         name: &str,
         lat: Option<f64>,
@@ -251,6 +271,10 @@ impl Core {
                         name: final_name.clone(),
                         lat: lat.unwrap_or(old.lat),
                         lon: lon.unwrap_or(old.lon),
+                        // A moved place needs its zone again.
+                        tz: old.tz.clone().filter(|_| {
+                            lat.is_none_or(|x| x == old.lat) && lon.is_none_or(|x| x == old.lon)
+                        }),
                     }
                 }
                 None => {
@@ -267,6 +291,7 @@ impl Core {
                         name: final_name.clone(),
                         lat,
                         lon,
+                        tz: None,
                     }
                 }
             };

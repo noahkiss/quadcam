@@ -62,7 +62,7 @@ On by default. On macOS 27 or later, QuadCam runs video analysis on each clip in
 
 ### Look up weather
 
-Off by default. On, QuadCam gets the weather at each library clip's place and hour from [Open-Meteo](https://open-meteo.com) (free, no account), in the background, and saves it in the clip file: temperature, wind and gusts, the sky, cloud cover, precipitation, humidity and visibility. A clip needs a place and a time of day. Each clip is looked up once; a new place, date or time looks it up again, and so does a clip looked up before QuadCam saved the sky (once). Off, QuadCam sends no weather request at all, from the app, the command line or an agent. See [Sun and weather](library.md#sun-and-weather). In the settings file, on the command line and in MCP it is `weather`.
+Off by default. On, QuadCam gets the weather at each library clip's place and hour from [Open-Meteo](https://open-meteo.com) (free, no account), in the background, and saves it in the clip file: temperature, wind and gusts, the sky, cloud cover, precipitation, humidity and visibility. A clip needs a place and a time of day. Each clip is looked up once; a new place, date or time looks it up again, and so does a clip looked up before QuadCam saved the sky (once). On, it also asks Open-Meteo once for the time zone of each saved place, so a clip's hour is read in its place's zone (see [Sun and weather](library.md#sun-and-weather)). Off, QuadCam sends no weather request at all, from the app, the command line or an agent. See [Sun and weather](library.md#sun-and-weather). In the settings file, on the command line and in MCP it is `weather`.
 
 ### Show the Map page
 

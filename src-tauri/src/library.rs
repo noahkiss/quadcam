@@ -229,8 +229,14 @@ pub struct LibClip {
 
 impl LibClip {
     /// Where the sun stood when the clip was flown, from its date, time and location.
-    pub fn sun(&self) -> Option<crate::sun::SunTag> {
-        crate::sun::clip_tag(self.date, self.time.as_deref(), self.location.as_ref())
+    /// `places` are the saved places, whose time zone the clip's hour is read in.
+    pub fn sun(&self, places: &[crate::metadata::Place]) -> Option<crate::sun::SunTag> {
+        crate::sun::clip_tag(
+            self.date,
+            self.time.as_deref(),
+            self.location.as_ref(),
+            crate::metadata::zone_for(places, self.location.as_ref()),
+        )
     }
 
     /// The name to show: the title, else the file name without the date.
@@ -961,7 +967,8 @@ pub struct Filter {
     pub min_rating: Option<u8>,
 }
 
-pub fn matches(ix: &Index, c: &LibClip, f: &Filter) -> bool {
+/// `places` are the saved places, for the sun tag's time zone.
+pub fn matches(ix: &Index, c: &LibClip, f: &Filter, places: &[crate::metadata::Place]) -> bool {
     let ok_group = match f.group.as_deref().unwrap_or("all") {
         "last_import" => c.import.is_some() && c.import == ix.last_import,
         "moments" => !c.moments.is_empty(),
@@ -981,7 +988,7 @@ pub fn matches(ix: &Index, c: &LibClip, f: &Filter) -> bool {
             c.keywords.join(" "),
             c.dvr.as_deref().unwrap_or(""),
             c.path.display(),
-            c.sun().map(|s| s.label()).unwrap_or("")
+            c.sun(places).map(|s| s.label()).unwrap_or("")
         ));
         q.split_whitespace().all(|w| hay.contains(&text(w)))
     });
@@ -1317,7 +1324,7 @@ mod tests {
         let ids = |f: &Filter| -> Vec<String> {
             ix.clips
                 .iter()
-                .filter(|c| matches(&ix, c, f))
+                .filter(|c| matches(&ix, c, f, &[]))
                 .map(|c| c.id.clone())
                 .collect()
         };
@@ -1347,15 +1354,15 @@ mod tests {
             .find(|t| {
                 let mut c = sunny.clone();
                 c.time = Some(t.clone());
-                c.sun() == Some(crate::sun::SunTag::GoldenHour)
+                c.sun(&[]) == Some(crate::sun::SunTag::GoldenHour)
             });
         assert!(sunny.time.is_some());
         let golden = Filter {
             query: Some("Golden hour".into()),
             ..Default::default()
         };
-        assert!(matches(&ix, &sunny, &golden));
-        assert!(!matches(&ix, &ix.clips[0], &golden));
+        assert!(matches(&ix, &sunny, &golden, &[]));
+        assert!(!matches(&ix, &ix.clips[0], &golden, &[]));
         let g = groups(&ix);
         assert_eq!(g["days"][0].0, "2026-09-27");
         assert_eq!(g["places"], vec![("Field".to_string(), 2)]);

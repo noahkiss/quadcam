@@ -144,7 +144,7 @@ export const commands = {
 	/**  Changes settings. */
 	settingsSet: (params: SetSettingsParams) => typedError<SettingsView_Serialize, string>(__TAURI_INVOKE("settings_set", { params })),
 	/**  Saved places. */
-	places: () => typedError<Place[], string>(__TAURI_INVOKE("places")),
+	places: () => typedError<Place_Serialize[], string>(__TAURI_INVOKE("places")),
 	/**  Searches for an address or a named place. */
 	placeSearch: (params: SearchParams) => typedError<GeoResult[], string>(__TAURI_INVOKE("place_search", { params })),
 	/**  This Mac's location from Location Services, named by Apple's geocoder. */
@@ -152,7 +152,7 @@ export const commands = {
 	/**  Names a point with Apple's geocoder. */
 	placeReverse: (params: LatLonParams) => typedError<GeoResult, string>(__TAURI_INVOKE("place_reverse", { params })),
 	/**  Creates or changes a saved place. */
-	placeSave: (params: PlaceSaveParams) => typedError<Place, string>(__TAURI_INVOKE("place_save", { params })),
+	placeSave: (params: PlaceSaveParams) => typedError<Place_Serialize, string>(__TAURI_INVOKE("place_save", { params })),
 	/**  Deletes a saved place. */
 	placeDelete: (params: NameParams) => typedError<PlaceRemoved, string>(__TAURI_INVOKE("place_delete", { params })),
 	/**  Aircraft profiles and the default. */
@@ -2481,7 +2481,7 @@ export type Defaults_Deserialize = {
 	tunables: Tunables,
 	/**  Volume name for the format step. */
 	format_label?: string,
-	places?: Place[],
+	places?: Place_Deserialize[],
 	profiles?: Profile_Deserialize[],
 	default_profile?: string | null,
 	/**  How imports are filed in the library folder (`output_dir`). */
@@ -2548,7 +2548,7 @@ export type Defaults_Serialize = {
 	tunables: Tunables,
 	/**  Volume name for the format step. */
 	format_label: string,
-	places: Place[],
+	places: Place_Serialize[],
 	profiles: Profile_Serialize[],
 	default_profile: string | null,
 	/**  How imports are filed in the library folder (`output_dir`). */
@@ -5752,11 +5752,7 @@ export type PinKind =
 "clip";
 
 /**  A saved place, kept in the settings file. */
-export type Place = {
-	name: string,
-	lat: number | null,
-	lon: number | null,
-};
+export type Place = Place_Serialize | Place_Deserialize;
 
 export type PlaceRemoved = {
 	name: string,
@@ -5776,6 +5772,32 @@ export type PlaceSaveParams = {
 export type PlaceTrend = {
 	place: string,
 	points: TrendPoint[],
+};
+
+/**  A saved place, kept in the settings file. */
+export type Place_Deserialize = {
+	name: string,
+	lat: number | null,
+	lon: number | null,
+	/**
+	 *  The place's IANA time zone (`Europe/London`), looked up once from Open-Meteo while
+	 *  the `weather` setting is on. Sun tags and weather read a clip's hour in it; without
+	 *  one they use this Mac's zone.
+	 */
+	tz?: string | null,
+};
+
+/**  A saved place, kept in the settings file. */
+export type Place_Serialize = {
+	name: string,
+	lat: number | null,
+	lon: number | null,
+	/**
+	 *  The place's IANA time zone (`Europe/London`), looked up once from Open-Meteo while
+	 *  the `weather` setting is on. Sun tags and weather read a clip's hour in it; without
+	 *  one they use this Mac's zone.
+	 */
+	tz?: string | null,
 };
 
 /**  What a batch would cost. */

@@ -197,7 +197,7 @@ A clip with a place and a time of day gets a **sun tag**: where the sun stood wh
 | Golden hour | The sun up, at most 6 degrees high |
 | Dawn, Dusk | The sun below the horizon, at most 6 degrees (civil twilight) |
 
-Daylight and night have no tag. The grid shows the tag as a sun icon, the list in its **Sun** column, and an open clip under **Details**. Search finds it (`golden hour`, `sunset`). The time is your Mac's time zone, as the library shows it. QuadCam reads a clip's time in the zone the Mac is in now, not the zone of the clip's place. A clip flown in another time zone gets the sun tag, and the weather, of the wrong hour.
+Daylight and night have no tag. The grid shows the tag as a sun icon, the list in its **Sun** column, and an open clip under **Details**. Search finds it (`golden hour`, `sunset`). QuadCam reads a clip's time in the time zone of its saved place. With [Look up weather](settings.md#look-up-weather) on, a saved place gets its zone from Open-Meteo once: when you save it, or when a weather lookup first uses it. Daylight saving time follows the zone's own rules. A clip without a saved place, or at a place that has no zone yet, is read in the zone the Mac is in now; flown in another time zone, it gets the sun tag and the weather of the wrong hour.
 
 With [Look up weather](settings.md#look-up-weather) on, an open clip also shows the **Weather** at its place and hour, from Open-Meteo:
 

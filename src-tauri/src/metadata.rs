@@ -14,6 +14,28 @@ pub struct Place {
     pub name: String,
     pub lat: f64,
     pub lon: f64,
+    /// The place's IANA time zone (`Europe/London`), looked up once from Open-Meteo while
+    /// the `weather` setting is on. Sun tags and weather read a clip's hour in it; without
+    /// one they use this Mac's zone.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tz: Option<String>,
+}
+
+/// The saved place of a clip's location: the one it names, else one at the same spot (within
+/// about half a kilometre).
+pub fn place_for<'a>(places: &'a [Place], location: Option<&Location>) -> Option<&'a Place> {
+    let l = location?;
+    let near = |p: &Place| (p.lat - l.lat).abs() < 0.005 && (p.lon - l.lon).abs() < 0.005;
+    l.name
+        .as_deref()
+        .and_then(|n| places.iter().find(|p| p.name.eq_ignore_ascii_case(n)))
+        .or_else(|| places.iter().find(|p| near(p)))
+}
+
+/// The time zone of a clip's location: its saved place's (`place_for`). None when it has no
+/// saved place, or the place has no zone yet.
+pub fn zone_for<'a>(places: &'a [Place], location: Option<&Location>) -> Option<&'a str> {
+    place_for(places, location).and_then(|p| p.tz.as_deref())
 }
 
 /// One aircraft setup, kept in the settings file. Every field is optional. A clip dated
@@ -418,6 +440,7 @@ mod tests {
             name: "Field".into(),
             lat: 40.68919,
             lon: -74.04449,
+            tz: None,
         }];
         let roll = Moment {
             kind: MomentKind::Roll,

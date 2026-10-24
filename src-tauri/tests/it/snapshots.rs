@@ -171,6 +171,7 @@ fn session_and_library_json() {
             name: "Home field".into(),
             lat: 40.6892,
             lon: -74.0445,
+            tz: None,
         }],
         ..Defaults::default()
     });

@@ -281,7 +281,7 @@ impl Core {
             let clips = ix
                 .clips
                 .iter()
-                .filter(|c| lib::matches(ix, c, filter))
+                .filter(|c| lib::matches(ix, c, filter, &d.places))
                 .map(|c| {
                     let strip = self.strip_path(&c.id);
                     let poster = self.poster_path(&c.id);
@@ -296,7 +296,7 @@ impl Core {
                         poster: poster.is_file().then_some(poster),
                         no_picture: self.no_picture_path(&c.id).is_file(),
                         last_import: c.import.is_some() && c.import == ix.last_import,
-                        sun: c.sun(),
+                        sun: c.sun(&d.places),
                         clip: c.clone(),
                     }
                 })

@@ -49,6 +49,7 @@ fn lab(layout: Layout, place_folders: bool, keep_originals: bool) -> Lab {
             name: "Home field".into(),
             lat: 40.6892,
             lon: -74.0445,
+            tz: None,
         }],
         ..Defaults::default()
     });

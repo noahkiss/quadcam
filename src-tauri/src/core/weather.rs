@@ -5,6 +5,7 @@
 use super::Core;
 use crate::api::{Event, LibraryTask, Task};
 use crate::library::{self as lib, LibClip};
+use crate::metadata::Place;
 use crate::weather::{self, Weather};
 use anyhow::{bail, Result};
 use serde::{Deserialize, Serialize};
@@ -61,6 +62,47 @@ impl Core {
         }));
     }
 
+    /// Looks up the time zone of each saved place that `wanted` picks and has none yet, and
+    /// stores it on the place. Only while the `weather` setting is on; a failed lookup leaves
+    /// the place without one, to be tried again on the next use. Returns the saved places.
+    pub(super) fn place_zones(&self, wanted: &dyn Fn(&Place) -> bool) -> Vec<Place> {
+        let d = self.defaults();
+        if !d.weather {
+            return d.places;
+        }
+        let tmp = self.cache.join("weather");
+        let found: Vec<(Place, String)> = d
+            .places
+            .iter()
+            .filter(|p| p.tz.is_none() && wanted(p))
+            .filter_map(|p| {
+                let z = weather::zone(self.weather_fetch.as_ref(), &tmp, p.lat, p.lon).ok()??;
+                Some((p.clone(), z))
+            })
+            .collect();
+        if found.is_empty() {
+            return d.places;
+        }
+        let saved = self.settings_update(|v| {
+            let mut places: Vec<Place> = crate::settings::list(v, "places");
+            for (old, z) in &found {
+                // Only the place as it was looked up: not one renamed or moved meanwhile.
+                if let Some(p) = places
+                    .iter_mut()
+                    .find(|p| p.name == old.name && p.lat == old.lat && p.lon == old.lon)
+                {
+                    p.tz = Some(z.clone());
+                }
+            }
+            v.insert("places".into(), serde_json::to_value(&places)?);
+            Ok(places)
+        });
+        saved.unwrap_or_else(|e| {
+            eprintln!("quadcam: place time zones not saved: {e:#}");
+            self.defaults().places
+        })
+    }
+
     /// Looks up the wind, temperature and sky of library clips' places and hours and writes
     /// them into the clip files (`app.quadcam.weather`). `ids` empty means every clip without
     /// weather. A clip that has weather keeps it: it is never asked for again, except once
@@ -86,6 +128,12 @@ impl Core {
         }
         let mut report = WeatherReport::default();
         let _one = ONE.lock().unwrap_or_else(|e| e.into_inner());
+        // A saved place first used here gets its time zone now.
+        let places = self.place_zones(&|p| {
+            clips.iter().any(|c| {
+                crate::metadata::place_for(std::slice::from_ref(p), c.location.as_ref()).is_some()
+            })
+        });
         let tmp = self.cache.join("weather");
         let mut memo = weather::Memo::new();
         let total = clips.len();
@@ -100,7 +148,7 @@ impl Core {
                 error: None,
             };
             if !row.kept {
-                match self.clip_weather(&root, c, &tmp, &mut memo) {
+                match self.clip_weather(&root, c, &places, &tmp, &mut memo) {
                     Ok(Ok(w)) => row.weather = Some(w),
                     Ok(Err(why)) => row.skipped = Some(why),
                     Err(e) => row.error = Some(format!("{e:#}")),
@@ -120,13 +168,15 @@ impl Core {
         &self,
         root: &std::path::Path,
         c: &LibClip,
+        places: &[Place],
         tmp: &std::path::Path,
         memo: &mut weather::Memo,
     ) -> Result<std::result::Result<Weather, String>> {
         let Some(l) = &c.location else {
             return Ok(Err("no place".into()));
         };
-        let Some(at) = crate::sun::local_instant(c.date, c.time.as_deref()) else {
+        let tz = crate::metadata::zone_for(places, Some(l));
+        let Some(at) = crate::sun::local_instant(c.date, c.time.as_deref(), tz) else {
             return Ok(Err("no time of day".into()));
         };
         let Some(w) = weather::lookup(self.weather_fetch.as_ref(), tmp, memo, l.lat, l.lon, at)?

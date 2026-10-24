@@ -306,6 +306,7 @@ fn profile_place_and_flight_stats_through_the_core() {
         name: "Field".into(),
         lat: 40.68919,
         lon: -74.04449,
+        tz: None,
     }];
     d.profiles = vec![
         Profile {

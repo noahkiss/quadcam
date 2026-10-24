@@ -152,23 +152,36 @@ pub fn tag(t: DateTime<Utc>, lat: f64, lon: f64) -> Option<SunTag> {
     }
 }
 
-/// The moment a library clip was flown: its date and `HH:MM` time on this Mac's clock.
-pub fn local_instant(date: NaiveDate, time: Option<&str>) -> Option<DateTime<Utc>> {
+/// The moment a library clip was flown: its date and `HH:MM` time in the IANA zone `tz`
+/// (its place's, `metadata::zone_for`), or on this Mac's clock without one.
+pub fn local_instant(
+    date: NaiveDate,
+    time: Option<&str>,
+    tz: Option<&str>,
+) -> Option<DateTime<Utc>> {
     let t = NaiveTime::parse_from_str(time?.trim(), "%H:%M").ok()?;
-    Local
-        .from_local_datetime(&date.and_time(t))
-        .earliest()
-        .map(|d| d.with_timezone(&Utc))
+    let at = date.and_time(t);
+    match tz.and_then(|z| z.parse::<chrono_tz::Tz>().ok()) {
+        Some(z) => z
+            .from_local_datetime(&at)
+            .earliest()
+            .map(|d| d.with_timezone(&Utc)),
+        None => Local
+            .from_local_datetime(&at)
+            .earliest()
+            .map(|d| d.with_timezone(&Utc)),
+    }
 }
 
-/// A library clip's sun tag, from its date, time and location.
+/// A library clip's sun tag, from its date, time and location, in the zone `tz`.
 pub fn clip_tag(
     date: NaiveDate,
     time: Option<&str>,
     location: Option<&crate::metadata::Location>,
+    tz: Option<&str>,
 ) -> Option<SunTag> {
     let l = location?;
-    tag(local_instant(date, time)?, l.lat, l.lon)
+    tag(local_instant(date, time, tz)?, l.lat, l.lon)
 }
 
 #[cfg(test)]
@@ -237,6 +250,36 @@ mod tests {
     }
 
     #[test]
+    fn a_clip_time_is_read_in_its_places_zone() {
+        let d = NaiveDate::from_ymd_opt(2024, 6, 21).unwrap();
+        // British Summer Time and US Eastern Daylight Time.
+        assert_eq!(
+            local_instant(d, Some("18:30"), Some("Europe/London")),
+            Some(utc("2024-06-21T17:30:00Z"))
+        );
+        assert_eq!(
+            local_instant(d, Some("18:30"), Some("America/New_York")),
+            Some(utc("2024-06-21T22:30:00Z"))
+        );
+        // Winter: London is on GMT.
+        let w = NaiveDate::from_ymd_opt(2024, 1, 10).unwrap();
+        assert_eq!(
+            local_instant(w, Some("18:30"), Some("Europe/London")),
+            Some(utc("2024-01-10T18:30:00Z"))
+        );
+        // Sunset in London at 21:21 BST is a sunset tag there, whatever this Mac's zone.
+        let loc = crate::metadata::Location {
+            lat: 51.5,
+            lon: -0.13,
+            name: None,
+        };
+        assert_eq!(
+            clip_tag(d, Some("21:21"), Some(&loc), Some("Europe/London")),
+            Some(SunTag::Sunset)
+        );
+    }
+
+    #[test]
     fn a_clip_needs_a_time_and_a_location() {
         let loc = crate::metadata::Location {
             lat: 51.5,
@@ -244,10 +287,11 @@ mod tests {
             name: None,
         };
         let d = NaiveDate::from_ymd_opt(2024, 6, 21).unwrap();
-        assert_eq!(clip_tag(d, None, Some(&loc)), None);
-        assert_eq!(clip_tag(d, Some("12:00"), None), None);
-        assert_eq!(clip_tag(d, Some("noon"), Some(&loc)), None);
-        assert!(local_instant(d, Some("18:30")).is_some());
+        assert_eq!(clip_tag(d, None, Some(&loc), None), None);
+        assert_eq!(clip_tag(d, Some("12:00"), None, None), None);
+        assert_eq!(clip_tag(d, Some("noon"), Some(&loc), None), None);
+        assert!(local_instant(d, Some("18:30"), None).is_some());
+        assert!(local_instant(d, Some("18:30"), Some("not a zone")).is_some());
         assert_eq!(SunTag::GoldenHour.label(), "golden hour");
         assert_eq!(
             serde_json::to_value(SunTag::GoldenHour).unwrap(),
