@@ -8,6 +8,8 @@ The command-line tool uses the app's settings as its defaults.
 
 Each run continues one import session. QuadCam saves the session to `~/Library/Caches/app.quadcam/session.json`, and the app uses the same file. To use another file, pass `--session FILE`.
 
+While the app runs, the CLI sends the session's commands to the app through its control socket, as the MCP server does: `status` (its `mode` is `app`), `stage`, `analyze`, `dates`, `show`, `meta`, `names`, `moments`, `cut`, `import`, `verify`, `photos` (not `--dry-run`), `clear`, `eject` and `format`, and the Gear commands that act on the app's own state: `gear fc pause|resume`, `gear stop`, `gear card-mount` and `gear card-unmount`. The app's core runs them, so you see each change in the app, and the app never writes an old copy of the session back over a CLI step. A `format` or `format --prep` waits for your click in the app. With `--session FILE`, or with the app closed, the CLI runs them in its own process. Other commands (library, settings, places, profiles and the rest of Gear) always run in the CLI's own process, on the same files.
+
 ## Import
 
 ```bash

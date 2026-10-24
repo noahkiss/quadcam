@@ -397,7 +397,10 @@ GitHub (`noahkiss/quadcam`, public) is the only remote. Users install the cask
 
 ## Agent/CLI usage
 
-`quadcam-cli` does everything the GUI does, on the same core. Every command takes `--json`
+`quadcam-cli` does everything the GUI does, on the same core. While the app runs, its session
+commands and the Gear commands on the app's own state (FC pause, stop, card mount) go to the
+app's core through the control socket (`via` in `bin/quadcam-cli/main.rs`; not with
+`--session FILE`), so one core owns the session. Every command takes `--json`
 and prints one object: `{"ok":true,"result":...}` or
 `{"ok":false,"error":{"code","exit","message"}}`. Exit codes: 0 ok, 1 failed, 2 usage,
 3 refused by a safety guard, 4 no session, no card or no device. Runs share a session file

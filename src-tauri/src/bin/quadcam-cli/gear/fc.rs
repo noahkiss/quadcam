@@ -115,16 +115,21 @@ pub fn run(core: &Core, cmd: FcCmd) -> Result<Value> {
             api::BoardNotesParams { board, version },
         )?)?,
         FcCmd::Usb => serde_json::to_value(call::gear_usb_timers(core)?)?,
-        FcCmd::Pause { port } => serde_json::to_value(call::gear_poll_pause(
+        // The app's poll is the one that probes: while it runs, the pause lands there.
+        FcCmd::Pause { port } => serde_json::to_value(crate::via::<_, Vec<String>>(
             core,
+            "gear_poll_pause",
             api::PollPauseParams { port, paused: true },
+            call::gear_poll_pause,
         )?)?,
-        FcCmd::Resume { port } => serde_json::to_value(call::gear_poll_pause(
+        FcCmd::Resume { port } => serde_json::to_value(crate::via::<_, Vec<String>>(
             core,
+            "gear_poll_pause",
             api::PollPauseParams {
                 port,
                 paused: false,
             },
+            call::gear_poll_pause,
         )?)?,
     })
 }

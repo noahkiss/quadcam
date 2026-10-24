@@ -728,3 +728,64 @@ fn voice_delete_lists_the_radios_that_chose_the_pack_and_clears_their_choice() {
         "only the deleted pack's choices go"
     );
 }
+
+/// While the app runs, the CLI's session calls go to the app's core through its socket: one
+/// core owns the session, so the app never writes a stale copy back over a CLI step, and the
+/// FC pause lands in the app's own poll. `--session FILE` stays headless.
+#[test]
+fn with_the_app_running_the_cli_drives_the_apps_core() {
+    use quadcam_lib::core::{Core, NoHooks};
+    use quadcam_lib::session::{Editor, PlanPatch};
+    use std::sync::Arc;
+    // Under /tmp: a Unix socket's path holds at most 104 bytes.
+    let env = Env {
+        home: tempfile::tempdir_in("/tmp").unwrap(),
+    };
+    let h = env.home.path();
+    let app = Arc::new(Core::new(
+        h.join("app-cache"),
+        Some(h.join("app-cache/session.json")),
+        Arc::new(NoHooks),
+        Arc::new(quadcam_lib::photos::Recorder::default()),
+    ));
+    let sock = h.join("Library/Application Support/app.quadcam/control.sock");
+    quadcam_lib::control::serve(app.clone(), &sock).unwrap();
+
+    assert_eq!(env.ok(&["status"])["mode"], "app");
+    let src = folder_with_clips();
+    env.ok(&["stage", s(src.path())]);
+    assert_eq!(app.session().unwrap().clips.len(), 3, "the app's session");
+    assert!(
+        !h.join("Library/Caches/app.quadcam/session.json").exists(),
+        "no second session file"
+    );
+    env.ok(&["analyze"]);
+    // The person names a clip in the app; the CLI's next step keeps it and sees it.
+    app.patch(
+        &[PlanPatch {
+            id: 0,
+            name: Some("pond".into()),
+            ..Default::default()
+        }],
+        Editor::User,
+    )
+    .unwrap();
+    env.ok(&["dates", "--no-logs", "--set", "1=2026-09-27"]);
+    let plans = app.session().unwrap().plans;
+    assert_eq!(plans[0].name, "pond");
+    assert_eq!(plans[1].date.to_string(), "2026-09-27");
+    assert_eq!(env.ok(&["show"])["plans"][0]["name"], "pond");
+
+    env.ok(&["gear", "fc", "pause", "--port", "/dev/cu.test"]);
+    assert_eq!(app.gear_paused_ports(), vec!["/dev/cu.test".to_string()]);
+    env.ok(&["gear", "fc", "resume", "--port", "/dev/cu.test"]);
+    assert!(app.gear_paused_ports().is_empty());
+
+    let other = h.join("other.json");
+    assert_eq!(
+        env.ok(&["--session", s(&other), "status"])["mode"],
+        "headless"
+    );
+    let (code, v) = env.run(&["--session", s(&other), "show"]);
+    assert_eq!(code, 4, "{v}");
+}

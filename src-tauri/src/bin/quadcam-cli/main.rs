@@ -1,6 +1,7 @@
 //! quadcam-cli: everything the GUI does, for scripts and coding agents. Every command takes
 //! `--json`. It drives the same `core::Core` as the app, on a session file, so separate runs
-//! continue one session. `quadcam-cli mcp` starts the MCP server on stdio.
+//! continue one session. While the app runs, the session's calls go to the app's core through
+//! its control socket (`via`). `quadcam-cli mcp` starts the MCP server on stdio.
 
 use anyhow::{anyhow, bail, Context, Result};
 use chrono::NaiveDate;
@@ -11,11 +12,11 @@ use quadcam_lib::media::{self, Encoder, Format};
 use quadcam_lib::moments::Span;
 use quadcam_lib::photos::{self, PhotosLibrary, Recorder};
 use quadcam_lib::session::{Editor, PlanPatch};
-use quadcam_lib::{disk, settings, sources};
-use serde::Deserialize;
+use quadcam_lib::{control, disk, paths, settings, sources};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 mod gear;
 
@@ -677,11 +678,44 @@ struct PlanFile {
     options: ImportOptions,
 }
 
+/// The running app's control socket, when this run drives the app's core: set once in `run`.
+static APP: OnceLock<Option<PathBuf>> = OnceLock::new();
+
+/// The app's socket when the app answers its ping and this run uses the shared session file.
+/// `--session FILE` names a session the app does not hold, so that run stays headless.
+fn app_socket(session: &Option<PathBuf>) -> Option<PathBuf> {
+    if session.is_some() {
+        return None;
+    }
+    let sock = paths::try_support_dir().ok()?.join("control.sock");
+    control::Client::connect(&sock).ok().map(|_| sock)
+}
+
+/// One `api` call: in the running app's core when it answers, so the session, its card and
+/// the app's jobs have one owner and the person sees the change; else in this process's core.
+pub(crate) fn via<P: Serialize, R: DeserializeOwned>(
+    core: &Core,
+    method: &str,
+    params: P,
+    local: impl FnOnce(&Core, P) -> Result<R>,
+) -> Result<R> {
+    match APP.get().and_then(Option::as_ref) {
+        Some(sock) => {
+            let mut app = control::Client::connect(sock)
+                .context("The QuadCam app stopped answering; nothing ran")?;
+            let v = app.call(method, serde_json::to_value(&params)?)?;
+            serde_json::from_value(v).with_context(|| format!("the app's answer to {method}"))
+        }
+        None => local(core, params),
+    }
+}
+
 fn run(cmd: Cmd, session: Option<PathBuf>) -> Result<Value> {
     let photos: Arc<dyn PhotosLibrary> = match &cmd {
         Cmd::Photos { dry_run: true, .. } => Arc::new(Recorder::default()),
         _ => Core::real_photos(),
     };
+    let app = APP.get_or_init(|| app_socket(&session)).is_some();
     let core = Core::headless(session, photos.clone());
     Ok(match cmd {
         Cmd::Status => {
@@ -696,8 +730,8 @@ fn run(cmd: Cmd, session: Option<PathBuf>) -> Result<Value> {
             };
             json!({
                 "schema_version": quadcam_lib::schema::SCHEMA_VERSION,
-                "mode": "headless",
-                "status": serde_json::to_value(core.status())?,
+                "mode": if app { "app" } else { "headless" },
+                "status": via(&core, "status", (), |c, ()| Ok(serde_json::to_value(c.status())?))?,
                 "cards": pick("is_card"),
                 "radios": pick("is_radio"),
             })
@@ -713,15 +747,22 @@ fn run(cmd: Cmd, session: Option<PathBuf>) -> Result<Value> {
             path,
             card,
             no_join,
-        } => serde_json::to_value(call::stage(
+        } => serde_json::to_value(via::<_, quadcam_lib::session::Session>(
             &core,
+            "stage",
             api::SourceParams {
-                source: path,
+                source: path.map(abs),
                 device: card,
                 join: no_join.then_some(false),
             },
+            call::stage,
         )?)?,
-        Cmd::Analyze => serde_json::to_value(call::analyse(&core)?)?,
+        Cmd::Analyze => serde_json::to_value(via::<_, quadcam_lib::session::Session>(
+            &core,
+            "analyse",
+            (),
+            |c, ()| call::analyse(c),
+        )?)?,
         Cmd::Dates {
             logs,
             no_logs,
@@ -730,11 +771,16 @@ fn run(cmd: Cmd, session: Option<PathBuf>) -> Result<Value> {
             times,
         } => {
             let choice = match (logs, no_logs) {
-                (Some(d), _) => LogChoice::Dir(d),
+                (Some(d), _) => LogChoice::Dir(abs(d)),
                 (None, true) => LogChoice::None,
                 _ => LogChoice::Keep,
             };
-            let mut s = call::dates(&core, api::DatesParams { logs: choice, day })?;
+            let mut s: quadcam_lib::session::Session = via(
+                &core,
+                "dates",
+                api::DatesParams { logs: choice, day },
+                call::dates,
+            )?;
             let patches = set
                 .iter()
                 .map(|x| {
@@ -761,7 +807,7 @@ fn run(cmd: Cmd, session: Option<PathBuf>) -> Result<Value> {
             json!({"log_dir": s.log_dir, "log_day": s.log_day, "log_days": s.log_days, "warnings": s.date_warnings, "plans": s.plans})
         }
         Cmd::Show => serde_json::to_value(
-            call::session(&core)?.ok_or_else(|| anyhow!("No clips loaded. Run `stage` first."))?,
+            session_of(&core)?.ok_or_else(|| anyhow!("No clips loaded. Run `stage` first."))?,
         )?,
         Cmd::Profiles { cmd } => profiles(&core, cmd.unwrap_or(ProfCmd::List))?,
         Cmd::Places { cmd } => places(&core, cmd.unwrap_or(PlaceCmd::List))?,
@@ -854,9 +900,8 @@ fn run(cmd: Cmd, session: Option<PathBuf>) -> Result<Value> {
             keywords,
             author,
         } => {
-            let s = core
-                .session()
-                .ok_or_else(|| anyhow!("No clips loaded. Run `stage` first."))?;
+            let s =
+                session_of(&core)?.ok_or_else(|| anyhow!("No clips loaded. Run `stage` first."))?;
             let ids: Vec<usize> = if ids.iter().any(|i| i == "all") {
                 s.clips.iter().map(|c| c.id).collect()
             } else {
@@ -900,16 +945,17 @@ fn run(cmd: Cmd, session: Option<PathBuf>) -> Result<Value> {
                 .map(|p| json!({"id": p.id, "metadata": p.meta, "log_model": p.log_model}))
                 .collect::<Vec<_>>())
         }
-        Cmd::Names { ids } => serde_json::to_value(call::suggest_on_device(
+        Cmd::Names { ids } => serde_json::to_value(via::<_, quadcam_lib::core::OnDeviceReport>(
             &core,
+            "suggest_on_device",
             quadcam_lib::core::OnDeviceParams {
                 ids: (!ids.is_empty()).then_some(ids),
             },
+            call::suggest_on_device,
         )?)?,
         Cmd::Moments { ids } => {
-            let s = core
-                .session()
-                .ok_or_else(|| anyhow!("No clips loaded. Run `stage` first."))?;
+            let s =
+                session_of(&core)?.ok_or_else(|| anyhow!("No clips loaded. Run `stage` first."))?;
             let want: Vec<u64> = ids.iter().map(|&i| i as u64).collect();
             let view = quadcam_lib::mcp::clip_views(
                 &serde_json::to_value(&s)?,
@@ -944,9 +990,8 @@ fn run(cmd: Cmd, session: Option<PathBuf>) -> Result<Value> {
             log_offset,
             removed: removed_files,
         } => {
-            let s = core
-                .session()
-                .ok_or_else(|| anyhow!("No clips loaded. Run `stage` first."))?;
+            let s =
+                session_of(&core)?.ok_or_else(|| anyhow!("No clips loaded. Run `stage` first."))?;
             let cuts = if keep {
                 let c = s
                     .clips
@@ -1073,8 +1118,7 @@ fn run(cmd: Cmd, session: Option<PathBuf>) -> Result<Value> {
                 match added.iter_mut().find(|(i, _)| *i == id) {
                     Some((_, v)) => v.push(sp),
                     None => {
-                        let mut v = core
-                            .session()
+                        let mut v = session_of(&core)?
                             .and_then(|s| {
                                 s.plans.iter().find(|p| p.id == id).map(|p| p.cuts.clone())
                             })
@@ -1102,13 +1146,18 @@ fn run(cmd: Cmd, session: Option<PathBuf>) -> Result<Value> {
                     Encoder::Videotoolbox
                 });
             }
-            opts.output_dir = output.or(opts.output_dir);
+            opts.output_dir = output.or(opts.output_dir).map(abs);
             opts.keep_originals = Some(keep_originals || opts.keep_originals.unwrap_or(false));
             opts.add_time = Some(add_time || opts.add_time.unwrap_or(false));
             opts.add_to_photos |= add_to_photos;
             opts.album = album.or(opts.album);
             opts.keep_clips |= keep_clips;
-            serde_json::to_value(call::import(&core, opts)?)?
+            serde_json::to_value(via::<_, quadcam_lib::core::ImportOutcome>(
+                &core,
+                "import",
+                opts,
+                call::import,
+            )?)?
         }
         Cmd::Verify {
             output: Some(out),
@@ -1145,7 +1194,12 @@ fn run(cmd: Cmd, session: Option<PathBuf>) -> Result<Value> {
             }
         }
         Cmd::Verify { output: None, .. } => {
-            let reports = call::verify(&core, api::VerifyParams { ids: None })?;
+            let reports: Vec<quadcam_lib::core::VerifyReport> = via(
+                &core,
+                "verify",
+                api::VerifyParams { ids: None },
+                call::verify,
+            )?;
             let bad: Vec<_> = reports.iter().filter(|r| !r.ok).collect();
             if !bad.is_empty() {
                 bail!(
@@ -1163,17 +1217,40 @@ fn run(cmd: Cmd, session: Option<PathBuf>) -> Result<Value> {
             dry_run,
         } => {
             let album = album.or(Some(photos::DEFAULT_ALBUM.to_string()));
-            if files.is_empty() {
+            if files.is_empty() && dry_run {
                 serde_json::to_value(call::photos(&core, api::PhotosParams { ids: None, album })?)?
+            } else if files.is_empty() {
+                serde_json::to_value(via::<_, photos::ShareReport>(
+                    &core,
+                    "photos",
+                    api::PhotosParams { ids: None, album },
+                    call::photos,
+                )?)?
             } else {
                 let report = photos::share(photos.as_ref(), &files, album.as_deref())?;
                 json!({"dry_run": dry_run, "report": report})
             }
         }
-        Cmd::Clear => serde_json::to_value(call::clear(&core)?)?,
-        Cmd::Eject { target } => {
-            serde_json::to_value(call::eject(&core, api::EjectParams { target })?)?
+        Cmd::Clear => {
+            serde_json::to_value(via::<_, api::Cleared>(&core, "clear", (), |c, ()| {
+                call::clear(c)
+            })?)?
         }
+        Cmd::Eject { target } => serde_json::to_value(via::<_, api::Ejected>(
+            &core,
+            "eject",
+            api::EjectParams {
+                // A mount point, from this shell's folder; `disk4` and `/dev/disk4` stay.
+                target: target.map(|t| {
+                    if std::path::Path::new(&t).exists() {
+                        abs(t.into()).to_string_lossy().into_owned()
+                    } else {
+                        t
+                    }
+                }),
+            },
+            call::eject,
+        )?)?,
         Cmd::Format {
             plan: true,
             prep: true,
@@ -1185,18 +1262,25 @@ fn run(cmd: Cmd, session: Option<PathBuf>) -> Result<Value> {
             if mount.is_none() && card.is_none() {
                 bail!("format --prep --plan needs --mount (the card's mount point) or --card (its device id).");
             }
-            serde_json::to_value(call::card_prep_plan(
+            serde_json::to_value(via::<_, quadcam_lib::core::FormatPlan>(
                 &core,
+                "card_prep_plan",
                 api::CardPrepParams {
-                    mount,
+                    mount: mount.map(abs),
                     device: card,
                     label,
                 },
+                call::card_prep_plan,
             )?)?
         }
         Cmd::Format {
             plan: true, label, ..
-        } => serde_json::to_value(call::format_plan(&core, api::LabelParams { label })?)?,
+        } => serde_json::to_value(via::<_, quadcam_lib::core::FormatPlan>(
+            &core,
+            "format_plan",
+            api::LabelParams { label },
+            call::format_plan,
+        )?)?,
         Cmd::Format {
             device,
             volume_uuid,
@@ -1218,15 +1302,26 @@ fn run(cmd: Cmd, session: Option<PathBuf>) -> Result<Value> {
                 confirm: true,
             };
             // Any reason not to erase is a refusal, so scripts can tell it from a crash.
-            let run = if prep { call::card_prep } else { call::format };
-            let plan = run(&core, req).map_err(|e| {
-                let m = format!("{e:#}");
-                if m.starts_with("Refused") {
-                    anyhow!(m)
-                } else {
-                    anyhow!("Refused: {m}")
-                }
-            })?;
+            let (method, run) = if prep {
+                (
+                    "card_prep",
+                    call::card_prep as fn(&Core, FormatRequest) -> Result<_>,
+                )
+            } else {
+                (
+                    "format",
+                    call::format as fn(&Core, FormatRequest) -> Result<_>,
+                )
+            };
+            let plan =
+                via::<_, quadcam_lib::core::FormatPlan>(&core, method, req, run).map_err(|e| {
+                    let m = format!("{e:#}");
+                    if m.starts_with("Refused") {
+                        anyhow!(m)
+                    } else {
+                        anyhow!("Refused: {m}")
+                    }
+                })?;
             serde_json::to_value(plan)?
         }
         Cmd::Library(cmd) => library(&core, cmd)?,
@@ -1237,13 +1332,25 @@ fn run(cmd: Cmd, session: Option<PathBuf>) -> Result<Value> {
 
 /// A person's plan changes, through `suggest` with the user as the editor.
 fn user_patch(core: &Core, patches: Vec<PlanPatch>) -> Result<quadcam_lib::session::Session> {
-    call::suggest(
+    via(
         core,
+        "suggest",
         api::SuggestParams {
             patches,
             editor: Some(Editor::User),
         },
+        call::suggest,
     )
+}
+
+/// A path from this shell's folder, absolute: the app that may run the call has its own.
+fn abs(p: PathBuf) -> PathBuf {
+    std::path::absolute(&p).unwrap_or(p)
+}
+
+/// The session: the app's while it runs, else the session file's.
+fn session_of(core: &Core) -> Result<Option<quadcam_lib::session::Session>> {
+    via(core, "session", (), |c, ()| call::session(c))
 }
 
 fn library(core: &Core, cmd: LibCmd) -> Result<Value> {

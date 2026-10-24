@@ -347,16 +347,24 @@ pub fn run(core: &Core, cmd: GearCmd) -> Result<Value> {
         GearCmd::Keep { change } => changes::keep(core, change)?,
         GearCmd::Revert { change } => changes::revert(core, change)?,
         GearCmd::Copy(a) => changes::copy(core, a)?,
-        GearCmd::CardMount { device, minutes } => serde_json::to_value(call::gear_card_mount(
+        // The app's tick unmounts a card when its minutes run out: while the app runs, the
+        // mount and the unmount are its own.
+        GearCmd::CardMount { device, minutes } => {
+            serde_json::to_value(crate::via::<_, quadcam_lib::core::CardMounted>(
+                core,
+                "gear_card_mount",
+                api::CardMountParams { device, minutes },
+                call::gear_card_mount,
+            )?)?
+        }
+        GearCmd::CardUnmount { device } => serde_json::to_value(crate::via::<_, bool>(
             core,
-            api::CardMountParams { device, minutes },
-        )?)?,
-        GearCmd::CardUnmount { device } => serde_json::to_value(call::gear_card_unmount(
-            core,
+            "gear_card_unmount",
             api::CardMountParams {
                 device,
                 minutes: None,
             },
+            call::gear_card_unmount,
         )?)?,
         GearCmd::Apply(a) => changes::apply(core, a)?,
         GearCmd::Stop { handle } => backup::stop(core, handle)?,

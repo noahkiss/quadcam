@@ -214,9 +214,12 @@ pub fn card_repair(core: &Core, check: String, yes: bool) -> Result<Value> {
     )?)?)
 }
 
+/// Stops a job: the app's while it runs, since its jobs live in its core.
 pub fn stop(core: &Core, handle: String) -> Result<Value> {
-    Ok(serde_json::to_value(call::gear_stop(
+    Ok(serde_json::to_value(crate::via::<_, bool>(
         core,
+        "gear_stop",
         api::StopParams { handle },
+        call::gear_stop,
     )?)?)
 }
