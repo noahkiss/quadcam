@@ -185,17 +185,17 @@ export function BackupsSegment({ d }: { d: DeviceRef }) {
             <>
               {d.kind === "radio" && isCard && d.device && !d.unmounted && (
                 <Button size="sm" icon="trash-bin-trash" onClick={cleanCard} disabled={busy || !!job}>
-                  Clean ._ files
+                  Clean ._ Files
                 </Button>
               )}
               {isCard && d.device && !d.unmounted && (
                 <Button size="sm" icon="shield" onClick={checkCard} disabled={busy || !!job}>
-                  Check card
+                  Check Card
                 </Button>
               )}
               {canBackUp(d) && (
                 <Button size="sm" variant="primary" icon="history" onClick={backUp} disabled={busy || !!job}>
-                  Back up now
+                  Back Up Now
                 </Button>
               )}
             </>

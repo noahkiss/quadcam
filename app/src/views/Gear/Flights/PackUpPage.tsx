@@ -32,7 +32,7 @@ export function PackUpPage() {
       </Button>
     ) : (
       <Button size="sm" className={styles.inCell} onClick={reload}>
-        Check now
+        Check Now
       </Button>
     );
   const columns: Column<CheckRow>[] = [
@@ -57,7 +57,7 @@ export function PackUpPage() {
         }
         actions={
           <Button icon="refresh" onClick={reload}>
-            Check again
+            Check Again
           </Button>
         }
       />

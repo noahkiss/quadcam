@@ -95,7 +95,7 @@ test("a narrow library folds sort and view into a menu and keeps Import", async 
   await expect(page.getByRole("button", { name: "Import…" })).toBeVisible();
   await expect(page.getByLabel("Sort by")).toBeHidden();
   await page.getByRole("button", { name: "View options" }).click();
-  await page.getByRole("menuitemcheckbox", { name: "Show as list" }).click();
+  await page.getByRole("menuitemcheckbox", { name: "Show as List" }).click();
   await expect(page.locator("table")).toBeVisible();
   await page.setViewportSize({ width: 1280, height: 800 });
   await expect(page.getByLabel("Sort by")).toBeVisible();

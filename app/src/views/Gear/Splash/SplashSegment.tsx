@@ -69,7 +69,7 @@ export function SplashSegment({ d }: { d: DeviceRef }) {
       title="Splash"
       actions={
         <Button variant="secondary" icon="gallery-add" onClick={() => void choose()}>
-          Choose image…
+          Choose Image…
         </Button>
       }
     >
@@ -109,7 +109,7 @@ export function SplashSegment({ d }: { d: DeviceRef }) {
               aria-describedby={reason ? reasonId : undefined}
               onClick={() => device && image && void openFlash({ device, version: null, splash: { image, threshold, invert, board } })}
             >
-              Flash with splash…
+              Flash with Splash…
             </Button>
             {reason && (
               <span id={reasonId} className={styles.reason}>

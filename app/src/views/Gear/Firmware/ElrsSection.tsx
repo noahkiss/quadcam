@@ -194,7 +194,7 @@ export function ElrsSection() {
           <div className={styles.bar}>
             {(view?.hosts ?? []).map((h) => (
               <Button key={h.device} variant="secondary" disabled={busy !== null} onClick={() => void read(h.device)}>
-                {busy === h.device ? "Reading…" : h.kind === "radio" ? `Read the module in ${h.name}` : `Read the receiver in ${h.name}`}
+                {busy === h.device ? "Reading…" : h.kind === "radio" ? `Read the Module in ${h.name}` : `Read the Receiver in ${h.name}`}
               </Button>
             ))}
             {view && view.hosts.length === 0 && <span className={styles.muted}>Save a radio or an FC first.</span>}
@@ -206,7 +206,7 @@ export function ElrsSection() {
           <div className={styles.phrase}>
             <SecretField label="Binding phrase" hint={phraseHint} value={phrase} onChange={setPhrase}>
               <Button variant="secondary" disabled={!phrase.trim()} onClick={() => void savePhrase()}>
-                Save phrase
+                Save Phrase
               </Button>
             </SecretField>
             <SelectField label="Region" value={view?.region ?? "FCC"} onChange={(e) => void saveSetting("elrsRegion", e.target.value).then(load)}>
@@ -319,7 +319,7 @@ function ElrsOptions({
       )}
       <div className={styles.optionsBar}>
         <Button variant="primary" disabled={Object.keys(draft).length === 0} onClick={onStage}>
-          Stage changes
+          Stage Changes
         </Button>
       </div>
     </div>

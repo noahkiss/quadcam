@@ -67,11 +67,11 @@ test("typed in and out points add a cut, then Save writes it", async ({ app, pag
   await page.getByRole("textbox", { name: "In point" }).press("Tab");
   await page.getByRole("textbox", { name: "Out point" }).fill("0:40.0");
   await page.getByRole("textbox", { name: "Out point" }).press("Tab");
-  await page.getByRole("button", { name: "Add cut" }).click();
+  await page.getByRole("button", { name: "Add Cut" }).click();
   await expect.poll(async () => (await app.method("library_cuts"))).toContainEqual({
     id: "xd0d144c9ce319e86", cuts: [{ start: 10, end: 25 }, { start: 30, end: 40 }], removed_cuts: null,
   });
-  await page.getByRole("button", { name: "Save 1 cut" }).click();
+  await page.getByRole("button", { name: "Save 1 Cut" }).click();
   await expect(page.getByRole("status")).toContainText("1 cut saved.");
 });
 
@@ -91,7 +91,7 @@ test("removing a saved cut asks what happens to its file", async ({ app, page })
 });
 
 test("Use keep ranges turns them into cuts", async ({ app, page }) => {
-  await page.getByRole("button", { name: "Use keep ranges (2)" }).click();
+  await page.getByRole("button", { name: "Use Keep Ranges (2)" }).click();
   await expect.poll(async () => (await app.method("library_cuts"))).toContainEqual({
     id: "xd0d144c9ce319e86", cuts: [{ start: 10, end: 25 }, { start: 0, end: 50 }, { start: 60, end: 120 }], removed_cuts: null,
   });
@@ -111,9 +111,9 @@ test("the menu bar's next and previous clip step through the library", async ({ 
 });
 
 test("Split by flight adds one cut per radio-log flight, unsaved until Save", async ({ app, page }) => {
-  await page.getByRole("button", { name: "Split by flight (2)" }).click();
+  await page.getByRole("button", { name: "Split by Flight (2)" }).click();
   await expect.poll(async () => await app.method("library_split")).toContainEqual({ id: "xd0d144c9ce319e86" });
   await expect(page.getByRole("status")).toContainText("2 cuts added, one per flight.");
   await expect(page.getByText("Not saved yet")).toHaveCount(2);
-  await expect(page.getByRole("button", { name: "Save 2 cuts" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Save 2 Cuts" })).toBeVisible();
 });

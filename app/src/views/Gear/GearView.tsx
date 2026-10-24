@@ -72,7 +72,7 @@ function DevicePage({ d }: { d: DeviceRef }) {
           <>
             {d.state === "inserted" && (
               <Button size="sm" onClick={() => dismiss(d.connected!)}>
-                Dismiss reminder
+                Dismiss Reminder
               </Button>
             )}
             {isCard && d.unmounted && d.connected?.id && (
@@ -82,7 +82,7 @@ function DevicePage({ d }: { d: DeviceRef }) {
             )}
             {isClipCard && d.unmounted && d.connected?.id && (
               <Button size="sm" onClick={() => void importFromDevice(d.connected!.id!, name)}>
-                Import clips…
+                Import Clips…
               </Button>
             )}
             {isClipCard && d.connected && (d.unmounted ? !!d.connected.id : d.connected.link.kind === "volume") && (
@@ -91,7 +91,7 @@ function DevicePage({ d }: { d: DeviceRef }) {
                
                 onClick={() => void prepCard(d.unmounted ? { device: d.connected!.id! } : { mount: d.connected!.link.kind === "volume" ? d.connected!.link.mount : undefined })}
               >
-                Prepare card…
+                Prepare Card…
               </Button>
             )}
             {isCard && browsing && (

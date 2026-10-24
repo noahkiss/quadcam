@@ -6,13 +6,13 @@ Open Settings with the gear icon or Command-comma. **Done** saves every change a
 
 | Section | Holds |
 |---|---|
-| **Library** | The library folder (default `~/Movies/quadcam`, made on the first import), the layout, the date in file names, place folders, keep originals, and **Rebuild from files**. See [The library](library.md). |
+| **Library** | The library folder (default `~/Movies/quadcam`, made on the first import), the layout, the date in file names, place folders, keep originals, and **Rebuild from Files**. See [The library](library.md). |
 | **Aircraft** | The aircraft profiles and the default profile. See [Metadata](metadata.md#places-and-profiles). |
 | **Places** | The place search provider and **Show the Map page**. While the Map page is off, the saved places too; with it on, you keep places on the Map page. See [Metadata](metadata.md#place-search-providers) and [The map](library.md#the-map). |
 | **Import** | The format (MP4 or MOV), the MP4 encoder, the default short name, the time in file names, **Delete clips after import**, **Join split recordings**, **On-device suggestions**, and the tolerances for log matching, the DJI clip clock skew included. |
 | **Photos** | The album. An empty album means the library only. See [Photos](photos.md). |
 | **Gear** | The previews (**Show the Sim page**, **Betaflight flashing (preview)**, **Show the ELRS tools**), **Back up on connect**, how many backups to keep, the USB power warning, the blackbox options (**Erase blackbox after download**, **Read through USB disk mode first (not proven)**), a row per device kind for the steps on connect (a pop-up with a check mark on each step that runs), and the cues: which play, as speech, sound or notification, mute, the voice and quiet hours. See [Gear](gear.md). |
-| **Modules** | Tools QuadCam downloads on request (ffmpeg, esptool): install, update, remove, **Check for module updates**, and **Use ffmpeg from** (the QuadCam module, else Homebrew; or Homebrew only). See [Modules and notices](modules.md). |
+| **Modules** | Tools QuadCam downloads on request (ffmpeg, esptool): install, update, remove, **Check for Module Updates**, and **Use ffmpeg from** (the QuadCam module, else Homebrew; or Homebrew only). See [Modules and notices](modules.md). |
 | **Advanced** | **Check for updates automatically**, and the last update check with the release notes when a newer version is known (see [Updates](#updates)). Read-only: the ffmpeg in use and the agent socket path. |
 
 ### Formats
@@ -58,7 +58,7 @@ On by default. QuadCam imports a recording that an analog DVR split into several
 
 ### Find highlights in new clips
 
-On by default. On macOS 27 or later, QuadCam runs video analysis on each clip in the background after a card loads, and on clips an import added before it finished. It marks highlights on clips without a radio log and picks each clip's picture. See [Highlights from video analysis](moments-and-cuts.md#highlights-from-video-analysis). Off, nothing runs on its own; **Find highlights again** in the library and `quadcam-cli library analyze-video` still work. On an older macOS the setting changes nothing, and Settings says why. In the settings file it is `videoAnalysis`; on the command line and in MCP it is `video_analysis`.
+On by default. On macOS 27 or later, QuadCam runs video analysis on each clip in the background after a card loads, and on clips an import added before it finished. It marks highlights on clips without a radio log and picks each clip's picture. See [Highlights from video analysis](moments-and-cuts.md#highlights-from-video-analysis). Off, nothing runs on its own; **Find Highlights Again** in the library and `quadcam-cli library analyze-video` still work. On an older macOS the setting changes nothing, and Settings says why. In the settings file it is `videoAnalysis`; on the command line and in MCP it is `video_analysis`.
 
 ### Look up weather
 
@@ -74,7 +74,7 @@ Off by default. On, the sidebar shows **Map** under Library: your places and cli
 
 ### On-device suggestions
 
-On by default. On a Mac with Apple's on-device model (macOS 26 or later, Apple Intelligence on), QuadCam suggests clip names, keywords and notes after a card loads, and the session report offers **Summarize day**. Off, neither runs, for the app, the command line or an agent. See [On-device suggestions](library.md#on-device-suggestions). In the settings file it is `onDeviceSuggestions`; on the command line and in MCP it is `on_device_suggestions`.
+On by default. On a Mac with Apple's on-device model (macOS 26 or later, Apple Intelligence on), QuadCam suggests clip names, keywords and notes after a card loads, and the session report offers **Summarize Day**. Off, neither runs, for the app, the command line or an agent. See [On-device suggestions](library.md#on-device-suggestions). In the settings file it is `onDeviceSuggestions`; on the command line and in MCP it is `on_device_suggestions`.
 
 ### Telemetry overlay folder
 
@@ -82,9 +82,9 @@ On by default. On a Mac with Apple's on-device model (macOS 26 or later, Apple I
 
 ### Updates
 
-On by default. QuadCam checks GitHub for a newer release about 30 seconds after it opens, then every hour while it runs. Off, it checks only when you select **QuadCam > Check for Updates…**, or **Check for Updates** under the version in Settings. Once a newer version is known, that button becomes **Restart to update**. In the settings file it is `updateCheck`; on the command line and in MCP it is `update_check`.
+On by default. QuadCam checks GitHub for a newer release about 30 seconds after it opens, then every hour while it runs. Off, it checks only when you select **QuadCam > Check for Updates…**, or **Check for Updates** under the version in Settings. Once a newer version is known, that button becomes **Restart to Update**. In the settings file it is `updateCheck`; on the command line and in MCP it is `update_check`.
 
-A newer version shows a banner with **Restart to update**, **Later** and a link to the release notes. **Restart to update** checks once more, downloads the newest release with a progress ring, checks its signature, installs it and restarts QuadCam in front of other apps. Every check runs while an update is known, so a newer release replaces the one the banner shows. QuadCam never installs a version at or below the one running. While a job runs (an import, a format, a card or device write, a flash, a backup), the banner waits and offers the restart when the job ends. A job that starts while the update installs holds the restart back the same way. **Later** hides the banner until the next check finds a newer version. Settings > Advanced offers the same **Restart to update** and release notes link, even after **Later**. A failed check never opens a dialog: Settings > Advanced shows the reason, and **Check for Updates…** shows it in a short message. An agent can read the update state in `quadcam_status` (`status.update`), but it cannot install an update or restart the app.
+A newer version shows a banner with **Restart to Update**, **Later** and a link to the release notes. **Restart to Update** checks once more, downloads the newest release with a progress ring, checks its signature, installs it and restarts QuadCam in front of other apps. Every check runs while an update is known, so a newer release replaces the one the banner shows. QuadCam never installs a version at or below the one running. While a job runs (an import, a format, a card or device write, a flash, a backup), the banner waits and offers the restart when the job ends. A job that starts while the update installs holds the restart back the same way. **Later** hides the banner until the next check finds a newer version. Settings > Advanced offers the same **Restart to Update** and release notes link, even after **Later**. A failed check never opens a dialog: Settings > Advanced shows the reason, and **Check for Updates…** shows it in a short message. An agent can read the update state in `quadcam_status` (`status.update`), but it cannot install an update or restart the app.
 
 ## The settings file
 
@@ -109,7 +109,7 @@ The app, the command-line tool and the MCP server all read and write this file.
 Three settings hold secrets: `google_places_key`, `tts_key` and `elrs_binding_phrase`. The ElevenLabs key is not a setting; it lives in the macOS Keychain ([ElevenLabs](gear.md#elevenlabs)).
 
 - **Write-only.** QuadCam never shows a stored secret. Every read shows its hint: the first and last characters and the length, for example `sk_9…8d4d (51 chars)`. A value of 16 or more characters shows 4 at each end, a shorter one a quarter of its length at each end, and one under 4 characters only its length. A hint never shows more than half the value.
-- **The Settings window** shows the hint and **Replace…**. **Replace…** opens an empty field; **Keep current** closes it.
+- **The Settings window** shows the hint and **Replace…**. **Replace…** opens an empty field; **Keep Current** closes it.
 - **Command line.** `quadcam-cli settings set-secret KEY` reads the value from one line of stdin, hidden at a terminal, so it stays out of the process list and your shell history: `op read "op://<vault>/<item>/<field>" | quadcam-cli settings set-secret google_places_key`. `settings set KEY=VALUE` still works for a secret, and prints a note that other processes can read a command's arguments. `settings show` keeps `"(set)"` in `values` and lists each hint in `secrets`.
 - **Agents.** MCP `quadcam_settings` `write` sets a secret, and `read` shows only the hints. A value an agent passes sits in the agent's transcript; `set-secret` from stdin keeps it out.
 

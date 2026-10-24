@@ -74,7 +74,7 @@ export function FlightsPage() {
             {dayPicker}
           </>
         }
-        more={[{ label: "Add log folder…", icon: "folder-open", run: () => void addFolder() }]}
+        more={[{ label: "Add Log Folder…", icon: "folder-open", run: () => void addFolder() }]}
         moreLabel="Flights actions"
       />
       {seg === "report" ? <Report day={reportDay} /> : <Flights data={flights.data} error={flights.error} shown={shown} />}
@@ -266,7 +266,7 @@ function Report({ day }: { day: string }) {
         <span className={styles.grow} />
         {onDeviceOn && onDeviceReady && !shown && (
           <Button icon="sparkle" disabled={summarizing} onClick={summarize}>
-            {summarizing ? "Summarizing…" : "Summarize day"}
+            {summarizing ? "Summarizing…" : "Summarize Day"}
           </Button>
         )}
         <Button

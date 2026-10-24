@@ -19,7 +19,7 @@ test("Suggest names fills empty names with one outing name and pack numbers, mar
   await openReview(app);
   await nameOf(page, "PICT0002.AVI").fill("my own name");
   await nameOf(page, "PICT0002.AVI").press("Tab");
-  await sheet(page).getByRole("button", { name: "Suggest names" }).click();
+  await sheet(page).getByRole("button", { name: "Suggest Names" }).click();
   await expect.poll(() => app.method("suggest_on_device")).toEqual([{ ids: null }]);
   await expect(nameOf(page, "PICT0001.AVI")).toHaveValue("morning loops pack 1");
   await expect(row(page, "PICT0001.AVI").getByText("on-device", { exact: true })).toBeVisible();
@@ -41,13 +41,13 @@ test("Suggest names fills empty names with one outing name and pack numbers, mar
 test("no Suggest names without the model or with the setting off", async ({ app, page }) => {
   await openReview(app, false);
   await expect(nameOf(page, "PICT0001.AVI")).toBeVisible();
-  await expect(sheet(page).getByRole("button", { name: "Suggest names" })).toHaveCount(0);
+  await expect(sheet(page).getByRole("button", { name: "Suggest Names" })).toHaveCount(0);
   expect(await app.calls("on_device_status")).toHaveLength(1);
 
   await app.open("review", { settings: { onDeviceSuggestions: false } });
   await page.getByRole("navigation", { name: "Library" }).getByRole("button", { name: /Unfinished import/ }).click();
   await expect(nameOf(page, "PICT0001.AVI")).toBeVisible();
-  await expect(sheet(page).getByRole("button", { name: "Suggest names" })).toHaveCount(0);
+  await expect(sheet(page).getByRole("button", { name: "Suggest Names" })).toHaveCount(0);
   expect(await app.calls("on_device_status")).toHaveLength(0);
 });
 
@@ -55,10 +55,10 @@ test("the session report's Summarize day adds the model's paragraph", async ({ a
   await app.open();
   await page.getByRole("navigation", { name: "Library" }).getByRole("button", { name: /^Flights/ }).click();
   await page.getByRole("group", { name: "Sections" }).getByRole("button", { name: "Session report" }).click();
-  await page.getByRole("button", { name: "Summarize day" }).click();
+  await page.getByRole("button", { name: "Summarize Day" }).click();
   await expect(page.getByLabel("Summary of the day")).toContainText("A calm morning at the field");
   expect((await app.method("gear_session_report")).at(-1)).toEqual({ day: null, summarize: true });
-  await expect(page.getByRole("button", { name: "Summarize day" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Summarize Day" })).toHaveCount(0);
   await app.core(`c => c.dialogAnswers.push("/Users/pilot/report.md")`);
   await page.getByRole("button", { name: "Save…" }).click();
   await expect(page.getByRole("status")).toContainText("Saved the report");
@@ -72,7 +72,7 @@ for (const scheme of axeSchemes) {
       await openReview(app);
       await nameOf(page, "PICT0002.AVI").fill("my own name");
       await nameOf(page, "PICT0002.AVI").press("Tab");
-      await sheet(page).getByRole("button", { name: "Suggest names" }).click();
+      await sheet(page).getByRole("button", { name: "Suggest Names" }).click();
       await expect(row(page, "PICT0002.AVI")).toContainText("On-device:");
       await page.mouse.move(0, 0);
       const r = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();

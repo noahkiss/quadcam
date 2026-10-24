@@ -21,7 +21,7 @@ async function openChanges(app: AppFixture, page: Page, plugged = true) {
 }
 
 async function stageSetting(page: Page, name: string, value: string) {
-  await page.getByRole("button", { name: "Edit setting…" }).click();
+  await page.getByRole("button", { name: "Edit Setting…" }).click();
   const d = page.getByRole("dialog", { name: "Edit setting" });
   await d.getByLabel("Setting").fill(name);
   await d.getByLabel("Value").fill(value);
@@ -108,7 +108,7 @@ test("a refused line fails the apply and offers the restore", async ({ app, page
   const sheet = page.getByRole("dialog", { name: "Apply to Whoop FC" });
   await sheet.getByRole("button", { name: "Apply" }).click();
   await expect(sheet.getByRole("region", { name: "Result" })).toContainText("The FC refused `set osd_ah_pos = 4000`");
-  await expect(sheet.getByRole("button", { name: "Restore backup" })).toBeVisible();
+  await expect(sheet.getByRole("button", { name: "Restore Backup" })).toBeVisible();
 });
 
 test("an agent's apply request waits for the person's click", async ({ app, page }) => {
@@ -145,7 +145,7 @@ test("an approved agent request shows its progress, its result and Restore backu
   const report = { change: change.id, device: FC_ID, status: "failed", steps: [{ name: "Backup", state: "done" }, { name: "Save", state: "failed", detail: "the FC did not answer" }], backup: "bk-1", after_backup: null, sent: [], failed_line: null, verify: [], saved: false, message: "The FC did not answer.", at: "2026-10-10T12:00:00Z" };
   await page.evaluate((r) => window.__qc!.emit("agent-apply-result", { id: 9, report: r, error: null }), report);
   await expect(sheet.getByRole("region", { name: "Result" })).toContainText("The FC did not answer.");
-  await expect(sheet.getByRole("button", { name: "Restore backup" })).toBeVisible();
+  await expect(sheet.getByRole("button", { name: "Restore Backup" })).toBeVisible();
   await sheet.getByRole("button", { name: "Done" }).click();
   await expect(sheet).toHaveCount(0);
 });
@@ -166,7 +166,7 @@ test("an agent's blackbox erase shows the apply sheet, waits for Apply and shows
   const report = { change: "blackbox-erase", device: FC_ID, status: "verified", steps: [{ name: "Erase the blackbox", state: "done" }], backup: null, after_backup: null, sent: [], failed_line: null, verify: [], saved: true, files: [], message: "Erased the blackbox flash in 12 s.", notes: [], at: "2026-10-10T12:00:00Z" };
   await page.evaluate((r) => window.__qc!.emit("agent-apply-result", { id: 12, report: r, error: null }), report);
   await expect(sheet.getByRole("region", { name: "Result" })).toContainText("Erased the blackbox flash in 12 s.");
-  await expect(sheet.getByRole("button", { name: "Restore backup" })).toHaveCount(0);
+  await expect(sheet.getByRole("button", { name: "Restore Backup" })).toHaveCount(0);
   await sheet.getByRole("button", { name: "Done" }).click();
   await expect(sheet).toHaveCount(0);
 });

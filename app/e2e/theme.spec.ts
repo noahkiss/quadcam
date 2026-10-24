@@ -102,12 +102,12 @@ for (const scheme of axeSchemes) {
 
     test("open dialog and menu pass axe", async ({ app, page }) => {
       await app.open("library", { query: "?gallery" });
-      await page.getByRole("button", { name: "Open menu" }).click();
+      await page.getByRole("button", { name: "Open Menu" }).click();
       await expect(page.getByRole("menu", { name: "Clip actions" })).toBeVisible();
       let r = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
       expect(r.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(" ") + " " + n.failureSummary).join(", ")}`)).toEqual([]);
       await page.keyboard.press("Escape");
-      await page.getByRole("button", { name: "Open dialog" }).click();
+      await page.getByRole("button", { name: "Open Dialog" }).click();
       await expect(page.getByRole("dialog", { name: "Move gap-run to the Trash?" })).toBeVisible();
       // Axe reads colors mid-fade otherwise.
       await page.waitForFunction(() => document.getAnimations().every((a) => a.playState === "finished"));

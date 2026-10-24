@@ -19,7 +19,7 @@ export function ClipCrashes({ clip: c, at }: { clip: LibClip; at: number | null 
       <div className={styles.crashHead}>
         <span className={styles.label}>Crashes</span>
         <Button size="sm" variant="ghost" icon="add" onClick={() => setLogging(true)}>
-          Log crash…
+          Log Crash…
         </Button>
       </div>
       {data && data.length === 0 && <p className={styles.muted}>None logged.</p>}

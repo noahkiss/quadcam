@@ -68,7 +68,7 @@ export function RadioAircraft({ d }: { d: DeviceRef }) {
       cell: (a) => (
         <div className={styles.actions}>
           <Button size="sm" variant="ghost" onClick={() => setFilter({ group: "all", aircraft: a.profile })}>
-            Show clips
+            Show Clips
           </Button>
           <Button size="sm" variant="danger-ghost" disabled={busy} aria-label={`Remove ${a.profile}`} onClick={() => void save(a.profile, false)}>
             Remove
@@ -93,7 +93,7 @@ export function RadioAircraft({ d }: { d: DeviceRef }) {
               ))}
             </Select>
             <Button size="sm" disabled={!pick || busy} onClick={() => void save(pick, true)}>
-              Add aircraft
+              Add Aircraft
             </Button>
           </>
         )

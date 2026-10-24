@@ -51,7 +51,7 @@ test("the Bench lists a device's changes, names the next session and asks to plu
   await app.core(`c => c.plug([${radio}])`);
   await expect(group.getByText("Plugged in")).toBeVisible();
   await expect(group.getByRole("status")).toHaveCount(0);
-  await expect(group.getByRole("button", { name: "Review 2 changes…" })).toBeEnabled();
+  await expect(group.getByRole("button", { name: "Review 2 Changes…" })).toBeEnabled();
 });
 
 test("a Try change on a radio card applies, unmounts the card, then waits for Keep", async ({ app, page }) => {
@@ -133,7 +133,7 @@ test("a card apply that reads back wrong puts the files back and says so", async
   const result = sheet.getByRole("region", { name: "Result" });
   await expect(result).toContainText("The card is as it was");
   await expect(result.getByRole("list", { name: "Steps" })).toContainText("Roll back");
-  await expect(sheet.getByRole("button", { name: "Restore backup" })).toHaveCount(0);
+  await expect(sheet.getByRole("button", { name: "Restore Backup" })).toHaveCount(0);
 });
 
 test("Mount mounts an unmounted card to browse and Done unmounts it", async ({ app, page }) => {
@@ -161,7 +161,7 @@ test("copy settings: pick the quads and the parts, read the diff, stage one chan
   await app.open();
   await secondFc(app, "4.5.1");
   await openBench(page);
-  await page.getByRole("button", { name: "Copy settings…" }).click();
+  await page.getByRole("button", { name: "Copy Settings…" }).click();
   const d = page.getByRole("dialog", { name: "Copy settings" });
   await expect(d.getByLabel("Copy from")).toHaveValue("fc-5a5a5a5a5a5a5a5a");
   await expect(d.getByRole("button", { name: "Stage" })).toBeDisabled();
@@ -185,7 +185,7 @@ test("copy settings refuses another release and says why", async ({ app, page })
   await app.open();
   await secondFc(app, "2025.12.5");
   await openBench(page);
-  await page.getByRole("button", { name: "Copy settings…" }).click();
+  await page.getByRole("button", { name: "Copy Settings…" }).click();
   const d = page.getByRole("dialog", { name: "Copy settings" });
   await d.getByLabel("OSD").check();
   await expect(d.getByRole("list", { name: "Checks" })).toContainText("settings change between releases");

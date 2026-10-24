@@ -76,7 +76,7 @@ export function TimersEditor({ detail, stage }: Props) {
       {free != null && (
         <div className={styles.bar}>
           <Button size="sm" icon="add" onClick={() => stage([{ op: "set_timer", index: free, fields: [{ key: "mode", value: "ON" }, { key: "swtch", value: "NONE" }] }])}>
-            Add timer
+            Add Timer
           </Button>
         </div>
       )}

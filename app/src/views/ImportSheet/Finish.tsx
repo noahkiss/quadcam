@@ -159,7 +159,7 @@ function PrepPanel() {
         </h4>
         <div className={styles.row}>
           <Button size="sm" variant="danger" disabled={!target} onClick={() => target && prepCard(target)}>
-            Prepare card…
+            Prepare Card…
           </Button>
         </div>
         <p className={styles.small}>QuadCam does not format a DJI card after an import. Card prep erases a removable card once every clip on it is in the library. A dialog names the disk first.</p>
@@ -198,7 +198,7 @@ function PhotosPanel() {
             />
           </label>
           <Button size="sm" variant="primary" disabled={!left.length} onClick={() => addToPhotos(draft ?? album)}>
-            {!verified.length ? "Add" : !left.length ? "All in Photos" : `Add ${files} file${files === 1 ? "" : "s"}`}
+            {!verified.length ? "Add" : !left.length ? "All in Photos" : `Add ${files} File${files === 1 ? "" : "s"}`}
           </Button>
         </div>
         <p className={styles.small}>{status}</p>
@@ -256,7 +256,7 @@ function FormatPanel() {
             />
           </label>
           <Button size="sm" variant="danger" icon={unlocked && ready ? "danger-triangle" : "lock"} disabled={!(unlocked && ready)} onClick={askFormat}>
-            Format card…
+            Format Card…
           </Button>
         </div>
         <p className={styles.small}>{ready ? "A dialog names the disk before anything is erased. Return does not confirm." : why || ""}</p>
@@ -281,7 +281,7 @@ function ReportPanel() {
         <p className={styles.muted}>Flights, air time, link and packs from the radio logs.</p>
       </div>
       <Button size="sm" variant="ghost" onClick={show}>
-        Show report
+        Show Report
       </Button>
     </section>
   );

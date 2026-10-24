@@ -28,7 +28,7 @@ Every program QuadCam runs is a macOS system tool, a module, or optional. `tests
 | `curl`, `tar`, `unzip`, `zipinfo`, `zip`, `ditto`, `codesign`, `xattr` | macOS | Downloads and unpacking (zipinfo lists a voice pack before it is unpacked), signing a module |
 | `say`, `afplay`, `osascript` | macOS | Spoken cues and voice previews |
 | `afconvert` | macOS | A published voice pack's AAC preview lines |
-| `gh` | Optional. QuadCam uses Homebrew's copy when it finds one | **Approve and publish** of a voice pack. Without it, QuadCam shows the commands to run |
+| `gh` | Optional. QuadCam uses Homebrew's copy when it finds one | **Approve and Publish** of a voice pack. Without it, QuadCam shows the commands to run |
 | `stty` | macOS | Hides the key as `quadcam-cli gear voice key set` reads it from a terminal |
 
 QuadCam bundles no tool. The cask installs only the app and `quadcam-cli`.
@@ -43,7 +43,7 @@ Open **Settings > Modules**.
 
 - **Install** shows the module's version, size, license, source and download address. Nothing downloads until you select **Download**.
 - QuadCam checks each download against the SHA-256 that the release pins. A mismatch deletes the file and stops the install: "The download does not match the expected checksum."
-- **Check for module updates** reads the newest pins that the latest QuadCam release published (`modules.json`). It installs nothing. The pins count only when `modules.json.sig` proves that QuadCam's release key signed them, the same key that signs the app's own updates; without that signature the check fails and changes nothing. A newer pin counts only when its download addresses are under the module's known release path (for esptool, `github.com/espressif/esptool/releases/download/`).
+- **Check for Module Updates** reads the newest pins that the latest QuadCam release published (`modules.json`). It installs nothing. The pins count only when `modules.json.sig` proves that QuadCam's release key signed them, the same key that signs the app's own updates; without that signature the check fails and changes nothing. A newer pin counts only when its download addresses are under the module's known release path (for esptool, `github.com/espressif/esptool/releases/download/`).
 - **Update** installs the new version next to the old one, then removes the old one.
 - **Remove** deletes the module's folder.
 

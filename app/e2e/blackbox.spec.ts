@@ -21,7 +21,7 @@ test("Pull blackbox stores the flash and keeps it while the erase setting is off
   const fc = await openBlackbox(app, page);
   await expect(fc.getByText("No blackbox pulled yet.")).toBeVisible();
   await expect(fc.getByRole("button", { name: "Erase flash" })).toBeDisabled();
-  await fc.getByRole("button", { name: "Pull blackbox" }).click();
+  await fc.getByRole("button", { name: "Pull Blackbox" }).click();
   await expect(page.getByText("3 logs stored (4 MB). Flash kept.")).toBeVisible();
   expect((await app.method("gear_blackbox_pull_click")).at(-1)).toEqual({ port: "/dev/cu.usbmodem0", keep: false, confirm: true });
   const table = fc.getByRole("table", { name: "Blackbox pulls" });
@@ -37,17 +37,17 @@ test("Pull blackbox stores the flash and keeps it while the erase setting is off
 test("with the setting on, a pull erases the flash and says it is safe to unplug", async ({ app, page }) => {
   const fc = await openBlackbox(app, page);
   await app.core(`c => { c.settings.values.gearEraseBlackbox = true; }`);
-  await fc.getByRole("button", { name: "Pull blackbox" }).click();
+  await fc.getByRole("button", { name: "Pull Blackbox" }).click();
   await expect(page.getByText("3 logs stored (4 MB). Flash erased. Safe to unplug.")).toBeVisible();
   await expect(fc.getByRole("table", { name: "Blackbox pulls" }).getByRole("row").nth(1)).toContainText("Erased");
   // Nothing left to pull.
-  await fc.getByRole("button", { name: "Pull blackbox" }).click();
+  await fc.getByRole("button", { name: "Pull Blackbox" }).click();
   await expect(page.getByText("The blackbox flash is empty.")).toBeVisible();
 });
 
 test("Erase flash asks first and needs a stored pull of what the flash holds", async ({ app, page }) => {
   const fc = await openBlackbox(app, page);
-  await fc.getByRole("button", { name: "Pull blackbox" }).click();
+  await fc.getByRole("button", { name: "Pull Blackbox" }).click();
   await expect(fc.getByRole("table", { name: "Blackbox pulls" })).toBeVisible();
   await fc.getByRole("button", { name: "Erase flash" }).click();
   const ask = dialog(page, "Erase the blackbox flash?");
@@ -72,17 +72,17 @@ test("Settings > Gear holds the blackbox erase setting and the Pull blackbox ste
     return page.getByRole("menu", { name: `Steps for ${kind}` });
   };
   let menu = await steps("FC");
-  await expect(menu.getByRole("menuitemcheckbox", { name: "Pull blackbox" })).toHaveAttribute("aria-checked", "false");
+  await expect(menu.getByRole("menuitemcheckbox", { name: "Pull Blackbox" })).toHaveAttribute("aria-checked", "false");
   // Apply ready changes runs for an FC and a radio only.
   await expect(menu.getByRole("menuitemcheckbox", { name: "Apply ready changes" })).toBeVisible();
   await page.keyboard.press("Escape");
   menu = await steps("Radio");
-  await expect(menu.getByRole("menuitemcheckbox", { name: "Pull blackbox" })).toHaveCount(0);
+  await expect(menu.getByRole("menuitemcheckbox", { name: "Pull Blackbox" })).toHaveCount(0);
   await expect(menu.getByRole("menuitemcheckbox", { name: "Apply ready changes" })).toBeVisible();
   await page.keyboard.press("Escape");
   await dlg.getByLabel("Erase blackbox after download").check();
   menu = await steps("FC");
-  await menu.getByRole("menuitemcheckbox", { name: "Pull blackbox" }).click();
+  await menu.getByRole("menuitemcheckbox", { name: "Pull Blackbox" }).click();
   await expect(dlg.getByRole("button", { name: "FC: Back up, Pull blackbox" })).toBeVisible();
   await dlg.getByRole("button", { name: "Done" }).click();
   const w = (await app.method("settings_set")).map((p) => (p as { values: Record<string, unknown> }).values).at(-1)!;

@@ -868,7 +868,7 @@ export function publish(g: MockGear, p: { pack: string; id?: string | null; vers
   const heard = v.heard[p.pack] ?? [];
   const files = LINES.filter((l) => !(v.retakes[p.pack] ?? []).some((r) => r.path === l.path)).map((l) => l.path);
   const unheard = files.filter((f) => !heard.some((h) => h.path === f));
-  if (unheard.length) throw `The speech check has not heard ${unheard.length} of the pack's ${files.length} lines: run Check speech (quadcam-cli gear voice check ${p.pack}) first.`;
+  if (unheard.length) throw `The speech check has not heard ${unheard.length} of the pack's ${files.length} lines: run Check Speech (quadcam-cli gear voice check ${p.pack}) first.`;
   const wrong = heard.filter((h) => files.includes(h.path) && !h.ok && !h.accepted);
   if (wrong.length) throw `${wrong.length} lines the speech check heard wrong are not accepted (${wrong.map((h) => h.path).join(", ")}): render them again, or listen and accept what was heard.`;
   const voice = p.voice_name?.trim() || k.voice;

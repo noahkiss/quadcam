@@ -154,7 +154,7 @@ export function OsdSegment({ paths: initial = [], device = null }: Props) {
           ]}
         />
         <Button icon="folder-open" onClick={openFile}>
-          Open dump…
+          Open Dump…
         </Button>
       </div>
       {editable && view && (
@@ -172,10 +172,10 @@ export function OsdSegment({ paths: initial = [], device = null }: Props) {
             </Select>
           </label>
           <Button size="sm" disabled={copy.from === copy.to} onClick={copyProfile}>
-            Copy profile
+            Copy Profile
           </Button>
           <Button size="sm" onClick={() => setCopying(true)}>
-            Copy from another quad…
+            Copy from Another Quad…
           </Button>
         </div>
       )}
@@ -190,7 +190,7 @@ export function OsdSegment({ paths: initial = [], device = null }: Props) {
                 Review…
               </Button>
               <Button size="sm" variant="danger-ghost" onClick={() => discard(osdChange.id)}>
-                Undo OSD edits
+                Undo OSD Edits
               </Button>
             </>
           }

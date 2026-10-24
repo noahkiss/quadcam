@@ -76,12 +76,12 @@ export function RepairsPage() {
         <div className={styles.actions}>
           {!c.repaired && (
             <Button size="sm" onClick={() => save(c, true)}>
-              Mark repaired
+              Mark Repaired
             </Button>
           )}
           <MoreMenu
             label={`More actions for the crash on ${fmtDay(c.day)}`}
-            items={[...(c.repaired ? [{ label: "Mark open", run: () => void save(c, false) }] : []), { label: "Delete…", icon: "trash-bin-trash", danger: true, run: () => void del(c) }]}
+            items={[...(c.repaired ? [{ label: "Mark Open", run: () => void save(c, false) }] : []), { label: "Delete…", icon: "trash-bin-trash", danger: true, run: () => void del(c) }]}
           />
         </div>
       ),

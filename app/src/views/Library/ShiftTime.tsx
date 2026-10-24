@@ -98,7 +98,7 @@ export function ShiftTime({ ids, onClose }: { ids: string[]; onClose: () => void
             Cancel
           </Button>
           <Button type="submit" value="shift" variant="primary" disabled={busy || !anchor || changed === 0}>
-            {changed === 1 ? "Shift 1 clip" : `Shift ${changed} clips`}
+            {changed === 1 ? "Shift 1 Clip" : `Shift ${changed} Clips`}
           </Button>
         </>
       }

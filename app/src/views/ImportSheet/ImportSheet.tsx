@@ -100,7 +100,7 @@ export function ImportSheet() {
           )}
           {session && step !== "load" && step !== "export" && (
             <Button size="sm" variant="ghost" onClick={startOver}>
-              Start over
+              Start Over
             </Button>
           )}
           <Button size="sm" variant="ghost" disabled={busy} onClick={() => setOpen(false)}>
@@ -113,7 +113,7 @@ export function ImportSheet() {
           <>
             {step === "finish" && (
               <Button variant="ghost" size="sm" icon="arrow-left" className={styles.back} onClick={() => setStep("review")}>
-                Back to review
+                Back to Review
               </Button>
             )}
             <span className={styles.footNote}>{step === "finish" && hasCard && release?.released ? "The card is unmounted." : ""}</span>

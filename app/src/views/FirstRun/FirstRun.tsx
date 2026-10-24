@@ -28,7 +28,7 @@ export function FirstRun() {
             Import…
           </Button>
           <Button icon="folder-open" disabled={!tools} onClick={openFolderAction}>
-            Open folder…
+            Open Folder…
           </Button>
         </div>
         <p className={styles.status}>
@@ -60,7 +60,7 @@ export function FirstRun() {
             </h3>
             <p>{profiles.length ? profiles.map((p) => p.name).join(", ") : "No aircraft yet."}</p>
             <Button size="sm" variant="primary" icon="add" onClick={() => s.openSettings("aircraft")}>
-              Add aircraft
+              Add Aircraft
             </Button>
           </div>
           <div className={styles.card}>
@@ -70,7 +70,7 @@ export function FirstRun() {
             </h3>
             <p>{places.length ? places.map((p) => p.name).join(", ") : "No saved places."}</p>
             <Button size="sm" icon="add" onClick={() => s.openSettings("places")}>
-              Add place
+              Add Place
             </Button>
           </div>
           <div className={styles.card}>

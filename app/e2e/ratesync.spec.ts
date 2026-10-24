@@ -25,7 +25,7 @@ const profiles = (page: Page) => page.getByRole("group", { name: "Rate profile" 
 test("editing a profile redraws the curve, stages the values and opens the apply sheet", async ({ app, page }) => {
   await openRates(app, page, true);
   await expect(page.getByRole("img", { name: /Roll: 152°\/s per full stick at the centre, 907°\/s at full stick/ })).toBeVisible();
-  await page.getByRole("button", { name: "Edit profile" }).click();
+  await page.getByRole("button", { name: "Edit Profile" }).click();
   const editor = page.getByRole("region", { name: "Edit rate profile" });
   await expect(editor.getByRole("button", { name: /^Stage/ })).toBeDisabled();
 
@@ -47,7 +47,7 @@ test("editing a profile redraws the curve, stages the values and opens the apply
   ]);
 
   // The apply sheet shows the lines; nothing was written before the click.
-  await editor.getByRole("button", { name: "Review and apply…" }).click();
+  await editor.getByRole("button", { name: "Review and Apply…" }).click();
   const sheet = page.getByRole("dialog", { name: "Apply to Whoop FC" });
   await expect(sheet.getByRole("region", { name: "Changes" })).toContainText("set roll_rc_rate = 150");
   await expect(sheet.getByRole("region", { name: "Changes" })).toContainText("set thr_mid = 40");
@@ -60,7 +60,7 @@ test("editing a profile redraws the curve, stages the values and opens the apply
 test("converting to another rate model fits the curve and shows the gap", async ({ app, page }) => {
   await openRates(app, page);
   await profiles(page).getByRole("button", { name: "1 RACE" }).click();
-  await page.getByRole("button", { name: "Edit profile" }).click();
+  await page.getByRole("button", { name: "Edit Profile" }).click();
   const editor = page.getByRole("region", { name: "Edit rate profile" });
   await editor.getByLabel("Convert to").selectOption("betaflight");
   await expect(editor).toContainText("Fitted onto Betaflight. Largest gap from the old curve:");
@@ -78,11 +78,11 @@ test("converting to another rate model fits the curve and shows the gap", async 
 
 test("a dump file is not editable", async ({ app, page }) => {
   await openRates(app, page);
-  await expect(page.getByRole("button", { name: "Edit profile" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Edit Profile" })).toBeVisible();
   await app.core(`c => { c.dialogAnswers.push(["/Users/pilot/bench/quad.dump_all.txt"]); }`);
-  await page.getByRole("button", { name: "Open dump…" }).click();
+  await page.getByRole("button", { name: "Open Dump…" }).click();
   await expect(page.getByText("quad.dump_all.txt")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Edit profile" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Edit Profile" })).toHaveCount(0);
 });
 
 test("syncing a sim profile plans, backs up through the sheet and reads as matching after", async ({ app, page }) => {
@@ -193,7 +193,7 @@ test("an agent's sim sync request waits for the person's click", async ({ app, p
 
 test("the editor and the sim sheet pass axe", async ({ app, page }) => {
   await openRates(app, page);
-  await page.getByRole("button", { name: "Edit profile" }).click();
+  await page.getByRole("button", { name: "Edit Profile" }).click();
   await expect(page.getByRole("region", { name: "Edit rate profile" })).toBeVisible();
   const r = await new AxeBuilder({ page }).analyze();
   expect(r.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target).join(" | ")}`)).toEqual([]);

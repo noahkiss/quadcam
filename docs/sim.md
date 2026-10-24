@@ -44,7 +44,7 @@ The **Switches** card, beside **Calibrate** on a wide window, lists them, each w
    model QuadCam knows, this is a short check: move each stick all the way both ways.
 2. **Let go**: the centres come from 0.6 s of still sticks. Throttle needs none. If throttle
    and a stick were swapped, the one that stays where it was left is throttle.
-3. **Flip the arm switch** (skipped when the quad's modes name it). **No arm switch** skips it.
+3. **Flip the arm switch** (skipped when the quad's modes name it). **No Arm Switch** skips it.
 4. **Press the reset control**: a free button or trim. **Keep** takes the suggestion.
 5. **Review**: the sticks show the calibrated output live. **Axes** opens at this step (click it
    to open it at any step). Per axis: the channel (picking a channel another stick has swaps the

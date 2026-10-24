@@ -244,7 +244,7 @@ export function BrowseVoices({ onClose, onAdded }: { onClose: () => void; onAdde
         <div className={styles.bar}>
           <TextField label="Voice ID" inline value={byId} onChange={(e) => setById(e.target.value)} />
           <Button size="sm" disabled={busy || !byId.trim()} onClick={() => void load(query, byId.trim())}>
-            Look up
+            Look Up
           </Button>
         </div>
         {error && (

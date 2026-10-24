@@ -93,7 +93,7 @@ test("a bad read back is reported and the radio stays in DFU", async ({ app, pag
   await expect(result).toContainText("The restore failed");
   await expect(result).toContainText("The radio stays in DFU mode");
   await expect(result.getByRole("listitem").filter({ hasText: "Write" }).first()).toContainText("failed");
-  await expect(sheet.getByRole("button", { name: "Restore backup" })).toHaveCount(0);
+  await expect(sheet.getByRole("button", { name: "Restore Backup" })).toHaveCount(0);
 });
 
 for (const scheme of axeSchemes) {

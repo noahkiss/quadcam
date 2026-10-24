@@ -25,7 +25,7 @@ test("the page reads the network only when asked, and says what it found", async
   await expect(page.locator("[data-component=summary-line]")).toHaveText("Not checked yet");
   expect((await app.method("gear_firmware")).every((c) => c.check !== true)).toBe(true);
 
-  await page.getByRole("button", { name: "Check for updates" }).click();
+  await page.getByRole("button", { name: "Check for Updates" }).click();
   await expect(page.getByRole("status").filter({ hasText: /^Checked / })).toBeVisible();
   expect((await app.method("gear_firmware")).at(-1)).toMatchObject({ check: true });
   const radio = table.getByRole("row", { name: /Field radio/ });
@@ -50,7 +50,7 @@ test("the page reads the network only when asked, and says what it found", async
 test("a source that fails is reported and the others still show", async ({ app, page }) => {
   await openFirmware(app, page);
   await app.core(`c => { c.firmware.failing = ["Betaflight"]; }`);
-  await page.getByRole("button", { name: "Check for updates" }).click();
+  await page.getByRole("button", { name: "Check for Updates" }).click();
   await expect(page.getByText(/Betaflight: The download failed/)).toBeVisible();
   await expect(page.getByRole("row", { name: /Field radio/ })).toContainText("Update available");
   await expect(page.getByRole("row", { name: /Whoop FC/ })).toContainText("Unknown");
@@ -60,7 +60,7 @@ test("a flash shows its checks, needs the DFU radio, and writes only on Apply", 
   await openFirmware(app, page);
   await makePocket(app);
   await app.core(`c => { c.firmware.dfu = 0; }`);
-  await page.getByRole("button", { name: "Check for updates" }).click();
+  await page.getByRole("button", { name: "Check for Updates" }).click();
   await page.getByRole("button", { name: "Flash 2.12.4…" }).click();
   const sheet = page.getByRole("dialog", { name: "Flash Field radio" });
   await expect(sheet.getByRole("region", { name: "Changes" })).toContainText("2.12.3");
@@ -88,7 +88,7 @@ test("a flash shows its checks, needs the DFU radio, and writes only on Apply", 
 test("the flash sheet links an unlinked DFU device to the radio, then plans again", async ({ app, page }) => {
   await openFirmware(app, page);
   await makePocket(app);
-  await page.getByRole("button", { name: "Check for updates" }).click();
+  await page.getByRole("button", { name: "Check for Updates" }).click();
   await page.getByRole("button", { name: "Flash 2.12.4…" }).click();
   const sheet = page.getByRole("dialog", { name: "Flash Field radio" });
   const link = sheet.getByRole("region", { name: "DFU device" });
@@ -108,7 +108,7 @@ test("a bad read back is reported and the radio stays in DFU", async ({ app, pag
   await openFirmware(app, page);
   await makePocket(app);
   await app.core(`c => { c.firmware.failNext = true; }`);
-  await page.getByRole("button", { name: "Check for updates" }).click();
+  await page.getByRole("button", { name: "Check for Updates" }).click();
   await page.getByRole("button", { name: "Flash 2.12.4…" }).click();
   const sheet = page.getByRole("dialog", { name: "Flash Field radio" });
   await sheet.getByRole("button", { name: "Apply" }).click();
@@ -116,17 +116,17 @@ test("a bad read back is reported and the radio stays in DFU", async ({ app, pag
   await expect(result).toContainText("The radio stays in DFU mode");
   await expect(result.getByRole("listitem").filter({ hasText: "Write" }).first()).toContainText("failed");
   await expect(result).toContainText("ROM bootloader always answers over USB");
-  await expect(sheet.getByRole("button", { name: "Restore backup" })).toHaveCount(0);
+  await expect(sheet.getByRole("button", { name: "Restore Backup" })).toHaveCount(0);
 });
 
 test("Read firmware lists the steps, reads with no write, and compares the version", async ({ app, page }) => {
   await openFirmware(app, page);
   await makePocket(app, "2.12.4");
-  await page.getByRole("button", { name: "Read firmware…" }).click();
+  await page.getByRole("button", { name: "Read Firmware…" }).click();
   const section = page.getByRole("dialog", { name: "Read radio firmware" });
   await expect(section.getByRole("list", { name: "Steps" })).toContainText("Turn the radio off.");
   await expect(section.getByRole("list", { name: "Steps" })).toContainText("Do not hold any buttons.");
-  await section.getByRole("button", { name: "Read firmware" }).click();
+  await section.getByRole("button", { name: "Read Firmware" }).click();
   const copy = section.getByRole("region", { name: "Firmware copy" });
   await expect(copy).toContainText("The radio's firmware is EdgeTX 2.12.4");
   await expect(copy.getByRole("list", { name: "Read steps" })).toContainText("Read the flash twice");
@@ -143,13 +143,13 @@ test("Read firmware says when no radio is in DFU mode and when the version diffe
   await openFirmware(app, page);
   await makePocket(app, "2.11.3");
   await app.core(`c => { c.firmware.dfu = 0; }`);
-  await page.getByRole("button", { name: "Read firmware…" }).click();
+  await page.getByRole("button", { name: "Read Firmware…" }).click();
   const section = page.getByRole("dialog", { name: "Read radio firmware" });
-  await section.getByRole("button", { name: "Read firmware" }).click();
+  await section.getByRole("button", { name: "Read Firmware" }).click();
   await expect(section).toContainText("No radio is in DFU mode.");
   await expect(section).toContainText("do not hold the trim buttons");
   await app.core(`c => { c.firmware.dfu = 1; }`);
-  await section.getByRole("button", { name: "Read firmware" }).click();
+  await section.getByRole("button", { name: "Read Firmware" }).click();
   await expect(section.getByRole("region", { name: "Firmware copy" })).toContainText("names EdgeTX 2.12.4, but QuadCam knows the radio as 2.11.3");
   await expect(section).not.toContainText("No radio is in DFU mode.");
 });
@@ -164,23 +164,23 @@ async function openSplash(app: AppFixture, page: Page) {
 test("the splash segment previews a PNG, refuses a colour radio, and plans a flash with it", async ({ app, page }) => {
   await openSplash(app, page);
   await app.core(`c => { c.dialogAnswers.push(["/Users/me/Pictures/logo.png"]); }`);
-  await page.getByRole("button", { name: "Choose image…" }).click();
+  await page.getByRole("button", { name: "Choose Image…" }).click();
   // The radio is a TX16S: its splash is not supported yet.
   await expect(page.getByText("This radio's splash format is not supported yet (board tx16s).")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Flash with splash…" })).toBeDisabled();
-  await expect(page.getByRole("button", { name: "Flash with splash…" })).toHaveAccessibleDescription("This radio cannot take a splash yet.");
+  await expect(page.getByRole("button", { name: "Flash with Splash…" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Flash with Splash…" })).toHaveAccessibleDescription("This radio cannot take a splash yet.");
 
   await makePocket(app, "2.12.4");
   await page.getByRole("group", { name: "Sections" }).getByRole("button", { name: "Overview" }).click();
   await page.getByRole("group", { name: "Sections" }).getByRole("button", { name: "Splash" }).click();
   await app.core(`c => { c.dialogAnswers.push(["/Users/me/Pictures/logo.png"]); }`);
-  await page.getByRole("button", { name: "Choose image…" }).click();
+  await page.getByRole("button", { name: "Choose Image…" }).click();
   await expect(page.getByRole("img", { name: /Splash preview, 128 by 64/ })).toBeVisible();
   await page.getByLabel("Threshold").fill("200");
   await page.getByLabel("Invert").check();
   await expect.poll(async () => (await app.method("gear_splash")).at(-1)).toMatchObject({ image: "/Users/me/Pictures/logo.png", threshold: 200, invert: true, board: "pocket" });
 
-  await page.getByRole("button", { name: "Flash with splash…" }).click();
+  await page.getByRole("button", { name: "Flash with Splash…" }).click();
   const sheet = page.getByRole("dialog", { name: "Flash Field radio" });
   await expect(sheet.getByRole("list", { name: "Checks" })).toContainText("Splash markers");
   await expect(sheet.getByRole("region", { name: "Changes" })).toContainText("Splash:");
@@ -201,7 +201,7 @@ const makeMeteor = (app: AppFixture) =>
 async function openVendorRow(app: AppFixture, page: Page) {
   await openFirmware(app, page);
   await makeMeteor(app);
-  await page.getByRole("button", { name: "Check for updates" }).click();
+  await page.getByRole("button", { name: "Check for Updates" }).click();
   await expect(page.getByRole("status").filter({ hasText: /^Checked / })).toBeVisible();
   return page.getByRole("table", { name: "Firmware" }).getByRole("row", { name: /Whoop FC/ });
 }

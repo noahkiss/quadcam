@@ -33,11 +33,11 @@ test("Devices groups rows by kind, and a row's menu backs up, edits and forgets"
   await expect(table.getByRole("row", { name: /Whoop FC/ })).toContainText("Not connected");
 
   await table.getByRole("button", { name: "More actions for Field radio" }).click();
-  await page.getByRole("menuitem", { name: "Back up now" }).click();
+  await page.getByRole("menuitem", { name: "Back Up Now" }).click();
   await expect(page.getByText("No changes since the last backup.")).toBeVisible();
 
   await table.getByRole("button", { name: "More actions for Whoop FC" }).click();
-  await expect(page.getByRole("menuitem", { name: "Back up now" })).toBeDisabled();
+  await expect(page.getByRole("menuitem", { name: "Back Up Now" })).toBeDisabled();
   await page.getByRole("menuitem", { name: "Forget…" }).click();
   await dialog(page, "Forget Whoop FC?").getByRole("button", { name: "Forget" }).click();
   await expect(table.getByRole("row", { name: /Whoop FC/ })).toHaveCount(0);
@@ -84,9 +84,9 @@ test("the Bench sums up in its header; a row keeps Review and puts Discard in it
 
   // Narrow: Copy settings… joins the menu, and each change stacks.
   await page.setViewportSize({ width: 420, height: 900 });
-  await expect(page.getByRole("button", { name: "Copy settings…" })).toBeHidden();
+  await expect(page.getByRole("button", { name: "Copy Settings…" })).toBeHidden();
   await page.getByRole("button", { name: "Bench actions" }).click();
-  await expect(page.getByRole("menuitem", { name: "Copy settings…" })).toBeVisible();
+  await expect(page.getByRole("menuitem", { name: "Copy Settings…" })).toBeVisible();
   await page.keyboard.press("Escape");
   if (process.env.QC_SHOTS) await page.screenshot({ path: `${process.env.QC_SHOTS}/pages-bench-420.png` });
 });
@@ -139,7 +139,7 @@ test("Repairs puts open crashes first with Mark repaired and folds the repaired 
   await expect(card.getByRole("table", { name: "Crashes on Whoop" })).not.toContainText("prop");
   await card.getByText("1 repaired").click();
   await expect(card.getByRole("table", { name: "Repaired crashes on Whoop" })).toContainText("prop");
-  await card.getByRole("button", { name: "Mark repaired" }).click();
+  await card.getByRole("button", { name: "Mark Repaired" }).click();
   expect((await app.method("gear_crash_save")).at(-1)).toMatchObject({ id: "crash-1", repaired: true });
 });
 
@@ -150,8 +150,8 @@ test("the Map page lists the places beside the map; Add place… searches and sa
   await expect(list).toContainText("Home field");
   await expect(list).toContainText("2 clips");
   if (process.env.QC_SHOTS) await page.screenshot({ path: `${process.env.QC_SHOTS}/pages-map-1280.png` });
-  await list.getByRole("button", { name: "Add place…" }).click();
-  const pop = page.getByRole("dialog", { name: "Add place" });
+  await list.getByRole("button", { name: "Add Place…" }).click();
+  const pop = page.getByRole("dialog", { name: "Add Place" });
   await pop.getByLabel("Search for a place").fill("Golden Gate Park");
   await pop.getByLabel("Search for a place").press("Enter");
   await pop.getByRole("list", { name: "Search results" }).getByRole("button").first().click();

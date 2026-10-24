@@ -66,7 +66,7 @@ export function ScreensEditor({ detail, stage }: Props) {
       {next != null && (
         <div className={styles.bar}>
           <Button size="sm" icon="add" onClick={() => stage([{ op: "set_screen_values", index: next, lines: [["Tmr1"]] }])}>
-            Add value screen
+            Add Value Screen
           </Button>
         </div>
       )}

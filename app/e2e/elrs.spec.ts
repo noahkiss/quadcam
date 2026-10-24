@@ -19,7 +19,7 @@ test("the ELRS tools are off until the setting is on", async ({ app, page }) => 
   await expect(box).not.toBeChecked();
   await expect(page.getByRole("button", { name: /^Read the module/ })).toHaveCount(0);
   await box.check();
-  await expect(page.getByRole("button", { name: "Read the module in Field radio" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Read the Module in Field radio" })).toBeVisible();
   await expect(page.getByText("QuadCam has not tried these on a real radio")).toBeVisible();
   expect((await app.method("settings_set")).some((v) => (v.values as Record<string, unknown>).elrsPreview === true)).toBe(true);
   const axe = await new AxeBuilder({ page }).analyze();
@@ -28,13 +28,13 @@ test("the ELRS tools are off until the setting is on", async ({ app, page }) => 
 
 test("a read through the radio and the FC fills the table and warns about mixed majors", async ({ app, page }) => {
   await openFirmware(app, page, { elrsPreview: true });
-  await page.getByRole("button", { name: "Read the module in Field radio" }).click();
+  await page.getByRole("button", { name: "Read the Module in Field radio" }).click();
   const table = page.getByRole("table", { name: "ExpressLRS devices" });
   const tx = table.getByRole("row", { name: /Transmitter/ });
   await expect(tx).toContainText("RM Pocket 2.4GHz TX");
   await expect(tx).toContainText("4.1.0");
   await expect(page.getByText(/restart the radio when you are done/)).toBeVisible();
-  await page.getByRole("button", { name: "Read the receiver in Whoop FC" }).click();
+  await page.getByRole("button", { name: "Read the Receiver in Whoop FC" }).click();
   const rx = table.getByRole("row", { name: /Receiver/ });
   await expect(rx).toContainText("3.5.3");
   await expect(page.getByText(/do not link/)).toBeVisible();
@@ -43,11 +43,11 @@ test("a read through the radio and the FC fills the table and warns about mixed 
 
 test("an option change is staged and applied through the apply sheet", async ({ app, page }) => {
   await openFirmware(app, page, { elrsPreview: true });
-  await page.getByRole("button", { name: "Read the module in Field radio" }).click();
+  await page.getByRole("button", { name: "Read the Module in Field radio" }).click();
   await page.getByRole("button", { name: "Options" }).click();
   const group = page.getByRole("group", { name: /Options of/ });
   await group.getByLabel("Packet rate").selectOption("250Hz(-108dBm)");
-  await group.getByRole("button", { name: "Stage changes" }).click();
+  await group.getByRole("button", { name: "Stage Changes" }).click();
   const sheet = page.getByRole("dialog", { name: /Apply to/ });
   await expect(sheet.getByRole("region", { name: "Changes" })).toContainText("packet_rate: 250Hz(-108dBm)");
   await expect(sheet).toContainText("QuadCam reads the device again first");
@@ -59,7 +59,7 @@ test("an option change is staged and applied through the apply sheet", async ({ 
 
 test("a flash needs the phrase, then runs only on Apply", async ({ app, page }) => {
   await openFirmware(app, page, { elrsPreview: true });
-  await page.getByRole("button", { name: "Read the receiver in Whoop FC" }).click();
+  await page.getByRole("button", { name: "Read the Receiver in Whoop FC" }).click();
   await page.getByRole("button", { name: "Flash 4.1.0…" }).click();
   const sheet = page.getByRole("dialog", { name: /^Flash / });
   await expect(sheet.getByRole("list", { name: "Checks" })).toContainText("A binding phrase is set");
@@ -68,7 +68,7 @@ test("a flash needs the phrase, then runs only on Apply", async ({ app, page }) 
   await sheet.getByRole("button", { name: "Cancel" }).click();
 
   await page.getByLabel("Binding phrase").fill("bench-phrase-not-real");
-  await page.getByRole("button", { name: "Save phrase" }).click();
+  await page.getByRole("button", { name: "Save Phrase" }).click();
   // The field closes on its hint; the phrase never comes back.
   await expect(page.getByLabel("Binding phrase")).toHaveText("benc…real (21 chars)");
   await expect(page.getByRole("button", { name: "Replace…" })).toBeVisible();

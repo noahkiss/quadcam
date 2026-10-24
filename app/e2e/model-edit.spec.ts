@@ -57,7 +57,7 @@ test("a timer edit stages, and a second edit of the same timer joins the same ch
     [["set_timer", 1, ["minuteBeep"]]],
   ]);
   // Undo discards the change.
-  await page.getByRole("button", { name: "Undo model edits" }).click();
+  await page.getByRole("button", { name: "Undo Model Edits" }).click();
   await dialog(page, "Undo model edits?").getByRole("button", { name: "Undo" }).click();
   await expect(page.getByText(/model edits? (is|are) staged/)).toHaveCount(0);
   await expect(timers.getByLabel("Timer 2 name")).toHaveValue("FLT");
@@ -66,9 +66,9 @@ test("a timer edit stages, and a second edit of the same timer joins the same ch
 test("a timer can be added and removed", async ({ app, page }) => {
   await openSegment(app, page, "Models");
   const timers = page.getByRole("region", { name: "Timers" });
-  await timers.getByRole("button", { name: "Add timer" }).click();
+  await timers.getByRole("button", { name: "Add Timer" }).click();
   await expect(timers.getByText("Timer 3")).toBeVisible();
-  await expect(timers.getByRole("button", { name: "Add timer" })).toHaveCount(0);
+  await expect(timers.getByRole("button", { name: "Add Timer" })).toHaveCount(0);
   await timers.getByRole("button", { name: "Remove timer 3" }).click();
   // Back to what the radio has: the change is gone.
   await expect(page.getByText(/model edits? (is|are) staged/)).toHaveCount(0);
@@ -114,17 +114,17 @@ test("logging, the sensors in the log and the RSSI alarms", async ({ app, page }
 test("a battery callout is added, edited, and removed", async ({ app, page }) => {
   await openSegment(app, page, "Models");
   const callouts = page.getByRole("region", { name: "Callouts" });
-  await callouts.getByRole("button", { name: "Add callout" }).click();
+  await callouts.getByRole("button", { name: "Add Callout" }).click();
   const form = callouts.getByRole("form", { name: "Callout" });
-  await form.getByRole("button", { name: "Stage callout" }).click();
+  await form.getByRole("button", { name: "Stage Callout" }).click();
   await expect(form.getByRole("alert")).toHaveText("Pick a sound for the callout.");
   await form.getByLabel("Sound").fill("lowbat");
-  await form.getByRole("button", { name: "Stage callout" }).click();
+  await form.getByRole("button", { name: "Stage Callout" }).click();
   await expect(form.getByRole("alert")).toHaveText("The value is a number.");
   await form.getByLabel("Value").fill("3.5");
   await form.getByLabel("Repeat", { exact: true }).selectOption("every");
   await form.getByLabel("Seconds between repeats").fill("5");
-  await form.getByRole("button", { name: "Stage callout" }).click();
+  await form.getByRole("button", { name: "Stage Callout" }).click();
   await expect.poll(() => lastEdit(app)).toEqual({
     device: RADIO_ID,
     model: "model01.yml",
@@ -135,7 +135,7 @@ test("a battery callout is added, edited, and removed", async ({ app, page }) =>
   // Edit it: the same track replaces the staged callout.
   await callouts.getByRole("button", { name: "Edit callout lowbat" }).click();
   await callouts.getByLabel("Value").fill("3.4");
-  await callouts.getByRole("button", { name: "Stage callout" }).click();
+  await callouts.getByRole("button", { name: "Stage Callout" }).click();
   await expect(callouts).toContainText("lowbat RxBt below 3.4 for 2 s, every 5 s");
   await expect(page.getByText("1 model edit is staged.")).toBeVisible();
   // A callout the editor did not write cannot be edited, but it can be removed.
@@ -149,30 +149,30 @@ test("the checklist editor stages text, checks the width, and turns the checklis
   const sec = page.getByRole("region", { name: "Checklist" });
   await expect(sec.getByText("This model has no checklist items.")).toBeVisible();
   await expect(sec.getByRole("checkbox", { name: "Show the checklist when the model loads" })).not.toBeChecked();
-  await sec.getByRole("button", { name: "Add item" }).click();
+  await sec.getByRole("button", { name: "Add Item" }).click();
   await sec.getByLabel("Item 1", { exact: true }).fill("Props tight");
-  await sec.getByRole("button", { name: "Add item" }).click();
+  await sec.getByRole("button", { name: "Add Item" }).click();
   await sec.getByLabel("Item 2", { exact: true }).fill("Battery strapped, antenna clear of props");
   await expect(sec.getByRole("alert")).toContainText("One item is over 20 characters");
-  await expect(sec.getByRole("button", { name: "Stage checklist" })).toBeDisabled();
+  await expect(sec.getByRole("button", { name: "Stage Checklist" })).toBeDisabled();
   await sec.getByLabel("Item 2", { exact: true }).fill("Battery strapped");
   await sec.getByRole("checkbox", { name: "Tick box" }).nth(1).uncheck();
   await sec.getByRole("button", { name: "Move item 2 up" }).click();
   await expect(sec.getByLabel("Item 1", { exact: true })).toHaveValue("Battery strapped");
-  await sec.getByRole("button", { name: "Stage checklist" }).click();
+  await sec.getByRole("button", { name: "Stage Checklist" }).click();
   await expect.poll(() => lastEdit(app)).toMatchObject({ ops: [], checklist: "Battery strapped\n=Props tight\n" });
   await expect(page.getByText("2 model edits are staged.")).toBeVisible();
   await expect(sec.getByRole("checkbox", { name: "Show the checklist when the model loads" })).toBeChecked();
-  await expect(sec.getByRole("button", { name: "Stage checklist" })).toBeDisabled();
+  await expect(sec.getByRole("button", { name: "Stage Checklist" })).toBeDisabled();
 });
 
 test("Review shows the card diff, and the apply verifies; the next read shows the applied model", async ({ app, page }) => {
   await openSegment(app, page, "Models", true);
   const callouts = page.getByRole("region", { name: "Callouts" });
-  await callouts.getByRole("button", { name: "Add callout" }).click();
+  await callouts.getByRole("button", { name: "Add Callout" }).click();
   await callouts.getByLabel("Sound").fill("lowbat");
   await callouts.getByLabel("Value").fill("3.5");
-  await callouts.getByRole("button", { name: "Stage callout" }).click();
+  await callouts.getByRole("button", { name: "Stage Callout" }).click();
   await page.getByRole("button", { name: "Review…" }).click();
   const sheet = page.getByRole("dialog", { name: "Apply to Field radio" });
   await expect(sheet.getByRole("region", { name: "Changes" })).toContainText("callout lowbat");
@@ -192,9 +192,9 @@ for (const scheme of axeSchemes) {
         await openSegment(app, page, segment);
         if (segment === "Models") {
           await page.getByRole("region", { name: "Timers" }).getByLabel("Timer 2 countdown").selectOption("1");
-          await page.getByRole("region", { name: "Callouts" }).getByRole("button", { name: "Add callout" }).click();
+          await page.getByRole("region", { name: "Callouts" }).getByRole("button", { name: "Add Callout" }).click();
         } else {
-          await page.getByRole("button", { name: "Add item" }).click();
+          await page.getByRole("button", { name: "Add Item" }).click();
         }
         await expect(page.getByRole("group", { name: "Sections" })).toBeVisible();
         const r = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();

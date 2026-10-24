@@ -37,7 +37,7 @@ function StagedVoice({ radio }: { radio: string | null }) {
             Review…
           </Button>
           <Button size="sm" variant="danger-ghost" onClick={() => discard(change.id)}>
-            Undo voice change
+            Undo Voice Change
           </Button>
         </>
       }
@@ -83,7 +83,7 @@ function Choose({ radio, view, act }: { radio: string; view: VoiceView; act: <T>
           </label>
           <Checkbox label="Keep my overrides" checked={keep} onChange={(e) => setKeep(e.target.checked)} />
           <Button variant="primary" onClick={() => act(() => api.gearVoiceChoose({ radio, pack: current, keep_overrides: keep, editor: null }))}>
-            Choose voice
+            Choose Voice
           </Button>
           <OpenVoices />
         </div>
@@ -152,7 +152,7 @@ function LineRow({ radio, line, view, act, setError }: { radio: string; line: Vo
           </Select>
           {own === null ? (
             <Button size="sm" onClick={() => setOwn(ov?.text ?? line.text)}>
-              My text…
+              My Text…
             </Button>
           ) : (
             <span className={styles.own}>
@@ -176,7 +176,7 @@ function LineRow({ radio, line, view, act, setError }: { radio: string; line: Vo
                       if ((await edit(own, true, ask.digest)) !== undefined) close();
                     }}
                   >
-                    Render and pay
+                    Render and Pay
                   </Button>
                 </>
               ) : (

@@ -6,7 +6,7 @@ const card = (page: Page, name: string) => page.getByRole("article", { name });
 
 async function findHighlights(page: Page, name: string) {
   await card(page, name).click({ button: "right" });
-  await page.getByRole("menu", { name: "Clip actions" }).getByRole("menuitem", { name: "Find highlights again" }).click();
+  await page.getByRole("menu", { name: "Clip actions" }).getByRole("menuitem", { name: "Find Highlights Again" }).click();
 }
 
 test("Find highlights again marks highlights on a clip without a radio log", async ({ app, page }) => {

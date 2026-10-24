@@ -12,7 +12,7 @@ QuadCam is a macOS app that imports the recordings from your FPV goggles into a 
 - **Named files.** Each file is `YYYY-MM-DD_<name>.mp4`, in a folder per year and per flying day.
 - **Small MP4s.** Hardware H.264 makes files that play everywhere and are much smaller than the DVR's MJPEG. A lossless MOV option keeps the original frames. DJI clips are already H.264 or H.265: QuadCam copies them as they are.
 - **Verified imports.** QuadCam compares every output with its source: frame count, duration, streams and metadata. It recovers half-written clips, for example after a power-off during recording, and marks empty ones.
-- **Moments and dead air.** QuadCam finds rolls, flips, punch-outs and dives in the radio log, and the no-signal stretches in the video. You export any range as a cut. **Split by flight** makes one cut per radio-log flight.
+- **Moments and dead air.** QuadCam finds rolls, flips, punch-outs and dives in the radio log, and the no-signal stretches in the video. You export any range as a cut. **Split by Flight** makes one cut per radio-log flight.
 - **Long recordings stay whole.** An analog DVR splits a long recording into files of a fixed length (10 minutes on a Fat Shark Echo) or size. QuadCam imports those files as one clip. See [Joined recordings](docs/library.md#joined-recordings).
 - **A library you can trust.** Rate, flag, search, rename and edit your clips. Every detail is written into the file itself, and the index rebuilds from the files.
 - **Metadata that Photos reads.** Date, time, place, aircraft and keywords go into QuickTime tags. Add clips to Photos, into an album.
@@ -24,7 +24,7 @@ QuadCam is a macOS app that imports the recordings from your FPV goggles into a 
   - **Card jobs.** QuadCam mounts a card for each job and unmounts it when the job ends. It backs up radio cards and flight controllers, checks a known card's file system, and prepares spare cards.
   - **Flight controllers.** Draw and edit the Betaflight OSD and rates, copy settings between quads, and pull the blackbox flash. Stage changes, check them, apply them and read them back. The Bench lists what waits.
   - **Radios.** Edit models and checklists, build voice packs on the Voices page (on macOS 26 or later the Mac's speech recognizer checks each line), apply one to several radios, and see what each switch does on the radio and the quad. The Controls page shows sticks and switches live in USB Joystick mode.
-  - **Firmware.** Check for new releases and **Read firmware** from a radio. Flashing an EdgeTX radio is available. Betaflight flashing and ExpressLRS tools are previews that you turn on in Settings.
+  - **Firmware.** Check for new releases and **Read Firmware** from a radio. Flashing an EdgeTX radio is available. Betaflight flashing and ExpressLRS tools are previews that you turn on in Settings.
   - **Flights and packs.** QuadCam reads flights from radio logs, keeps packs with their history, logs crashes and repairs, writes a session report after an import, and checks your gear before a session.
 - **Scripts and agents.** A command-line tool and an MCP server do everything the app does.
 
@@ -66,7 +66,7 @@ To remove the app, run `brew uninstall --cask quadcam`. Uninstall keeps your set
 
 ### Updates
 
-QuadCam updates itself. It checks GitHub for a newer release when it opens and every hour, and **QuadCam > Check for Updates…** or **Check for Updates** in Settings checks at any time. When a newer version is out, a banner shows **Restart to update** and **Later**, with a link to the release notes. **Restart to update** downloads the update, checks its signature, and restarts QuadCam. QuadCam never restarts during an import, a card or device write, or a flash: it offers the restart when the job ends. To stop the automatic check, clear **Settings > Advanced > Check for updates automatically**.
+QuadCam updates itself. It checks GitHub for a newer release when it opens and every hour, and **QuadCam > Check for Updates…** or **Check for Updates** in Settings checks at any time. When a newer version is out, a banner shows **Restart to Update** and **Later**, with a link to the release notes. **Restart to Update** downloads the update, checks its signature, and restarts QuadCam. QuadCam never restarts during an import, a card or device write, or a flash: it offers the restart when the job ends. To stop the automatic check, clear **Settings > Advanced > Check for updates automatically**.
 
 Because the app updates itself, the cask is marked `auto_updates`. So `brew upgrade` skips QuadCam, and Homebrew may show the version you first installed. To update through Homebrew anyway, run `brew upgrade --cask --greedy quadcam`.
 
@@ -78,9 +78,9 @@ NKMK Digital Co. signs QuadCam with its Apple Developer ID, and Apple notarizes 
 
 1. **Load the clips.** Insert the card. It shows in the sidebar under **Import from**, with the number of new clips. Select it. You can also select **Folder…**, or drag a folder or clip files onto the window.
 2. **Wait for the copy.** The Import sheet opens and copies every clip to a local folder first. The sheet header shows how many files are left and the progress of the current one. You can pull the card when the copy is done.
-3. **Review.** Set the aircraft, the place and the date for all clips at once, or per clip. Type a short name for each clip, or keep the one Apple's on-device model suggests (macOS 26 or later, Apple Intelligence on; see [On-device suggestions](docs/library.md#on-device-suggestions)). Select **Skip** for clips you do not want, such as bench tests. A recording that the DVR split into several files shows as one clip with its files; **Keep files separate** imports them one by one.
+3. **Review.** Set the aircraft, the place and the date for all clips at once, or per clip. Type a short name for each clip, or keep the one Apple's on-device model suggests (macOS 26 or later, Apple Intelligence on; see [On-device suggestions](docs/library.md#on-device-suggestions)). Select **Skip** for clips you do not want, such as bench tests. A recording that the DVR split into several files shows as one clip with its files; **Keep Files Separate** imports them one by one.
 4. **Add radio logs (optional).** Under **Radio logs**, select **Choose…** and pick your radio's `LOGS` folder. QuadCam then dates the clips and finds their moments.
-5. **Trim (optional).** Select a clip to play it, see its moments and set cuts. **Split by flight** adds one cut per radio-log flight.
+5. **Trim (optional).** Select a clip to play it, see its moments and set cuts. **Split by Flight** adds one cut per radio-log flight.
 6. **Add to Library** (Command-Return). QuadCam converts and verifies each clip. When **Delete clips after import** is on in Settings, a checkbox above the button shows it; clear it to keep the clips on the card for this import.
 7. **Finish.** QuadCam unmounts the card when the import is done, so it is safe to remove. Add the files to Photos, or format the card (analog cards only; QuadCam mounts it again for that and unmounts it after). A DJI card has **Prepare card** instead. **Show in Library** shows the new clips under **Last import**. Clips already in the library are skipped and listed as such; **Import Anyway** imports them again.
 
@@ -124,11 +124,11 @@ QuadCam works on your Mac. It sends data out only when you ask it to, with one e
 - The update check reads `latest.json` from QuadCam's latest GitHub release when the app opens and every hour. It sends nothing but the request. Clear **Settings > Advanced > Check for updates automatically** to check only on request. See [Updates](#updates).
 
 - A place search sends the search text to the provider you picked. See [Metadata](docs/metadata.md#place-search-providers).
-- **Use current location** asks macOS Location Services where your Mac is, once per click, and **Name from coordinates** sends a place's coordinates to Apple's geocoder to name it. See [Metadata](docs/metadata.md#use-your-current-location).
+- **Use Current Location** asks macOS Location Services where your Mac is, once per click, and **Name from coordinates** sends a place's coordinates to Apple's geocoder to name it. See [Metadata](docs/metadata.md#use-your-current-location).
 - The **Map** page (off by default) loads Apple Maps for the area it shows, through macOS, as the Maps app does. See [The map](docs/library.md#the-map).
 - **Look up weather** (off by default) sends each clip's place, rounded to about 1 km, and its date to [Open-Meteo](https://open-meteo.com), once per clip (once more for a clip looked up before QuadCam saved the sky). Off, QuadCam sends no weather request. Sun tags need no network. See [Sun and weather](docs/library.md#sun-and-weather).
-- A module install downloads the module from its upstream, and **Check for module updates** reads `modules.json` from QuadCam's latest GitHub release. See [Modules](docs/modules.md).
-- **Gear > Firmware > Check for updates** reads the newest EdgeTX, Betaflight and ExpressLRS releases from GitHub and the ExpressLRS release index. Planning an EdgeTX flash downloads that release's firmware zip. With `firmware_check` set to `daily` in the settings file, the page also checks once a day. **Read firmware** saves a copy of a radio's firmware over USB (DFU) without changing the radio. See [Gear](docs/gear.md#firmware-and-splash).
+- A module install downloads the module from its upstream, and **Check for Module Updates** reads `modules.json` from QuadCam's latest GitHub release. See [Modules](docs/modules.md).
+- **Gear > Firmware > Check for updates** reads the newest EdgeTX, Betaflight and ExpressLRS releases from GitHub and the ExpressLRS release index. Planning an EdgeTX flash downloads that release's firmware zip. With `firmware_check` set to `daily` in the settings file, the page also checks once a day. **Read Firmware** saves a copy of a radio's firmware over USB (DFU) without changing the radio. See [Gear](docs/gear.md#firmware-and-splash).
 
 ## License
 

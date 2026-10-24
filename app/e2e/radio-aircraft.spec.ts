@@ -28,7 +28,7 @@ test("a radio lists its aircraft from the profiles, and Add and Remove save the 
   await expect(radio.getByRole("term").filter({ hasText: /^Aircraft$/ })).toHaveCount(0);
 
   await section.getByLabel("Aircraft to add").selectOption("Five-inch");
-  await section.getByRole("button", { name: "Add aircraft" }).click();
+  await section.getByRole("button", { name: "Add Aircraft" }).click();
   await expect.poll(async () => (await app.method("profile_save")).at(-1)).toEqual({ name: "Five-inch", fields: { gear: { radio: RADIO_ID } }, new_name: null });
   await expect(rows).toHaveCount(3);
   await expect(rows.nth(2)).toContainText("ALPHA · model00.yml");

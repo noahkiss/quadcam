@@ -33,7 +33,7 @@ function KeyActions({ s, onReplace }: { s: UseStudio; onReplace: () => void }) {
         Replace…
       </Button>
       <Button size="sm" variant="danger-ghost" onClick={() => s.deleteKey()}>
-        Remove key
+        Remove Key
       </Button>
     </>
   );
@@ -54,7 +54,7 @@ function KeyForm({ s, replacing, done }: { s: UseStudio; replacing: boolean; don
     >
       <TextField label="ElevenLabs API key" type="password" autoComplete="off" autoFocus={replacing} value={draft} onChange={(e) => setDraft(e.target.value)} />
       <Button type="submit" size="sm" variant="primary" disabled={!draft.trim()}>
-        Save key
+        Save Key
       </Button>
       {replacing && (
         <Button
@@ -65,7 +65,7 @@ function KeyForm({ s, replacing, done }: { s: UseStudio; replacing: boolean; don
             done();
           }}
         >
-          Keep current
+          Keep Current
         </Button>
       )}
       {s.key?.problem && <span className={styles.error}>{s.key.problem}</span>}
@@ -154,7 +154,7 @@ function Pickers({ s, onError }: { s: UseStudio; onError: (e: string) => void })
           </SelectField>
           <span className={styles.grow} />
           <Button size="sm" variant="secondary" onClick={() => setBrowsing(true)}>
-            Browse voices…
+            Browse Voices…
           </Button>
         </div>
       <DataTable
@@ -463,7 +463,7 @@ export function Studio({ s, collapse, children }: { s: UseStudio; collapse?: { o
               Sample
             </Button>
             <Button size="sm" variant="primary" disabled={s.busy || !ready || !(e?.estimate.affordable ?? true)} onClick={() => s.run("render", false)}>
-              {pairs > 1 ? "Render packs" : "Render pack"}
+              {pairs > 1 ? "Render Packs" : "Render Pack"}
             </Button>
             {ready && !s.picked.includes("quadcam") && (
               <span className={styles.muted} role="note">
@@ -481,7 +481,7 @@ export function Studio({ s, collapse, children }: { s: UseStudio; collapse?: { o
                 if (f) await s.importTakes(f);
               }}
             >
-              Import takes…
+              Import Takes…
             </Button>
           </div>
           {s.imported && (
@@ -496,7 +496,7 @@ export function Studio({ s, collapse, children }: { s: UseStudio; collapse?: { o
               action={
                 <>
                   <Button size="sm" variant="danger" disabled={s.busy} onClick={() => s.run(s.asking!, true)}>
-                    {s.asking === "sample" ? "Sample and pay" : "Render and pay"}
+                    {s.asking === "sample" ? "Sample and Pay" : "Render and Pay"}
                   </Button>
                   <Button size="sm" onClick={s.cancel}>
                     Cancel

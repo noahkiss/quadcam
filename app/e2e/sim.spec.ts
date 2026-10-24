@@ -66,7 +66,7 @@ for (const scheme of axeSchemes) {
     test("the Sim radio page passes axe", async ({ app, page }) => {
       await openSim(app, page);
       await page.getByRole("button", { name: "Done" }).click();
-      await page.getByRole("button", { name: "No reset control" }).click();
+      await page.getByRole("button", { name: "No Reset Control" }).click();
       await expect(page.getByRole("table", { name: "Axes" })).toBeVisible();
       const r = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
       expect(r.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(" ")).join(", ")}`)).toEqual([]);

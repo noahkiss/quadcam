@@ -12,7 +12,7 @@ test.beforeEach(async ({ app }) => {
 test("Shift time moves the selected clips by one clip's real time; a radio log wins", async ({ app, page }) => {
   await card(page, "backyard-loops").click();
   await card(page, "gap-run").click({ modifiers: ["Meta"] });
-  await page.getByRole("toolbar", { name: "Selected clips" }).getByRole("button", { name: "Shift time…" }).click();
+  await page.getByRole("toolbar", { name: "Selected clips" }).getByRole("button", { name: "Shift Time…" }).click();
   const dlg = dialog(page, "Shift time");
   await dlg.getByLabel("Clip").selectOption({ label: "backyard-loops" });
   await dlg.getByLabel("Real time").fill("18:30");
@@ -25,7 +25,7 @@ test("Shift time moves the selected clips by one clip's real time; a radio log w
   await expect(row("gap-run")).toContainText("Radio log");
   expect((await app.method("library_time_shift")).every((p) => p.apply === false)).toBe(true);
 
-  await dlg.getByRole("button", { name: "Shift 2 clips" }).click();
+  await dlg.getByRole("button", { name: "Shift 2 Clips" }).click();
   await expect(dlg).toBeHidden();
   expect((await app.method("library_time_shift")).at(-1)).toMatchObject({ from: expect.any(String), time: "18:30", apply: true });
   await expect(card(page, "backyard-loops").getByText("18:30")).toBeVisible();
@@ -36,7 +36,7 @@ test("Shift time needs a clip with a time of day", async ({ app, page }) => {
   await app.core("(core) => { for (const c of core.lib.clips) c.time = null; core.libraryChanged(); }");
   await card(page, "backyard-loops").click();
   await card(page, "gap-run").click({ modifiers: ["Meta"] });
-  await page.getByRole("button", { name: "Shift time…" }).click();
+  await page.getByRole("button", { name: "Shift Time…" }).click();
   const dlg = dialog(page, "Shift time");
   await expect(dlg.getByText("None of the selected clips has a time of day.")).toBeVisible();
   await expect(dlg.getByRole("button", { name: /^Shift/ })).toBeDisabled();
@@ -78,7 +78,7 @@ for (const scheme of axeSchemes) {
       await card(page, "river-dive").click();
       await card(page, "backyard-loops").click({ modifiers: ["Meta"] });
       await card(page, "gap-run").click({ modifiers: ["Meta"] });
-      await page.getByRole("button", { name: "Shift time…" }).click();
+      await page.getByRole("button", { name: "Shift Time…" }).click();
       const table = dialog(page, "Shift time").getByRole("table", { name: "New times" });
       await dialog(page, "Shift time").getByLabel("Clip").selectOption({ label: "backyard-loops" });
       for (const t of ["Set", "Radio log", "No time"]) await expect(table.getByText(t, { exact: true })).toBeVisible();

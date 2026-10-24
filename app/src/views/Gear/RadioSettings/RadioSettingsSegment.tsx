@@ -72,7 +72,7 @@ function StagedBar({ device }: { device: string | null }) {
             Review…
           </Button>
           <Button size="sm" variant="danger-ghost" onClick={() => discard(change.id)}>
-            Undo settings edits
+            Undo Settings Edits
           </Button>
         </>
       }

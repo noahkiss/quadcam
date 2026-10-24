@@ -52,16 +52,16 @@ export function ChangesSegment({ d }: { d: DeviceRef }) {
           <>
             {fc && (
               <Button size="sm" disabled={!canStage || !d.device?.last_backup} onClick={() => setCopying(true)}>
-                Copy settings…
+                Copy Settings…
               </Button>
             )}
             {fc && (
               <Button size="sm" disabled={!canStage} onClick={() => setEditing(true)}>
-                Edit setting…
+                Edit Setting…
               </Button>
             )}
             <Button size="sm" variant="primary" disabled={!ready} onClick={() => id && open(id)}>
-              {ready > 1 ? `Review ${ready} changes…` : "Review…"}
+              {ready > 1 ? `Review ${ready} Changes…` : "Review…"}
             </Button>
           </>
         }

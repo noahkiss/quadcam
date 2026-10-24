@@ -305,7 +305,7 @@ impl Core {
                 (Some(src), false, None) => Err(Refusal::new(
                     RefusalCode::ReadFirst,
                     format!(
-                        "QuadCam has not read {}'s files for the {} yet. Check firmware first (Firmware > Check now, or `gear firmware --check`).",
+                        "QuadCam has not read {}'s files for the {} yet. Check firmware first (Firmware > Check for Updates, or `gear firmware --check`).",
                         src.vendor, src.product
                     ),
                 )),

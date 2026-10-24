@@ -209,7 +209,7 @@ export function Publish({ pack, onClose }: { pack: VoicePack; onClose: () => voi
           ) : (
             <div className={styles.bar}>
               <Button size="sm" variant="primary" disabled={busy} onClick={approve}>
-                Approve and publish
+                Approve and Publish
               </Button>
               <span className={styles.muted}>{review.gh.ready ? `Creates the release and a pull request on ${review.repo}.` : "gh is not ready: Approve shows the commands to run."}</span>
             </div>

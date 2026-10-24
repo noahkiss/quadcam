@@ -51,7 +51,7 @@ export function Overview({ d }: { d: DeviceRef }) {
         <>
           {isPaused ? "Paused" : "On"}
           <Button size="sm" variant="ghost" onClick={() => setPollPaused(fcPort, !isPaused)}>
-            {isPaused ? "Resume reads" : "Pause reads"}
+            {isPaused ? "Resume Reads" : "Pause Reads"}
           </Button>
         </>
       ),
@@ -64,7 +64,7 @@ export function Overview({ d }: { d: DeviceRef }) {
           {aircraft || "None"}
           {aircraft && (
             <Button size="sm" variant="ghost" onClick={() => setFilter({ group: "all", aircraft })}>
-              Show clips
+              Show Clips
             </Button>
           )}
         </>

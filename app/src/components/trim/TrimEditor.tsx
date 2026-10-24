@@ -84,31 +84,31 @@ export function TrimEditor({ trim, strip }: { trim: Trim; strip?: string }) {
           <TimeInput label="In point" value={sel.in} onCommit={(v) => trim.setSel({ ...sel, in: v })} />
         </label>
         <Button size="sm" variant="ghost" onClick={() => trim.setPoint("in")}>
-          Set in <Kbd>I</Kbd>
+          Set In <Kbd>I</Kbd>
         </Button>
         <label className={styles.inline}>
           Out
           <TimeInput label="Out point" value={sel.out} onCommit={(v) => trim.setSel({ ...sel, out: v })} />
         </label>
         <Button size="sm" variant="ghost" onClick={() => trim.setPoint("out")}>
-          Set out <Kbd>O</Kbd>
+          Set Out <Kbd>O</Kbd>
         </Button>
         <Button size="sm" icon="scissors" onClick={() => trim.addCut()}>
-          Add cut
+          Add Cut
         </Button>
         {model.keep.length > 0 && (
           <Button size="sm" variant="ghost" icon="scissors" onClick={() => trim.useKeep()}>
-            {`Use keep ranges (${model.keep.length})`}
+            {`Use Keep Ranges (${model.keep.length})`}
           </Button>
         )}
         {trim.opts.split && (model.flights ?? 0) > 0 && (
           <Button size="sm" variant="ghost" icon="scissors" title="Adds one cut per radio-log flight" onClick={() => trim.opts.split?.()}>
-            {`Split by flight (${model.flights})`}
+            {`Split by Flight (${model.flights})`}
           </Button>
         )}
         {trim.opts.save && unsaved > 0 && (
           <Button size="sm" variant="primary" onClick={() => trim.opts.save?.()}>
-            {unsaved === 1 ? "Save 1 cut" : `Save ${unsaved} cuts`}
+            {unsaved === 1 ? "Save 1 Cut" : `Save ${unsaved} Cuts`}
           </Button>
         )}
       </div>
@@ -318,7 +318,7 @@ function OffsetRow({ trim }: { trim: Trim }) {
         s
       </label>
       <Button size="sm" variant="ghost" title="Sets the log start to the playhead" onClick={() => trim.armHere()}>
-        Arm is here
+        Arm Is Here
       </Button>
     </div>
   );

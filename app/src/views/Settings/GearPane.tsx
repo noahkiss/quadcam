@@ -11,7 +11,7 @@ import styles from "./SettingsSheet.module.css";
 import form from "./GearPane.module.css";
 import { PathText } from "../../components/PathText";
 
-const AUTOMATION_LABEL: Record<ShownAutomation, string> = { backup: "Back up", apply_ready: "Apply ready changes", blackbox: "Pull blackbox" };
+const AUTOMATION_LABEL: Record<ShownAutomation, string> = { backup: "Back Up", apply_ready: "Apply Ready Changes", blackbox: "Pull Blackbox" };
 
 /** The steps that make sense for a kind: Apply only for the kinds the core runs it for (`bench::apply_ready_hooks`). */
 const OFFERED: Record<ShownAutomation, DeviceKind[]> = {

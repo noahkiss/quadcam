@@ -214,11 +214,11 @@ export function SpeechCheck({ v, view, pack, onClose, onFlagged }: { v: UseVoice
       actions={
         <>
           <Button size="sm" disabled={busy || toAccept.length === 0} onClick={() => void check({ accept: toAccept.map((r) => r.path) })}>
-            Accept selected
+            Accept Selected
           </Button>
           {studio && (
             <Button size="sm" disabled={busy || toRetake.length === 0 || !!ask} onClick={() => void price()}>
-              Re-take selected…
+              Re-take Selected…
             </Button>
           )}
           <span className={styles.grow} />
@@ -243,7 +243,7 @@ export function SpeechCheck({ v, view, pack, onClose, onFlagged }: { v: UseVoice
           <Checkbox label="Select all" checked={allPicked} disabled={shown.length === 0} onChange={(e) => setPicked(e.target.checked ? shown.map((r) => r.path) : [])} />
           <span className={styles.grow} />
           <Button size="sm" disabled={busy || !speech.available} onClick={() => void check({})}>
-            {(pack.heard ?? []).length ? "Check again" : "Check speech"}
+            {(pack.heard ?? []).length ? "Check Again" : "Check Speech"}
           </Button>
         </div>
         {!speech.available && (
@@ -253,7 +253,7 @@ export function SpeechCheck({ v, view, pack, onClose, onFlagged }: { v: UseVoice
             action={
               speech.assets === "supported" ? (
                 <Button size="sm" disabled={busy} onClick={() => void check({ install: true })}>
-                  Install speech assets
+                  Install Speech Assets
                 </Button>
               ) : undefined
             }
@@ -273,7 +273,7 @@ export function SpeechCheck({ v, view, pack, onClose, onFlagged }: { v: UseVoice
             action={
               <>
                 <Button size="sm" variant="danger" disabled={busy} onClick={() => void pay(ask)}>
-                  {(ask.estimate?.chars ?? 0) > 0 ? "Re-take and pay" : "Re-take"}
+                  {(ask.estimate?.chars ?? 0) > 0 ? "Re-take and Pay" : "Re-take"}
                 </Button>
                 <Button size="sm" onClick={() => setAsk(null)}>
                   Cancel

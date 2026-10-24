@@ -94,7 +94,7 @@ export function ReadFirmware({ radios, onClose }: Props) {
           </label>
         )}
         <Button variant="secondary" disabled={busy} onClick={() => void read()}>
-          {busy ? "Reading…" : "Read firmware"}
+          {busy ? "Reading…" : "Read Firmware"}
         </Button>
         {busy && <progress className={styles.progress} aria-label="Reading the radio" max={100} value={Math.round(progress * 100)} />}
       </div>

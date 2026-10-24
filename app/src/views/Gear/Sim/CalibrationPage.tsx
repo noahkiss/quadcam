@@ -196,11 +196,11 @@ export function CalibrationPage({ tabs }: { tabs?: ReactNode }) {
               <div className={styles.bar}>
                 {view.phase === "move" && <Button onClick={() => act({ action: "advance" })}>Done</Button>}
                 {view.phase === "let_go" && <Button onClick={() => act({ action: "advance" })}>Next</Button>}
-                {view.phase === "arm" && <Button onClick={() => act({ action: "skip" })}>No arm switch</Button>}
+                {view.phase === "arm" && <Button onClick={() => act({ action: "skip" })}>No Arm Switch</Button>}
                 {view.phase === "reset" && (
                   <>
                     {cal?.reset && <Button onClick={() => act({ action: "advance" })}>Keep {controlText(cal.reset)}</Button>}
-                    <Button onClick={() => act({ action: "skip" })}>No reset control</Button>
+                    <Button onClick={() => act({ action: "skip" })}>No Reset Control</Button>
                   </>
                 )}
                 {view.phase === "capture" && (

@@ -14,7 +14,7 @@ export function RestartToUpdate({ u, children, className }: { u: UpdateStatus; c
       {busy && <ProgressRing value={pct} size={20} label="Download" />}
       {children}
       <Button size="sm" variant="primary" className={className} onClick={() => void restartToUpdate()} disabled={busy || waiting}>
-        {u.phase === "failed" ? "Try again" : "Restart to update"}
+        {u.phase === "failed" ? "Try Again" : "Restart to Update"}
       </Button>
     </>
   );

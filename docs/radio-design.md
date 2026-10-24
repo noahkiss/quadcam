@@ -406,7 +406,7 @@ Native macOS, as the rest of Gear (`docs/development.md`):
   that moved is picked. Uses the existing `radio-input` stream. No synthetic input.
 - A board picture is not needed; the control names match the radio's labels.
 - **Review…** opens the apply sheet with the diff per file.
-- **Copy from…** runs 5.5.
+- **Copy From…** runs 5.5.
 
 Every UI change goes to the owner in a dev build first. The owner approves it before it ships.
 

@@ -52,7 +52,7 @@ function Secret({ label, hint, value, onChange, children }: SecretFieldProps) {
             setReplacing(false);
           }}
         >
-          Keep current
+          Keep Current
         </Button>
       )}
     </div>

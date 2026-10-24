@@ -81,12 +81,12 @@ test("a time near sunset tags the clip, and search finds the tag", async ({ app,
 test("Use current location adds a named place, and a row can be named from its coordinates", async ({ app, page }) => {
   await app.open();
   const dlg = await openSettings(page, "Places");
-  await dlg.getByRole("button", { name: "Use current location" }).click();
+  await dlg.getByRole("button", { name: "Use Current Location" }).click();
   await expect(dlg.getByRole("textbox", { name: "Place name" }).last()).toHaveValue("Current spot");
   await expect(dlg.getByRole("spinbutton", { name: "Latitude" }).last()).toHaveValue("40.21");
   expect(await app.method("place_here")).toHaveLength(1);
 
-  await dlg.getByRole("button", { name: "Add place" }).click();
+  await dlg.getByRole("button", { name: "Add Place" }).click();
   await dlg.getByRole("spinbutton", { name: "Latitude" }).last().fill("40.5");
   await dlg.getByRole("spinbutton", { name: "Longitude" }).last().fill("-75.5");
   await dlg.getByRole("button", { name: "Name from coordinates" }).last().click();

@@ -20,7 +20,7 @@ async function openVoice(app: AppFixture, page: Page, plugged = false) {
 /** Installs the index's Demo pack on the Voices page, then opens the radio's Voice segment. */
 async function installDemo(page: Page) {
   await page.getByRole("navigation", { name: "Library" }).getByRole("button", { name: /^Voices/ }).click();
-  await page.getByRole("button", { name: "Refresh packs" }).click();
+  await page.getByRole("button", { name: "Refresh Packs" }).click();
   await page.getByRole("button", { name: "Install Demo" }).click();
   await expect(page.getByRole("table", { name: "Voice packs on this Mac" })).toContainText("Demo");
   await page.getByRole("navigation", { name: "Library" }).getByRole("button", { name: /^Devices/ }).click();
@@ -33,11 +33,11 @@ test("the lines show the spoken text, and Choose voice lists the packs on the Vo
   const lines = page.getByRole("table", { name: "Voice lines" });
   await expect(lines.getByRole("row", { name: /armed\.wav Armed/ })).toBeVisible();
   await expect(lines.getByRole("row", { name: /gpsfix\.wav GPS fix \(spoken: G\.P\.S\. fix\)/ })).toBeVisible();
-  const choose = page.getByRole("region", { name: "Choose voice" });
+  const choose = page.getByRole("region", { name: "Choose Voice" });
   await expect(choose).toContainText("No voice pack on this Mac.");
   // The studio and the pack list live on the Voices page now.
   await expect(page.getByRole("region", { name: "ElevenLabs" })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Refresh packs" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Refresh Packs" })).toHaveCount(0);
   await choose.getByRole("button", { name: "Open Voices" }).click();
   await expect(page.getByRole("heading", { name: "Voices", level: 2 })).toBeVisible();
   await installDemo(page);
@@ -48,20 +48,20 @@ test("the lines show the spoken text, and Choose voice lists the packs on the Vo
 test("Choose voice stages one change and keeps the overrides when asked", async ({ app, page }) => {
   await openVoice(app, page);
   await installDemo(page);
-  const choose = page.getByRole("region", { name: "Choose voice" });
+  const choose = page.getByRole("region", { name: "Choose Voice" });
   const keep = choose.getByRole("checkbox", { name: "Keep my overrides" });
   await expect(keep).toBeChecked();
-  await choose.getByRole("button", { name: "Choose voice" }).click();
+  await choose.getByRole("button", { name: "Choose Voice" }).click();
   expect((await app.method("gear_voice_choose")).at(-1)).toEqual({ radio: RADIO_ID, pack: "en-demo-v1", keep_overrides: true, editor: null });
   await expect(page.getByText(/Voice: Demo is staged: 7 sounds to put on the card/)).toBeVisible();
   await expect(choose).toContainText("Chosen for this radio: en-demo-v1.");
   // Again with Keep my overrides off: the same change, updated.
   await keep.uncheck();
-  await choose.getByRole("button", { name: "Choose voice" }).click();
+  await choose.getByRole("button", { name: "Choose Voice" }).click();
   expect((await app.method("gear_voice_choose")).at(-1)).toMatchObject({ keep_overrides: false });
   const changes = await app.core<{ title: string }[]>(`c => c.dispatch("gear_changes", { device: null, history: false })`);
   expect(changes.map((c) => c.title)).toEqual(["Voice: Demo"]);
-  await page.getByRole("button", { name: "Undo voice change" }).click();
+  await page.getByRole("button", { name: "Undo Voice Change" }).click();
   await expect(page.getByText(/Voice: Demo is staged/)).toHaveCount(0);
 });
 
@@ -71,7 +71,7 @@ test("my text on a provider that may charge shows the characters, and Render and
   await page.getByRole("group", { name: "Sections" }).getByRole("button", { name: "Overview" }).click();
   await page.getByRole("group", { name: "Sections" }).getByRole("button", { name: "Voice" }).click();
   const row = page.getByRole("row", { name: /armed\.wav/ });
-  await row.getByRole("button", { name: "My text…" }).click();
+  await row.getByRole("button", { name: "My Text…" }).click();
   await row.getByLabel("My text for Armed").fill("Motors live");
   await row.getByRole("button", { name: "Render", exact: true }).click();
   await expect(row).toContainText("11 characters go to openai, which may charge for them.");
@@ -79,9 +79,9 @@ test("my text on a provider that may charge shows the characters, and Render and
   await expect(row).not.toContainText("my text: Motors live");
   // A change to the text closes the question.
   await row.getByLabel("My text for Armed").fill("Motors on");
-  await expect(row.getByRole("button", { name: "Render and pay" })).toHaveCount(0);
+  await expect(row.getByRole("button", { name: "Render and Pay" })).toHaveCount(0);
   await row.getByRole("button", { name: "Render", exact: true }).click();
-  await row.getByRole("button", { name: "Render and pay" }).click();
+  await row.getByRole("button", { name: "Render and Pay" }).click();
   expect((await app.method("gear_voice_edit")).at(-1)).toMatchObject({ text: "Motors on", confirm: true, dry_run: false, digest: `edit-${RADIO_ID}-SOUNDS/en/armed.wav-Motors on` });
   await expect(row).toContainText("my text: Motors on");
 });
@@ -93,7 +93,7 @@ test("one line takes another voice's take or the person's own text, and Reset cl
   await row.getByRole("combobox", { name: "Take for Armed" }).selectOption("en-demo-v1");
   expect((await app.method("gear_voice_edit")).at(-1)).toEqual({ radio: RADIO_ID, line: "SOUNDS/en/armed.wav", text: null, pack: "en-demo-v1", confirm: false, dry_run: false, digest: null });
   await expect(row).toContainText("take from en-demo-v1");
-  await row.getByRole("button", { name: "My text…" }).click();
+  await row.getByRole("button", { name: "My Text…" }).click();
   await row.getByLabel("My text for Armed").fill("Motors live");
   await row.getByRole("button", { name: "Render" }).click();
   expect((await app.method("gear_voice_edit")).at(-1)).toMatchObject({ text: "Motors live", pack: null });
@@ -112,7 +112,7 @@ test("one line takes another voice's take or the person's own text, and Reset cl
 test("Review shows the sounds that go on the card, and the apply verifies", async ({ app, page }) => {
   await openVoice(app, page, true);
   await installDemo(page);
-  await page.getByRole("region", { name: "Choose voice" }).getByRole("button", { name: "Choose voice" }).click();
+  await page.getByRole("region", { name: "Choose Voice" }).getByRole("button", { name: "Choose Voice" }).click();
   await page.getByRole("button", { name: "Review…" }).click();
   const sheet = page.getByRole("dialog", { name: "Apply to Field radio" });
   await expect(sheet.getByRole("region", { name: "Changes" })).toContainText("SOUNDS/en/armed.wav");
@@ -128,8 +128,8 @@ for (const scheme of axeSchemes) {
     test("the Voice segment passes axe", async ({ app, page }) => {
       await openVoice(app, page);
       await installDemo(page);
-      await page.getByRole("row", { name: /armed\.wav/ }).getByRole("button", { name: "My text…" }).click();
-      await page.getByRole("region", { name: "Choose voice" }).getByRole("button", { name: "Choose voice" }).click();
+      await page.getByRole("row", { name: /armed\.wav/ }).getByRole("button", { name: "My Text…" }).click();
+      await page.getByRole("region", { name: "Choose Voice" }).getByRole("button", { name: "Choose Voice" }).click();
       await expect(page.getByText(/Voice: Demo is staged/)).toBeVisible();
       const r = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
       expect(r.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(" ") + " " + n.failureSummary).join(", ")}`)).toEqual([]);

@@ -78,10 +78,10 @@ export function ChecklistSegment({ d }: { d: DeviceRef }) {
             )}
             <div className={styles.bar}>
               <Button size="sm" icon="add" onClick={() => setItems([...items, { tick: true, text: "" }])}>
-                Add item
+                Add Item
               </Button>
               <Button variant="primary" size="sm" disabled={!dirty || over > 0} onClick={() => m.stage([], checklistText(items))}>
-                Stage checklist
+                Stage Checklist
               </Button>
             </div>
           </SectionCard>

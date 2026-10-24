@@ -117,7 +117,7 @@ function RemovedCutsDialog() {
             Cancel
           </Button>
           <Button type="submit" value="keep">
-            Keep the file
+            Keep the File
           </Button>
           <Button type="submit" value="trash" variant="danger">
             Move to Trash
@@ -184,8 +184,8 @@ function ClipMenu() {
       ? []
       : [
           { label: "Rename", icon: "pen" as const, keys: "⏎", run: () => s.setRenaming(id) },
-          { label: "Edit details", icon: "tag" as const, keys: "⌘I", run: () => s.openDetail(id, null, "details") },
-          { label: "Trim and cuts", icon: "scissors" as const, keys: "T", run: () => s.openDetail(id) },
+          { label: "Edit Details", icon: "tag" as const, keys: "⌘I", run: () => s.openDetail(id, null, "details") },
+          { label: "Trim and Cuts", icon: "scissors" as const, keys: "T", run: () => s.openDetail(id) },
           null,
         ]),
     { label: "Share…", icon: "share", run: () => shareClips(ids, anchor()) },
@@ -194,8 +194,8 @@ function ClipMenu() {
       ? []
       : [
           { label: "Show in Finder", icon: "finder" as const, keys: "⌘R", run: () => revealClip(id) },
-          { label: "Find dead air again", icon: "refresh-moments" as const, run: () => rescan(id) },
-          { label: "Find highlights again", icon: "sparkle" as const, run: () => findHighlights([id]) },
+          { label: "Find Dead Air Again", icon: "refresh-moments" as const, run: () => rescan(id) },
+          { label: "Find Highlights Again", icon: "sparkle" as const, run: () => findHighlights([id]) },
         ]),
     null,
     { label: many ? `Move ${ids.length} to Trash` : "Move to Trash", icon: "trash-bin-trash", keys: "⌘⌫", danger: true, run: () => trashClips(ids) },

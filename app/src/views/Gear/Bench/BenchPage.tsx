@@ -64,7 +64,7 @@ export function BenchPage() {
             />
           )
         }
-        fold={[{ label: "Copy settings…", variant: "primary", disabled: devices.filter((d) => d.kind === "fc").length < 2, run: () => setCopying(true) }]}
+        fold={[{ label: "Copy Settings…", variant: "primary", disabled: devices.filter((d) => d.kind === "fc").length < 2, run: () => setCopying(true) }]}
         more={[{ label: "Copy as Markdown", disabled: !groups.length, run: () => void copy() }]}
         moreLabel="Bench actions"
       />
@@ -106,7 +106,7 @@ function Group({ g }: { g: BenchGroup }) {
       }
       actions={
         <Button size="sm" variant="primary" disabled={g.ready === 0 || !g.present} onClick={() => void open(g.device)}>
-          {g.ready > 1 ? `Review ${g.ready} changes…` : "Review…"}
+          {g.ready > 1 ? `Review ${g.ready} Changes…` : "Review…"}
         </Button>
       }
     >

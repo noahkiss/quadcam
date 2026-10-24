@@ -7,9 +7,9 @@ Every file QuadCam writes carries QuickTime metadata that Apple Photos and exift
 In the Import sheet, select a clip. The panel on the right shows its preview, its timeline and three tabs: **Details**, **Flight** and **File**. Use **Details**:
 
 - **Aircraft**: the profile of the gear the clip was flown with. **Automatic** picks the profile whose EdgeTX model names include the model of the clip's radio log. If none matches, it picks the first profile whose **Video system** names the clip's source (`Analog` or `DJI`). If none matches either, it picks the default profile.
-- **Place**: type a saved place (the list filters as you type), or a latitude and longitude such as `40.6892, -74.0445`. To keep a typed location for next time, name it and select **Save as place**.
+- **Place**: type a saved place (the list filters as you type), or a latitude and longitude such as `40.6892, -74.0445`. To keep a typed location for next time, name it and select **Save as Place**.
 - **Keywords** and **Author**: QuadCam offers recent values as you type. Notes in the clip list work the same way.
-- **Apply to all clips** copies the clip's aircraft, place, keywords and author to every clip.
+- **Apply to All Clips** copies the clip's aircraft, place, keywords and author to every clip.
 
 The row above the clip list sets the aircraft, the place and the date for every clip at once.
 
@@ -69,7 +69,7 @@ The search button on a row fills that row. You can also type coordinates by hand
 
 ### Use your current location
 
-**Use current location** in Settings > Places asks macOS Location Services where your Mac is, to about 100 m, and adds a place there. Apple's geocoder names it; change the name before you select **Done**. The first time, macOS asks whether QuadCam may use your location. If you said no, allow it in System Settings > Privacy & Security > Location Services. QuadCam asks once per click and never tracks your location.
+**Use Current Location** in Settings > Places asks macOS Location Services where your Mac is, to about 100 m, and adds a place there. Apple's geocoder names it; change the name before you select **Done**. The first time, macOS asks whether QuadCam may use your location. If you said no, allow it in System Settings > Privacy & Security > Location Services. QuadCam asks once per click and never tracks your location.
 
 ### Name a place from coordinates
 
@@ -95,7 +95,7 @@ Google Places needs an API key from a Google Cloud project with the Places API (
 
 The search sends what you type to the provider you picked, and to the US Census Bureau when the fallback runs. Nothing else leaves your Mac.
 
-On the command line, `quadcam-cli places here` and `places reverse LAT,LON` do the same as **Use current location** and **Name from coordinates**; neither saves a place.
+On the command line, `quadcam-cli places here` and `places reverse LAT,LON` do the same as **Use Current Location** and **Name from coordinates**; neither saves a place.
 
 ### A profile in the settings file
 
@@ -148,7 +148,7 @@ An analog clip with dead air matches by its picture instead of its length. On a 
 - **A recording may start late or stop early.** A flight may run past either end of the clip, when the picture runs to that end.
 - **Missed recordings are normal.** A flight with no clip costs nothing. But every flight of the session that would fall inside the clip must be part of the match.
 
-The match also places the log in the clip: the clip's log offset is set to where the first flight starts, so moments, flight numbers and **Split by flight** line up with the picture. With a believable radio clock, the clip's time of day is its start, not the arm.
+The match also places the log in the clip: the clip's log offset is set to where the first flight starts, so moments, flight numbers and **Split by Flight** line up with the picture. With a believable radio clock, the clip's time of day is its start, not the arm.
 
 Files an analog DVR split from one recording are matched as one timeline, so a flight may run across the split. In an import they are one clip already (see [Joined recordings](library.md#joined-recordings)). In the library, two clips match as one timeline when the second file has the next DVR number, the first is full length (the same rule as [Joined recordings](library.md#joined-recordings), without the file size), and both have the same date. Each file then gets the flights it shows.
 
@@ -168,7 +168,7 @@ When the radio's clock battery is flat, EdgeTX dates every log `2000-01-01`, and
 
 ### Match clips already in the library
 
-Settings > Library > **Match radio logs** matches the log folder to every library clip. It shows what matched first. **Write** puts the flight numbers and moments of the matched clips into their files, placed at the log offset the picture gave. It never changes a date, a time or a name.
+Settings > Library > **Match Radio Logs** matches the log folder to every library clip. It shows what matched first. **Write** puts the flight numbers and moments of the matched clips into their files, placed at the log offset the picture gave. It never changes a date, a time or a name.
 
 Each clip is matched to the logs of its own day. Clips of a day without a log are matched to a reset-clock log, if there is one. Clips of different days never share one power-on of the radio.
 

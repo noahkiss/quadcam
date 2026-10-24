@@ -82,7 +82,7 @@ test("the arrow keys move a focused element; Shift moves five cells; edits join 
   await page.keyboard.press("Shift+ArrowDown");
   await expect(page.getByText("1 OSD edit is staged.")).toBeVisible();
   // Undo discards the change.
-  await page.getByRole("button", { name: "Undo OSD edits" }).click();
+  await page.getByRole("button", { name: "Undo OSD Edits" }).click();
   await expect(page.getByText(/OSD edits? (is|are) staged/)).toHaveCount(0);
   await expect(el).toHaveAttribute("aria-label", /column 24, row 14/);
 });
@@ -129,10 +129,10 @@ test("toggle an element per profile, and set a position in the list", async ({ a
 test("copy one profile's layout onto another", async ({ app, page }) => {
   await openEditor(app, page);
   const bar = page.getByRole("group", { name: "Copy layout" });
-  await expect(bar.getByRole("button", { name: "Copy profile" })).toBeEnabled();
+  await expect(bar.getByRole("button", { name: "Copy Profile" })).toBeEnabled();
   await bar.getByLabel("Copy from profile").selectOption("1");
   await bar.getByLabel("Copy to profile").selectOption("3");
-  await bar.getByRole("button", { name: "Copy profile" }).click();
+  await bar.getByRole("button", { name: "Copy Profile" }).click();
   await expect.poll(() => lastEdit(app)).toEqual({ device: FC_ID, moves: [], copy: { from: 1, to: 3 } });
   await expect(page.getByRole("status").filter({ hasText: "Profile 3 now shows what profile 1 shows." })).toBeVisible();
   await page.getByRole("group", { name: "OSD profile" }).getByRole("button", { name: /^3/ }).click();
@@ -141,12 +141,12 @@ test("copy one profile's layout onto another", async ({ app, page }) => {
   await expect(box(page, "stick_overlay_left")).toHaveCount(0);
   // The same profile cannot be copied onto itself.
   await bar.getByLabel("Copy to profile").selectOption("1");
-  await expect(bar.getByRole("button", { name: "Copy profile" })).toBeDisabled();
+  await expect(bar.getByRole("button", { name: "Copy Profile" })).toBeDisabled();
 });
 
 test("copy the layout from another quad opens the copy dialog on OSD", async ({ app, page }) => {
   await openEditor(app, page);
-  await page.getByRole("button", { name: "Copy from another quad…" }).click();
+  await page.getByRole("button", { name: "Copy from Another Quad…" }).click();
   const d = page.getByRole("dialog", { name: "Copy settings" });
   await expect(d.getByRole("checkbox", { name: "OSD" })).toBeChecked();
   await expect(d.getByRole("checkbox", { name: "Rates" })).not.toBeChecked();

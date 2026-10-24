@@ -81,7 +81,7 @@ pub struct Callout {
     pub lines: Vec<String>,
     /// The clip's sky: an SF Symbol name and the sky as words.
     pub sky: Option<(&'static str, String)>,
-    /// The button's title (Show clips, Open); None for a place without clips.
+    /// The button's title (Show Clips, Open); None for a place without clips.
     pub button: Option<&'static str>,
     /// The pin's VoiceOver label.
     pub label: String,
@@ -138,7 +138,7 @@ fn capital(s: &str) -> String {
         .unwrap_or_default()
 }
 
-/// The callout of a pin: a place's clip count and date range with Show clips; a clip's day
+/// The callout of a pin: a place's clip count and date range with Show Clips; a clip's day
 /// and time and its sky with Open.
 pub fn callout(p: &MapPin) -> Callout {
     let mut lines = Vec::new();
@@ -160,7 +160,7 @@ pub fn callout(p: &MapPin) -> Callout {
                 n => format!("{n} clips"),
             });
             lines.extend(dates);
-            button = (n > 0).then_some("Show clips");
+            button = (n > 0).then_some("Show Clips");
         }
         PinKind::Clip => {
             kind = "clip";
@@ -1170,7 +1170,7 @@ mod tests {
         let c = callout(&p);
         assert_eq!(c.title, "Home field");
         assert_eq!(c.lines, ["3 clips", "Sep 3 – Sep 28, 2026"]);
-        assert_eq!(c.button, Some("Show clips"));
+        assert_eq!(c.button, Some("Show Clips"));
         assert_eq!(c.sky, None);
         assert_eq!(c.label, "Home field, place, 3 clips, Sep 3 – Sep 28, 2026");
 

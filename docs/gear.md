@@ -22,12 +22,12 @@ With nothing plugged in the bar stays and says "No gear connected".
   plugged in, those that need attention, those working and the changes staged. A card per
   device, those that need you first, shows its state, a line of facts (kind, firmware, last
   backup, card space) and its next step (**Save…**, **Review…**, **Import…**). The card's
-  **…** menu holds **Open**, **Mount**, **Prepare card…**, **Edit…** and **Forget…**. Each
+  **…** menu holds **Open**, **Mount**, **Prepare Card…**, **Edit…** and **Forget…**. Each
   device also has its own row under Connected in the sidebar.
 - **Devices** is a table of the devices you saved, plugged in or not, grouped by kind (Radios,
   Quads, Goggles and cards, ExpressLRS): aircraft, state, last backup, firmware and staged
   changes. A device that is not plugged in shows its state in muted text. An **Update** badge
-  beside the firmware opens Firmware. Each row's **…** menu holds **Open**, **Back up now**,
+  beside the firmware opens Firmware. Each row's **…** menu holds **Open**, **Back Up Now**,
   **Edit…** and **Forget…**.
 - **Bench** lists the changes staged for each device. See [The Bench](#the-bench).
 - **Pack up**, **Flights**, **Packs** and **Repairs** are described under
@@ -50,11 +50,11 @@ With nothing plugged in the bar stays and says "No gear connected".
   reports about itself (board, firmware, version), where it is mounted and its aircraft.
   **Save…** names a device QuadCam does not know and links an FC to its aircraft; **Edit…**
   changes that; **Forget…** (in the **…** menu) removes it from `gear.json` and keeps its
-  backups. **Show clips** opens the aircraft's clips.
+  backups. **Show Clips** opens the aircraft's clips.
 - A radio flies many aircraft, so its page lists them under **Aircraft on this radio**: every
   aircraft profile that names the radio, with its EdgeTX model, whether that model is on the
   mounted card (else in the latest backup), and **Selected** on the model the radio selects.
-  **Add aircraft** and **Remove** set or clear the profile's radio. **Settings > Aircraft**
+  **Add Aircraft** and **Remove** set or clear the profile's radio. **Settings > Aircraft**
   edits the same field (**Radio**, **EdgeTX model file**), so the two always agree.
 
 The bar along the bottom of the window shows one item for each kind of device plugged in:
@@ -65,7 +65,7 @@ are several. Each item shows a state:
 |---|---|
 | Working | A QuadCam job is using the device |
 | Safe to unplug | The card is unmounted and still in |
-| Still inserted | The "still inserted" reminder is due. **Dismiss** (**Dismiss reminder** on the device page) stops it |
+| Still inserted | The "still inserted" reminder is due. **Dismiss** (**Dismiss Reminder** on the device page) stops it |
 | Needs attention | QuadCam does not know the device yet: save it |
 | Connected | Plugged in, nothing to do |
 
@@ -152,7 +152,7 @@ a port only when no other program has it open:
 - QuadCam's own background reads are the USB timer's probe (every 30 s), the on-connect FC
   backup and a live switch read. Each opens, reads, and closes.
 - The check sees programs of your own user account. If a tool runs as another user, or you want
-  no chance of a probe at all, pause the reads: **Pause reads** on the FC's Overview, `gear fc
+  no chance of a probe at all, pause the reads: **Pause Reads** on the FC's Overview, `gear fc
   pause` in the CLI, or `poll_pause` in `quadcam_gear_edit`. The USB timer stops counting while
   paused, and the pause lasts until QuadCam quits. A job you start yourself still runs.
 - A pause also turns off the USB heat checks, because they read the timer. A job still reads
@@ -198,7 +198,7 @@ FC is plugged in, QuadCam reads the flash size and use over one MSP message (`ge
 summary`, MCP `blackbox_summary`): no pull, no cue. It skips that read while a job runs or the
 port's reads are paused. Pick a pull to see its logs and the flight each one is paired with.
 
-**Pull.** **Pull blackbox** on the FC's **Blackbox** segment (also `gear blackbox pull`, and the
+**Pull.** **Pull Blackbox** on the FC's **Blackbox** segment (also `gear blackbox pull`, and the
 on-connect step below) does this in one job:
 
 1. Reads the flash summary over MSP: size, bytes used, ready.
@@ -239,7 +239,7 @@ moments ago, or the app not running), the pull runs and its answer warns.
 step skips a port whose reads you paused; a pull you start yourself still runs.
 
 **Steps on connect.** `blackbox` is a step in `gear_on_connect` for FCs. It is off until you pick
-**Pull blackbox** in the FC pop-up of **Settings > Gear > When a device is plugged in** (or list
+**Pull Blackbox** in the FC pop-up of **Settings > Gear > When a device is plugged in** (or list
 `blackbox` in `gear_on_connect.fc`).
 
 **Dates and flights.** A flight controller has no clock, so its logs read `0000-01-01`. QuadCam
@@ -362,7 +362,7 @@ it on. The bootloader then shows the SD card over USB.
 
 macOS writes hidden `._*` files (AppleDouble) next to files it copies to a FAT card. The radio
 does not use them. QuadCam removes the `._` file beside every file it writes, and does not
-create the others. For files that are already there, **Clean ._ files** on the radio's
+create the others. For files that are already there, **Clean ._ Files** on the radio's
 **Backups** segment lists them, asks, then deletes them and unmounts the card. It deletes only
 files that start with the AppleDouble header; a file you named `._notes` stays. It deletes only
 on a card Gear detects or a folder that is an EdgeTX card (`RADIO/radio.yml` or `MODELS/`). On
@@ -397,7 +397,7 @@ mounted card, or from the radio's latest backup when it is not plugged in (the l
 radio's staged model edits on top. Every control stages its change at once. All edits join
 one change per radio, "Model edits". A later edit of a setting replaces the earlier one,
 and an edit that puts the model back as the radio has it drops out. Nothing reaches the card
-until the apply sheet writes it. **Review…** opens the sheet; **Undo model edits** discards
+until the apply sheet writes it. **Review…** opens the sheet; **Undo Model Edits** discards
 the change.
 
 The **Model** pop-up picks the model file. The first load shows the radio's selected model.
@@ -444,7 +444,7 @@ plugged in, and shows the radio's staged settings on top. Every control stages i
 once into one change per radio, "Radio settings". A later edit of a setting replaces the
 earlier one, and an edit that puts a setting back as the radio has it drops out. A staged
 setting shows **Staged** and the value on the radio. **Review…** opens the apply sheet, which
-shows the `radio.yml` diff; **Undo settings edits** discards the change.
+shows the `radio.yml` diff; **Undo Settings Edits** discards the change.
 
 The sections follow the radio's own Radio Setup screen:
 
@@ -545,7 +545,7 @@ A saved radio's page has a **Setup** segment beside Switches:
   a control to the job's "on" end; that control, and that end, take the job. Learn reads the
   channels through the switch map of the radio's model (its latest backup), so it sees only
   controls that model sends on CH1-CH8; pick the others from the pop-up.
-- **Copy from…** copies another saved radio's models and setup (above).
+- **Copy From…** copies another saved radio's models and setup (above).
 - **Review…** stages the setup as the radio's one "Radio setup" change and opens the apply
   sheet with the diff per file. While the change is staged, each edit keeps it up to date.
 
@@ -599,12 +599,12 @@ pack records its firmware family (`edgetx`) in `pack.json`.
   need a re-take ([ElevenLabs](#elevenlabs)) or carry a flag shows how many under the voice,
   such as "150 need a re-take, 2 flagged"; click it to list each line with its reason. The play
   button plays one line (Armed, when the pack has it). The **…** menu holds **Apply to
-  radios…**, **Check speech** (the pack's speech check), **Publish…** for a pack rendered here,
+  radios…**, **Check Speech** (the pack's speech check), **Publish…** for a pack rendered here,
   and **Delete…**.
-- **Apply to radios…** lists every saved EdgeTX radio with a tick box, and **All radios**.
+- **Apply to Radios…** lists every saved EdgeTX radio with a tick box, and **All radios**.
   Each radio shows **Card connected** when its card is mounted or unmounted and still in, and
   **Not connected** otherwise. **Stage** stages one voice change per radio, the same change a
-  radio's **Choose voice** stages, and keeps each radio's overrides unless you untick **Keep
+  radio's **Choose Voice** stages, and keeps each radio's overrides unless you untick **Keep
   each radio's overrides**. A radio whose card is connected has **Review…**, which opens the
   apply sheet (it mounts and unmounts the card as usual). The others keep the staged change
   and apply it when they are next plugged in, like any staged change.
@@ -614,7 +614,7 @@ pack records its firmware family (`edgetx`) in `pack.json`.
   its own copy of them. The raw takes stay in
   the cache, so rendering that voice and model again costs nothing. Tick **Also delete the raw
   takes** to remove them too.
-- **Get voice packs.** A voice pack is a zip of WAVs for one voice. **Refresh packs** reads
+- **Get voice packs.** A voice pack is a zip of WAVs for one voice. **Refresh Packs** reads
   the pack index: the `voice_index` setting, by default the
   [QuadCam Voices](https://noahkiss.github.io/quadcam-voices/) index (an https address or a
   file; plain http only on this Mac; an empty setting turns the index off). Each pack shows its
@@ -630,10 +630,10 @@ pack records its firmware family (`edgetx`) in `pack.json`.
   server on this Mac: set `tts_base_url`, `tts_model` and `tts_voice`). The server's key goes
   in `QUADCAM_OPENAI_KEY` or the `tts_key` setting and is never shown or logged. ElevenLabs
   renders only in the [ElevenLabs](#elevenlabs) section, which prices a render first: with
-  `tts_provider` `elevenlabs`, **Render my voice** and **My text…** say so. **Check cost**
+  `tts_provider` `elevenlabs`, **Render My Voice** and **My Text…** say so. **Check Cost**
   reports the lines, how many the cache already holds, and the characters a provider would
-  speak. A provider that is not on this Mac may charge: **Render my voice** then stops and
-  shows the characters, and **Render and pay** goes ahead.
+  speak. A provider that is not on this Mac may charge: **Render My Voice** then stops and
+  shows the characters, and **Render and Pay** goes ahead.
 - **The cache.** A take is kept by provider, voice, model, speed, spoken text and seed. A
   render with other trim or tempo settings finds the take and calls no provider.
 - **Publish…** on a pack rendered here offers it to QuadCam Voices. See
@@ -646,7 +646,7 @@ pack records its firmware family (`edgetx`) in `pack.json`.
 ### Publish a pack
 
 **Publish…** on a pack you rendered opens the publish section. QuadCam prepares the pack,
-shows a review, and publishes nothing until you click **Approve and publish**.
+shows a review, and publishes nothing until you click **Approve and Publish**.
 
 1. **Prepare.** Give the pack an id (default `<language>-<short name>`: the voice's name before
    " - ", so "Xavier - Dominating, Metalic Announcer" gives `en-xavier`), a version (default 1),
@@ -655,7 +655,7 @@ shows a review, and publishes nothing until you click **Approve and publish**.
    **Prepare** builds, in QuadCam's cache, the zip, about ten preview lines as AAC (from the
    `sample` line set first, encoded by macOS's `afconvert`) and the index entry with every hash.
    It refuses:
-   - a pack the speech check has not heard in full: run **Check speech** first,
+   - a pack the speech check has not heard in full: run **Check Speech** first,
    - a line the check heard wrong that you did not accept: render it again, or listen and
      **Accept** it,
    - a pack made with macOS `say`, whose voices are licensed for use on the Mac,
@@ -680,7 +680,7 @@ but no MCP call approves. From a terminal, `quadcam-cli gear voice publish PACK`
 **Kokoro packs.** Kokoro is a free, open voice model (Apache-2.0). Run a Kokoro-FastAPI server
 on this Mac, set `tts_provider` to `openai`, `tts_base_url` to its address (for example
 `http://127.0.0.1:8880`), `tts_model` to `kokoro` and `tts_voice` to one of its voices, then
-**Render my voice**. The voices repo's
+**Render My Voice**. The voices repo's
 [docs/kokoro.md](https://github.com/noahkiss/quadcam-voices/blob/main/docs/kokoro.md) has the
 steps.
 
@@ -688,14 +688,14 @@ steps.
 
 The **ElevenLabs** section of the Voices page renders whole line sets with ElevenLabs, inside
 carrier sentences, and compares voices before it spends credits. It holds, in order: the key,
-the voices, the models, the line sets, the cost, **Sample** and **Render pack**, and the
+the voices, the models, the line sets, the cost, **Sample** and **Render Pack**, and the
 [Samples](#samples). Click its title to collapse it; it stays collapsed until you open it again.
 
-- **Key.** Paste the ElevenLabs API key and **Save key**. It goes to the macOS Keychain
+- **Key.** Paste the ElevenLabs API key and **Save Key**. It goes to the macOS Keychain
   (service `app.quadcam`) and nowhere else: not `settings.json`, not a log, not an answer.
   The studio shows only its hint: the first and last characters and the length, such as
   `sk_9…8d4d (51 chars)` ([Secrets](settings.md#secrets)). **Replace…** opens the field for a
-  new key; **Remove key** deletes it. From the command line, `quadcam-cli gear voice key set`
+  new key; **Remove Key** deletes it. From the command line, `quadcam-cli gear voice key set`
   reads the key from stdin, for example piped from a password manager. An agent sets it with
   MCP `voice_key_set`; a key passed that way sits in the agent's transcript.
   `QUADCAM_ELEVENLABS_KEY` in the environment takes the place of the Keychain for one run. The
@@ -716,14 +716,14 @@ the voices, the models, the line sets, the cost, **Sample** and **Render pack**,
   it. The play button plays the voice's ElevenLabs preview. A voice that bills more than the
   usual credits (a Voice Library voice with a rate of its own) shows the multiplier, such as
   **2× credits**, and the estimate prices it at that rate.
-- **Browse voices…** opens ElevenLabs' Voice Library: **Search** words, and filter by
+- **Browse Voices…** opens ElevenLabs' Voice Library: **Search** words, and filter by
   language (English at first), accent, gender, age, use, category and sort, a page at a time.
   Each row shows the voice's gender, age, accent, languages, use and description, any rate of
   its own and the days of notice its owner gives before it leaves the library, a **Preview**
   button, and whether the account has it. **Add…** asks first, as it changes the account:
   **Add to My Voices** adds the voice under its name and takes one of the account's voice
   slots (no credits). When the account has no free slot, the sheet says so; remove a voice in
-  ElevenLabs or move to a larger plan. **Voice ID** and **Look up** find one voice by its id
+  ElevenLabs or move to a larger plan. **Voice ID** and **Look Up** find one voice by its id
   and show it the same way. An added voice joins the studio's voice table. Previews are
   fetched by QuadCam into `voice/library-previews/` in the cache, once each. CLI
   `gear voice library` (`--search`, `--language`, `--accent`, `--gender`, `--age`,
@@ -768,7 +768,7 @@ the voices, the models, the line sets, the cost, **Sample** and **Render pack**,
   no profile, it takes quads. The first time, every set starts ticked. After that the studio
   keeps the sets you tick (`voice-studio.json` in the gear folder) and ticks them again the
   next time it opens. **QuadCam default** is ticked each time: QuadCam's own cues need it. You
-  can untick it for one render; a note by **Render pack** then says that these cues use the
+  can untick it for one render; a note by **Render Pack** then says that these cues use the
   Mac voice. A Betaflight quad needs only `quad` and `extras`: `quad` already holds the
   Betaflight script's prompts, and `scripts` is for INAV and ArduPilot. With one voice and one
   model ticked, each set shows how many of its lines are rendered. The voice list scrolls inside
@@ -787,7 +787,7 @@ the voices, the models, the line sets, the cost, **Sample** and **Render pack**,
   The cost covers every ticked voice in the picked model: each voice is one pack. With more
   than one voice, **Cost by pack** lists each voice and model with its lines to render,
   characters, price and credits, and the tiles show the total.
-- **Import takes…** copies a folder of earlier takes into QuadCam's cache: takes of single
+- **Import Takes…** copies a folder of earlier takes into QuadCam's cache: takes of single
   lines that an older line-by-line ElevenLabs render left, each a `.json` (text, voice, model,
   speed, seed, and the sample rate when it is not 32,000 Hz) beside a `.pcm` of the same name
   (16-bit mono). QuadCam only reads the folder. The takes count as rendered for their voice,
@@ -808,7 +808,7 @@ the voices, the models, the line sets, the cost, **Sample** and **Render pack**,
   model's per-request limit (v3 5,000 characters, multilingual v2 10,000, flash and turbo
   40,000).
 - **Sample.** Tick voices, pick a model and press **Sample**. QuadCam renders the sample lines
-  in each voice in that model only, shows the cost, and waits for **Sample and pay**. The samples go to
+  in each voice in that model only, shows the cost, and waits for **Sample and Pay**. The samples go to
   [Samples](#samples). The sample files keep the card path, so two lines with one file name
   (`armed.wav` and a script's `armed.wav`) stay apart.
 - **The risky lines.** The `sample` set is the validation set: one line for each word that
@@ -820,15 +820,15 @@ the voices, the models, the line sets, the cost, **Sample** and **Render pack**,
   were sampled, heard right and heard wrong, and the ways of saying words found). The set lives
   in `resources/voice/sets/sample.csv`; each line's `why` says what went wrong.
 - **Render pack.** Needs a voice, a model and at least one set. With several voices
-  ticked it reads **Render packs** and makes one pack per voice in one run, priced
-  as one plan with one digest. After **Render and pay** the lines go into a local pack named
+  ticked it reads **Render Packs** and makes one pack per voice in one run, priced
+  as one plan with one digest. After **Render and Pay** the lines go into a local pack named
   for the voice id and the model, so two voices with one name never share a pack; a second set
   adds to the same pack. A pack that fails stops the run: the packs made before it stay, and
   the result names the pack that failed. A pack from 0.12.0 or earlier
   is named for the voice's name: the next render of that voice and model moves it to the new
   name, and the radios that chose it keep it. The pack joins the library, and **Apply to
-  radios…** or a radio's **Choose voice** puts it on a radio like any other pack.
-- **Progress and Stop.** While **Sample and pay** or **Render and pay** runs, a bar shows the
+  radios…** or a radio's **Choose Voice** puts it on a radio like any other pack.
+- **Progress and Stop.** While **Sample and Pay** or **Render and Pay** runs, a bar shows the
   batches done of the total over every pack, and the voice and model it is on. **Stop** ends
   the run after the batch being made: the packs finished stay, and the batches made for the
   next one are in the cache, so the next render cuts them from there instead of paying
@@ -837,7 +837,7 @@ the voices, the models, the line sets, the cost, **Sample** and **Render pack**,
   render runs on this Mac at a time: while the app runs one, `quadcam-cli` refuses another
   and names the process that holds it, and the other way round.
 - **Pay for what was priced.** The question names a digest of its plan: the voices, models,
-  sets, seed and characters. **Sample and pay** and **Render and pay** send that digest, and
+  sets, seed and characters. **Sample and Pay** and **Render and Pay** send that digest, and
   QuadCam refuses a confirm whose plan changed ("estimate again"). A change to any picker
   closes the question. The CLI (`--digest`) and MCP (`digest`) work the same way, and so
   does a line-by-line render or `build-pack` with a provider that may charge (`openai`): its
@@ -870,7 +870,7 @@ the voices, the models, the line sets, the cost, **Sample** and **Render pack**,
   bill again for the same failure. The error names the line where the text changed. Change
   that line's spelling, or render with another seed; the estimate prices the kept take at 0. When a
   QuadCam update cuts differently, **Sample** again (samples are cut fresh every time) and
-  **Render pack** again with the same voice, model, sets and seed: the pack's batches are cut
+  **Render Pack** again with the same voice, model, sets and seed: the pack's batches are cut
   again from the cache, and the estimate shows 0 credits. A paid
   request is retried only after a 429 (busy), never after a server error, which may already be
   billed. `--carrier "I said {line}."` changes the carrier.
@@ -912,23 +912,23 @@ the voices, the models, the line sets, the cost, **Sample** and **Render pack**,
   heard). The page reads them when it opens. Samples from 0.19 and earlier sat in the cache;
   they move to the gear folder once, and a later sample of that voice and model takes the
   folder over.
-- **Play all.** **Play all** on a card plays its lines in order and marks the line playing;
-  **Play all voices** plays every card. **Stop** ends it. A play button on one line plays only
+- **Play all.** **Play All** on a card plays its lines in order and marks the line playing;
+  **Play All Voices** plays every card. **Stop** ends it. A play button on one line plays only
   that line.
 - **Speech check.** A sample the speech check heard wrong is listed on its card with what it
   heard.
 - **Flag.** The flag button on a line opens a form: a reason (**Mispronounced**, **Clipped**,
-  **Wrong tone**, **Noise**, **Other**) and a note. **Save flag** keeps it in `flags.json` beside
-  the take (in the sample folder or the pack); **Clear flag** removes it. Flagged lines are
+  **Wrong tone**, **Noise**, **Other**) and a note. **Save Flag** keeps it in `flags.json` beside
+  the take (in the sample folder or the pack); **Clear Flag** removes it. Flagged lines are
   listed on the card, and a pack's flags in its library row. A pack's
   [speech check](#speech-check) table has the same flag button on each line. A published pack
   never holds `flags.json`.
 - **Re-take flagged.** A flagged take the studio made (a sample, or a pack the studio rendered)
   counts as a re-take: a render or sample with the same seed leaves it out and sends nothing.
-  **Re-take flagged** prices the card's flagged lines with another seed, and **Re-take and
+  **Re-take Flagged** prices the card's flagged lines with another seed, and **Re-take and
   pay** makes them again. A line with a new take loses its flag; a line still without one keeps
   it, and the next re-take uses another seed. A flag on an installed pack is a note only.
-- **Delete.** The trash button on a sample card removes that voice's samples; **Delete all…**
+- **Delete.** The trash button on a sample card removes that voice's samples; **Delete All…**
   removes every sample. Both ask first. The takes stay in the cache, so sampling again costs
   nothing. Packs are deleted in the library.
 - **Command line and agents.** `quadcam-cli gear voice samples` (`--delete ID,... --yes`,
@@ -968,13 +968,13 @@ the app carries. On an older macOS, or without the helper, the check is unavaila
 everything else works as before.
 
 - **When it runs.** After every render, on the lines the render put into the pack, and after
-  every **Sample**, on each sample. **Check speech** in a library row's **…** menu, or the row's
-  speech check badge, opens the pack's check in a sheet, and **Check speech** (later **Check
+  every **Sample**, on each sample. **Check Speech** in a library row's **…** menu, or the row's
+  speech check badge, opens the pack's check in a sheet, and **Check Speech** (later **Check
   again**) hears every line of the pack again.
 - **Review.** **Needs review** lists the lines heard wrong, the re-takes and the flagged lines;
   **All** lists every line. The play button plays the pack's take of a line; a line heard wrong
   plays the take the check took out of the pack. Tick lines (or **Select all**) for **Accept
-  selected** and **Re-take selected…**.
+  selected** and **Re-take Selected…**.
 - **How it compares.** Both texts go through the spelling rules, then lose case, punctuation
   and spaces, and numbers read as words. So "GPS fix" heard for "G.P.S. fix", "10" for
   "ten" and "Fail safe" for "Failsafe" all count as heard right. A word heard as another that
@@ -986,14 +986,14 @@ everything else works as before.
   nothing. QuadCam then hears it again with half a second of silence before and after it.
 - **A line heard wrong.** In a pack ElevenLabs rendered, the line leaves the pack and is
   a [re-take](#elevenlabs) with the reason "The speech check heard …". A render with the same
-  seed keeps it out and sends nothing. **Re-take selected…** in a studio pack's check prices
-  the ticked re-take and flagged lines first; **Re-take and pay** renders only their batches
+  seed keeps it out and sends nothing. **Re-take Selected…** in a studio pack's check prices
+  the ticked re-take and flagged lines first; **Re-take and Pay** renders only their batches
   again with another seed, and nothing is sent before that click. A sample heard wrong is listed under the samples, and a later render
   treats its line the same way. In any other pack the check only marks the line.
 - **Accept.** When the recognizer is wrong (a name, an unusual word), **Accept** keeps what it
   heard: the line passes, goes back into the pack, and later renders keep it.
 - **Speech assets.** macOS needs its English speech assets. When they are missing, the check
-  says so, and **Install speech assets** asks macOS to download them.
+  says so, and **Install Speech Assets** asks macOS to download them.
 - **Hear a re-take again.** A re-take line named in `--lines` (MCP `lines`) is heard again from
   the take the check held back. When it is heard right now, after a QuadCam update to the
   check, it goes back into the pack at no cost.
@@ -1015,14 +1015,14 @@ them on the card.
   units, extras, and cues: the lines QuadCam plays on the Mac, see [Cues](#cues)). A few words read badly, so QuadCam spells them out before a voice speaks them:
   `GPS` is spoken `G.P.S.`, `TX` `T.X.`, `dBm` `D.B.M.`. The table shows the spoken text
   beside the text. Your own lines live on your Mac, never in a pack.
-- **Choose voice.** Pick a pack from the library and **Choose voice** stages one change that
+- **Choose voice.** Pick a pack from the library and **Choose Voice** stages one change that
   puts every sound of that pack on the card. **Keep my overrides** (on by default) keeps the
   lines you changed one by one. Sounds on the card that no pack knows are never deleted.
   **Review…** opens the apply sheet: backup first, write, read back, compare. Over the radio's
   USB a whole pack takes minutes.
 - **One line.** **Use another voice…** takes another installed voice's take for that line
-  on this radio. **My text…** speaks your own text with your provider for that line only. A
-  provider that may charge shows the characters first, and **Render and pay** goes ahead.
+  on this radio. **My Text…** speaks your own text with your provider for that line only. A
+  provider that may charge shows the characters first, and **Render and Pay** goes ahead.
   **Reset** clears it. The play buttons play a take. A line you add this way that QuadCam does
   not list becomes one of your own lines.
 
@@ -1127,12 +1127,12 @@ its SD card except `LOGS/`. A backup of a flight controller holds `version`, `st
 On a device page, **Backups** shows tiles for the count, the pinned backups, the last backup
 and the size, then the device's backups on the left. Pick one: the right side shows its changes
 from the backup before it, and below them its files; click a file to read its text. **Pin** keeps
-a backup. **Back up now** backs the device up.
+a backup. **Back Up Now** backs the device up.
 
 **Gear > Storage** shows the gear folder (with **Show in Finder**), one bar for its size split
-into backups, stored files and radio logs with the total, and a table per device. **Prune now**
+into backups, stored files and radio logs with the total, and a table per device. **Prune Now**
 shows what would go and asks first. **Export…** (in a device row's **…** menu, beside **Show in
-Finder**) writes a device's backups as plain folders, one per backup. **Import backups…** takes
+Finder**) writes a device's backups as plain folders, one per backup. **Import Backups…** takes
 an old backup folder; its report opens in a drawer on the right:
 
 - a folder with `RADIO/radio.yml` or `MODELS/` is a radio card copy; its `LOGS/` go to the
@@ -1153,7 +1153,7 @@ A change to a flight controller goes through five steps: **stage** it, **review*
 it, **confirm** it, then **apply** it. Staging writes nothing to the FC. Only the apply
 does, and only after the plan's checks pass.
 
-**Stage a setting.** On an FC's page open **Changes**, then **Edit setting…**. Give a setting
+**Stage a setting.** On an FC's page open **Changes**, then **Edit Setting…**. Give a setting
 name (`osd_cap_alarm`), its value, and, for a profile setting, the PID or rate profile. QuadCam
 refuses a name that the FC's latest backup does not hold, and any line it never sends
 (`save`, `exit`, `defaults`, `batch`: QuadCam saves and exits itself; `bl`, `dfu`, `msc`,
@@ -1195,7 +1195,7 @@ value outside the allowed range or list is refused before any line is sent.
 
 **If it fails.** A line the FC refuses stops the apply: QuadCam sends `exit`, nothing is saved,
 and the FC is as it was. The sheet names the line. If the FC saves but a line does not read back
-as written, the sheet lists those lines and offers **Restore backup**, which stages the backup
+as written, the sheet lists those lines and offers **Restore Backup**, which stages the backup
 taken before the write as a new change and opens it in the same sheet. If the FC saves but does
 not come back after its reboot, or the read back fails, the change is marked failed with "Saved,
 but nothing was verified": back up the FC to see what it holds, and restore the backup taken
@@ -1257,8 +1257,8 @@ what is mounted, or the latest backup.
 
 **Mount** (on a radio's, a DVR card's or a goggles card's page, an air unit's included, when
 the card is unmounted but still in) mounts the card so you can browse it in Finder. QuadCam unmounts it again when you
-press **Done**, or after 10 minutes. **Import clips…** on a DVR or goggles card's page mounts it
-and starts an import. **Prepare card…** opens [card prep](format-safety.md#card-prep).
+press **Done**, or after 10 minutes. **Import Clips…** on a DVR or goggles card's page mounts it
+and starts an import. **Prepare Card…** opens [card prep](format-safety.md#card-prep).
 
 A restore of a radio backup names the files to put back (`gear restore <backup> --path
 RADIO/radio.yml`). It makes those files read as in the backup, and removes a file the backup
@@ -1271,7 +1271,7 @@ the order the next session applies them. One line under the title counts the sta
 changes, the devices plugged in, and the applied Try changes that wait for **Keep**. Each device
 is a card with a table of its changes: title, edit, status and **Review…**; the row's **…** menu
 says who staged it and when, and holds **Discard**. A device's **Changes** segment shows the same
-table for that device. **Copy settings…** sits in the header; **Copy as Markdown** is in its
+table for that device. **Copy Settings…** sits in the header; **Copy as Markdown** is in its
 **…** menu.
 
 - Devices that are plugged in come first, open. A device that is away folds to one row with its
@@ -1302,7 +1302,7 @@ table for that device. **Copy settings…** sits in the header; **Copy as Markdo
 
 ### Copy settings between quads
 
-**Copy settings…** (on the Bench, and on an FC's **Changes**) copies settings from one FC's
+**Copy Settings…** (on the Bench, and on an FC's **Changes**) copies settings from one FC's
 latest backup to another FC. Pick the quad to copy from and the one that gets the settings, then
 the parts (rates, PID profiles, OSD, modes, adjustments, VTX, features and beeper) and any
 settings by name. QuadCam shows the checks and the diff. **Stage** queues one change on the
@@ -1392,9 +1392,9 @@ viewer. Nothing reaches the FC until you apply it from the apply sheet.
 - **Turn on or off:** tick the element in the list for the profile you are looking at. The list
   shows every element, the ones on in this profile first.
 - **One position for all profiles:** moving an element moves it in every profile that shows it.
-- **Copy a layout between profiles:** pick the two profiles and press **Copy profile**. The
+- **Copy a layout between profiles:** pick the two profiles and press **Copy Profile**. The
   target then shows exactly the elements the source shows.
-- **Copy from another quad:** **Copy from another quad…** opens Copy settings with OSD ticked.
+- **Copy from another quad:** **Copy from Another Quad…** opens Copy settings with OSD ticked.
   It copies every `osd_*` setting from that quad's latest backup, not only the positions.
 - **Live check:** the grid, the problem list and the profile counts show the layout with your
   edits on top, so an overlap or an element off screen shows as you edit. A diff-only backup
@@ -1402,7 +1402,7 @@ viewer. Nothing reaches the FC until you apply it from the apply sheet.
 - **Staged as one change:** all edits go into one change named "OSD layout" on the FC's
   Changes segment. A later edit of an element replaces its earlier one, an element put back where
   the FC holds it drops out, and the change disappears when nothing differs. **Review…** opens
-  the apply sheet, which shows the `set osd_<element>_pos` lines. **Undo OSD edits** discards the
+  the apply sheet, which shows the `set osd_<element>_pos` lines. **Undo OSD Edits** discards the
   change.
 - **Element labels:** each element draws as plain sample text, not Betaflight's font.
 
@@ -1411,7 +1411,7 @@ viewer. Nothing reaches the FC until you apply it from the apply sheet.
 The Rates segment shows how an FC's rate profiles turn stick movement into rotation, and how
 each sim on this Mac compares. You can edit a profile and write the quad's rates into a sim;
 both go through the apply sheet. Open a flight controller's page under **Gear > Devices** and
-choose **Rates**. A saved FC with a backup shows its latest backup; **Open dump…** reads a
+choose **Rates**. A saved FC with a backup shows its latest backup; **Open Dump…** reads a
 `dump all` or `diff all` file instead (a file is read only). The line beside it says where the
 rates came from ("From backup" and its time, or the file names).
 
@@ -1437,11 +1437,11 @@ rates came from ("From backup" and its time, or the file names).
   curve. Velocidrone is off: QuadCam needs a sample Velocidrone save to read its rate file, so
   the adapter ships disabled until one exists. A sim marked "Running" may rewrite its
   file when it quits.
-- **Edit profile:** on a saved FC, **Edit profile** opens the profile's rates type, the three
+- **Edit profile:** on a saved FC, **Edit Profile** opens the profile's rates type, the three
   numbers of each axis (named for the type: RC rate, super rate and expo for Betaflight; center
   rate, max rate and expo for Actual and Quick), the rate limits, the throttle mid, expo and
   limit, and the name. The curves redraw as you type, with the profile as it is now dashed.
-  **Stage** queues only the values you changed as one change; **Review and apply…** opens the
+  **Stage** queues only the values you changed as one change; **Review and Apply…** opens the
   apply sheet. Nothing is written until you click Apply there. **Convert to** fits the profile
   onto another rate model with the same fit the sims use (whole numbers within the model's
   range) and shows the largest gap from the old curve per axis; stage it like any edit.
@@ -1525,8 +1525,8 @@ backup shows the latest backups of its aircraft's radio and FC (or its own, with
 An FC's aircraft is the one it is linked to; a radio's is the aircraft whose model the radio
 selects. The radio's model is the profile's EdgeTX model file, else the model the profile
 names under EdgeTX models, else the radio's selected model. To read files instead, pick from
-the **Open…** pop-up: the radio's card (**Open card…**: a mounted card or a copy of its
-folder), one model file (**Open model…**), or the FC's dump (**Open dump…**).
+the **Open…** pop-up: the radio's card (**Open Card…**: a mounted card or a copy of its
+folder), one model file (**Open Model…**), or the FC's dump (**Open Dump…**).
 
 - **Rows:** each switch (with its type from `radio.yml`: 2-position, 3-position or toggle),
   each trim used as a switch, and each stick a logical switch reads.
@@ -1615,8 +1615,8 @@ the flight, else the profile.
 
 **Session report** (a segment of Flights) sums up one day: flights, air time, the longest
 flight, the worst link, dropouts, pack use and crashes. By default it shows the days of the
-last import; the import's Finish step has **Show report**. **Copy as Markdown** copies it to
-share. **Save…** writes it to a Markdown file you pick. **Summarize day** adds a short
+last import; the import's Finish step has **Show Report**. **Copy as Markdown** copies it to
+share. **Save…** writes it to a Markdown file you pick. **Summarize Day** adds a short
 paragraph about the day from Apple's on-device model (macOS 26 or later, Apple Intelligence
 on; see [On-device suggestions](library.md#on-device-suggestions)); the copy and the saved file
 then hold it too.
@@ -1629,7 +1629,7 @@ when every flight was on one day. **Values** under a chart lists LQ and RSSI per
 many are marked weak and their cycles. The table lists each pack with its type, its charge
 state, its cycles (flights on it), and its median resting voltage and flight time. A pack whose
 resting voltage sits 0.05 V a cell under its type's median, or whose flights are 20 % shorter,
-is marked. **Mark charged** records a charge; a flight after it makes the pack "Flown" again.
+is marked. **Mark Charged** records a charge; a flight after it makes the pack "Flown" again.
 The row's **…** menu holds **Edit…** and **Retire**; retired packs fold under "N retired" at
 the end. Click a label to open its history in a drawer on the right.
 **Charging** lists the pack types (chemistry, cells, capacity, connector, full and storage
@@ -1639,7 +1639,7 @@ resting voltage reaches 3.7 V a cell, from a straight line through the type's fl
 
 **Pack up** checks, before a session. One line under the title says how many checks pass and
 how many packs are charged. Checks that warn or cannot tell come first, each with its fix
-(**Open Packs**, **Check now**); the ones that passed fold under "N passed".
+(**Open Packs**, **Check Now**); the ones that passed fold under "N passed".
 
 | Row | Pass when |
 |---|---|
@@ -1652,11 +1652,11 @@ how many packs are charged. Checks that warn or cannot tell come first, each wit
 A row QuadCam cannot judge (nothing plugged in, no backups kept yet) reads as unknown. Each radio
 backup records the card's free space for this check.
 
-**Repairs** shows a card per aircraft. Open crashes come first, each with **Mark repaired**;
-repaired ones fold under "N repaired" (**Mark open** and **Delete…** are in a row's **…**
+**Repairs** shows a card per aircraft. Open crashes come first, each with **Mark Repaired**;
+repaired ones fold under "N repaired" (**Mark Open** and **Delete…** are in a row's **…**
 menu). A row shows the clip with its frame, the day and time, what broke and the parts. One
 line under the title counts the open and repaired crashes and names the last crash. Log a crash from a clip: open the clip, choose the
-**Flight** tab, then **Log crash…**. The time is the playhead; add what broke and the parts
+**Flight** tab, then **Log Crash…**. The time is the playhead; add what broke and the parts
 used. The clip's Flight tab lists its crashes.
 
 Packs, pack types, the pack set on each flight, added log folders and crashes are yours, in
@@ -1683,7 +1683,7 @@ last checked and how many updates there are:
 | Betaflight | The Betaflight releases on GitHub |
 | ExpressLRS | The ExpressLRS release index |
 
-- **Check for updates** reads the network. Without it, the page shows the last answer, or
+- **Check for Updates** reads the network. Without it, the page shows the last answer, or
   "Not checked yet" under the title. The setting `firmware_check` (`firmwareCheck` in the settings file) is `manual` by default.
   With `daily`, the page checks when the last answer is a day old. Settings has no control for
   it: run `quadcam-cli settings set firmware_check=daily`.
@@ -1738,8 +1738,8 @@ Betaflight release. QuadCam knows these quads:
 
 ### Read the firmware
 
-**Read firmware…** in the header of **Gear > Firmware** (in its **…** menu in a narrow window)
-opens the **Read radio firmware** sheet. Its **Read firmware** button reads the firmware that
+**Read Firmware…** in the header of **Gear > Firmware** (in its **…** menu in a narrow window)
+opens the **Read radio firmware** sheet. Its **Read Firmware** button reads the firmware that
 runs on a radio and saves a copy. It
 cannot erase, write or restart the radio: the USB path it uses refuses every command except
 status polls, aborts, the address pointer and uploads. Run it before any flash.
@@ -1751,7 +1751,7 @@ status polls, aborts, the address pointer and uploads. Run it before any flash.
    hold SG, tap the power button, then let go of SG. The screen stays dark. The sheet lists
    the steps for the radio you pick.
 3. Pick the radio in **Radio**, or **Other radio** to skip the version comparison.
-4. Select **Read firmware**. The progress bar covers two reads of the whole 1 MB flash.
+4. Select **Read Firmware**. The progress bar covers two reads of the whole 1 MB flash.
 
 QuadCam reads the flash twice and keeps the copy only when both reads are equal. It saves the
 copy, reads the saved file back and compares it, then compares the version the image names
@@ -1775,7 +1775,7 @@ another radio, and a flash of the picked radio refuses it.
 
 **Saved firmware copies** on **Gear > Firmware** (closed at first, with its count; click it to
 open) lists each radio's firmware copies, newest
-first: when the copy was taken, why (**Read firmware**, **Before a flash**, **Before a
+first: when the copy was taken, why (**Read Firmware**, **Before a flash**, **Before a
 restore**), the radio, the EdgeTX version and board the image names, the size and the SHA-256.
 A copy from a DFU device that is not linked to a radio shows **No radio linked** and cannot
 be restored until the device is linked (see [What QuadCam finds](#what-quadcam-finds)).
@@ -2018,7 +2018,7 @@ open), or turn on **Settings > Gear > Show the ELRS tools**
 radio, FC or ExpressLRS device yet.** Every job refuses while the setting is off.
 
 **Read.** An ExpressLRS device sits behind a saved radio (its internal module) or a saved FC
-(its receiver). **Read the module in …** or **Read the receiver in …** hands the host's USB
+(its receiver). **Read the Module in …** or **Read the Receiver in …** hands the host's USB
 port to the device and asks it over CRSF for its name, version, target and parameters:
 
 | Host | What QuadCam does |
@@ -2044,7 +2044,7 @@ options in the gear folder. It cannot read the binding phrase, and QuadCam never
 change.
 
 **Options.** For a device that was read, **Options** lists packet rate, telemetry ratio, max power,
-dynamic power, switch mode and model match, as far as the device offers them. **Stage changes**
+dynamic power, switch mode and model match, as far as the device offers them. **Stage Changes**
 queues one change; **Apply** opens the apply sheet like any change. The apply reads the device
 again and refuses if an option's value or list of values changed since your read, keeps the
 parameters as a backup, writes each option over CRSF, reads them back and compares. After a write
@@ -2073,7 +2073,7 @@ packet rate changes the switch modes). From a terminal:
   checks that no other byte changed. As with ExpressLRS's own configurator, the options hold only
   the UID, the WiFi delay and a build number. A target whose screen shows a logo refuses.
   **The plan shows only a fingerprint of the UID, never the
-  phrase.** Type the phrase in **Binding phrase** and select **Save phrase** (write-only), or use
+  phrase.** Type the phrase in **Binding phrase** and select **Save Phrase** (write-only), or use
   `settings set-secret elrs_binding_phrase` (the phrase on stdin); reads show only its hint. The plan refuses without a phrase.
 - The region (`elrs_region`, `FCC` or `LBT`; the **Region** list in the ELRS section) picks the image folder.
 - The **esptool** module must be installed ([Modules](modules.md)). Nothing downloads except the
@@ -2116,11 +2116,11 @@ passthrough is one of the things a real-device trial has to show.
 
 **Radio > Splash** makes the start-up picture.
 
-1. **Choose image…** picks a PNG. QuadCam scales it to fit 128 × 64, centres it on white and
+1. **Choose Image…** picks a PNG. QuadCam scales it to fit 128 × 64, centres it on white and
    cuts it to two tones.
 2. **Threshold** sets how dark a pixel must be to count as dark. **Invert** swaps the tones.
    The preview frame shows the radio's 128 × 64 screen at twice the size.
-3. **Flash with splash…** opens the flash sheet for the radio's installed version, with the
+3. **Flash with Splash…** opens the flash sheet for the radio's installed version, with the
    picture put into the board's image. While it is off, the line under it says why: the radio
    is not saved, no image is chosen, or the radio cannot take a splash.
 
@@ -2250,7 +2250,7 @@ Agents use the `quadcam_gear`, `quadcam_gear_edit` and `quadcam_gear_apply` tool
 With the app running, an agent's write (an apply, a flash, a sim sync or restore) opens the
 apply sheet, and nothing is written until you click **Apply**. **Apply on connect** uses the
 same sheet. After the click the sheet stays open: it shows the progress, then the result, with
-**Restore backup** when the write failed. A request never replaces a sheet that is open. It
+**Restore Backup** when the write failed. A request never replaces a sheet that is open. It
 waits, the open sheet says so, and it opens when you close that sheet. A request still waiting
 after 3 minutes is refused.
 

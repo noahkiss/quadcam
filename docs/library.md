@@ -38,12 +38,12 @@ On a Mac with Apple's on-device model (macOS 26 or later, Apple Intelligence on)
 - **One outing, one name.** Clips from the same day, place and aircraft share one name with a pack number in time order: `morning loops pack 1`, `morning loops pack 2`. The numbers continue after the day's numbered clips in the library. The model picks the words; QuadCam numbers the packs, in the word your earlier names use.
 - **Your values stay.** A suggestion fills only an empty name, note or keyword list, or one that still holds the model's last suggestion. A name you typed, or an agent suggested, never changes.
 - **Marked on-device.** A suggested field has a dotted outline and an **on-device** badge until you edit it. When you typed a name, the model's name shows under it with **Use**.
-- **Suggest names** in the Review step asks again, for example after you match radio logs.
+- **Suggest Names** in the Review step asks again, for example after you match radio logs.
 - **On-device suggestions** in Settings > Import turns it off. On an older Mac, or with Apple Intelligence off, QuadCam skips it without a message.
 
 The command line runs it with `quadcam-cli names [IDS]`; an agent passes `on_device: true` to `quadcam_suggest`.
 
-**Date in file names** sets the date format: `2026-09-25_<name>.mp4` (default) or `26.09.25_<name>.mp4`. **Rename library files to this format** renames the clips already in the library, with their cuts and originals. Folder names keep `YYYY-MM-DD`.
+**Date in file names** sets the date format: `2026-09-25_<name>.mp4` (default) or `26.09.25_<name>.mp4`. **Rename Library Files to This Format** renames the clips already in the library, with their cuts and originals. Folder names keep `YYYY-MM-DD`.
 
 QuadCam reads both formats. It takes a clip's date from the file's metadata first, then from the name.
 
@@ -68,7 +68,7 @@ A clip's time of day comes from its radio log or its clip clock, or you type it.
 
 QuadCam writes every detail it shows into the file's QuickTime metadata: the date, name, note, place, aircraft, moments, keep ranges, flight numbers, star rating, pick or reject flag, and whether the clip is in Photos. See [Metadata](metadata.md).
 
-The index in `<library>/.quadcam/index.json` is a cache that makes the app start fast. **Rebuild from files** in Settings > Library makes it again from the files alone. A rebuild never moves or writes a file. Only cut ranges that you set but did not save yet live in the index alone.
+The index in `<library>/.quadcam/index.json` is a cache that makes the app start fast. **Rebuild from Files** in Settings > Library makes it again from the files alone. A rebuild never moves or writes a file. Only cut ranges that you set but did not save yet live in the index alone.
 
 The app, the command line and the MCP server take turns on the index: each holds a lock on `.quadcam/index.lock` while it reads, changes and saves it. An index that a newer QuadCam wrote is refused: update QuadCam to open that library.
 
@@ -109,7 +109,7 @@ On import, QuadCam joins such files into one clip. It joins two files only when 
 
 When QuadCam is not sure, it keeps the files separate. Examples: the first file is 596 seconds long, or a DVR QuadCam does not know wrote one 300-second file and then a shorter one.
 
-- The Review step shows a joined clip as one row with its files. **Keep files separate** imports them as clips of their own. **Join N files** joins them again. You cannot change it after the clip is in the library.
+- The Review step shows a joined clip as one row with its files. **Keep Files Separate** imports them as clips of their own. **Join N Files** joins them again. You cannot change it after the clip is in the library.
 - **Join split recordings** in Settings > Import turns joining on or off. It is on by default. The command line takes `stage --no-join` for one import, and `import --separate ID` or `import --join ID` for one clip. An agent passes `join` to `quadcam_load_clips`, or `joined` to `quadcam_suggest`.
 - QuadCam converts every file into one output file and verifies it against all of them together: frame count and duration.
 - The radio log is matched to the whole recording, so a flight that runs across a file boundary stays one flight. Moments and dead air use the joined timeline.
@@ -121,7 +121,7 @@ Clips imported as separate files before QuadCam 0.6.3 stay separate. QuadCam doe
 
 ### Existing exports
 
-If the library folder already holds videos that are not in the index, the library shows a **Scan folder** banner. These can come from an older QuadCam or from another tool. A scan reads the files where they are. It moves nothing and writes nothing. If you rate or edit such a clip later, QuadCam writes into that clip's file.
+If the library folder already holds videos that are not in the index, the library shows a **Scan Folder** banner. These can come from an older QuadCam or from another tool. A scan reads the files where they are. It moves nothing and writes nothing. If you rate or edit such a clip later, QuadCam writes into that clip's file.
 
 ## Work in the library
 
@@ -136,20 +136,20 @@ If the library folder already holds videos that are not in the index, the librar
 - **Rejected** in the sidebar shows a **Move to Trash** button for every rejected clip.
 - Each day's head shows, on one line, the clips, armed time, radio-log flights, lowest battery voltage, the place and aircraft, the best moments of the day, and **Share**. In a narrow window it wraps: the date, then the numbers, then the moments. **Best moments** in the sidebar lists them for the whole library (see [Moments](moments-and-cuts.md#moments)).
 - A thin strip at the bottom of a card's thumbnail is stronger where the clip's moments are.
-- **Shift time…** in the bar for two or more selected clips fixes a wrong camera clock. See [Shift the time of many clips](#shift-the-time-of-many-clips).
+- **Shift Time…** in the bar for two or more selected clips fixes a wrong camera clock. See [Shift the time of many clips](#shift-the-time-of-many-clips).
 
 Right-click a clip for these commands:
 
 | Command | Key |
 |---|---|
 | Rename | Return |
-| Edit details | Command-I |
-| Trim and cuts | T |
+| Edit Details | Command-I |
+| Trim and Cuts | T |
 | Share… | |
 | Add to *album* (shown when Settings names a Photos album) | |
 | Show in Finder | Command-R |
-| Find dead air again | |
-| Find highlights again (macOS 27; see [Highlights](moments-and-cuts.md#highlights-from-video-analysis)) | |
+| Find Dead Air Again | |
+| Find Highlights Again (macOS 27; see [Highlights](moments-and-cuts.md#highlights-from-video-analysis)) | |
 | Move to Trash | Command-Delete |
 
 Move to Trash takes the clip's cuts and kept original with it. The clip's own file goes last, and only after all the others went: if one of them cannot go, the clip stays in the library with what is left.
@@ -171,10 +171,10 @@ Open a clip, then use the **Details** tab. It changes the name, date, time of da
 A DVR or goggles clock that was wrong puts every clip of a day at the wrong time. Fix one clip and shift the rest by the same amount:
 
 1. Select the clips. Command-click or Shift-click selects more.
-2. Select **Shift time…** in the bar at the bottom.
+2. Select **Shift Time…** in the bar at the bottom.
 3. Pick the **Clip** whose real time you know. Set its **Real date** and **Real time**.
 4. Check the table. It shows each clip's time now, its new time and where the new time comes from.
-5. Select **Shift N clips**.
+5. Select **Shift N Clips**.
 
 | From | New time |
 |---|---|
@@ -220,7 +220,7 @@ Click a pin to show its callout:
 
 | Pin | Stands for | Its callout shows | Button |
 |---|---|---|---|
-| Red, with a number | A place and its clip count | The place, its clip count, and the first and last day of its clips | **Show clips**: the place's clips in the library |
+| Red, with a number | A place and its clip count | The place, its clip count, and the first and last day of its clips | **Show Clips**: the place's clips in the library |
 | Gray | A saved place without clips | The place and **No clips** | None |
 | Blue | A clip with a location but no place | The clip's name, day and time, its poster frame, and the sky at flight time when [weather](#sun-and-weather) has it | **Open**: the clip |
 
@@ -228,13 +228,13 @@ Click a pin to show its callout:
 - VoiceOver reads each pin's name, kind and callout lines.
 - A place sits at its saved point. A place that is not saved sits in the middle of its clips' locations.
 - Pins close together merge into one at a wide zoom. Click it to zoom in.
-- **Map**, **Hybrid** and **Satellite** pick the look, and the map opens in it the next time ([Map style](settings.md#map-style)). **Show all** zooms to every pin.
+- **Map**, **Hybrid** and **Satellite** pick the look, and the map opens in it the next time ([Map style](settings.md#map-style)). **Show All** zooms to every pin.
 - The header counts the places, the clips on the map, and the clips without a location.
-- The **Places** list beside the map shows each saved place with its clip count and the day you last flew there; click one to show its clips. **Add place…** searches for a place or uses this Mac's location, and saves it. A place's **…** menu holds **Rename…**, **Show clips** and **Delete…**. In a narrow window the map sits on top and the list under it.
+- The **Places** list beside the map shows each saved place with its clip count and the day you last flew there; click one to show its clips. **Add Place…** searches for a place or uses this Mac's location, and saves it. A place's **…** menu holds **Rename…**, **Show Clips** and **Delete…**. In a narrow window the map sits on top and the list under it.
 - Scroll or pinch to zoom; drag to move. The map keeps its view when you come back to the page.
 
 ## Unfinished imports
 
 You can close the Import sheet at any time. The import stays in the sidebar as **Unfinished import**, and the app saves it as you work.
 
-If you quit and open QuadCam again, the import comes back with the same clips, names, dates and cuts. This works only while the copies in QuadCam's cache still exist. **Start over** in the sheet clears the import. Clips already in the library stay where they are. After the app formats a card, the next launch starts empty.
+If you quit and open QuadCam again, the import comes back with the same clips, names, dates and cuts. This works only while the copies in QuadCam's cache still exist. **Start Over** in the sheet clears the import. Clips already in the library stay where they are. After the app formats a card, the next launch starts empty.

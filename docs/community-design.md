@@ -10,7 +10,7 @@ every QuadCam.
 
 It extends [Gear design](gear-design.md) and [Radio design](radio-design.md). It reuses two
 patterns that already work: the module pins (`modules.json`, [Modules](modules.md)) for the
-fetch, and the voice pack publish (prepare, review, **Approve and publish**,
+fetch, and the voice pack publish (prepare, review, **Approve and Publish**,
 [Gear](gear.md#publish-a-pack)) for the send.
 
 ---
@@ -50,7 +50,7 @@ fetch, and the voice pack publish (prepare, review, **Approve and publish**,
 
 | Table | Where it lives now | A contribution holds | Value to other pilots | How QuadCam gets the facts |
 |---|---|---|---|---|
-| Radio board profiles | `gear/radios/boards.rs`, about 50 rows, read-only unless proven | Board, firmware version, USB product string, VID and PID, the DFU device's descriptor (flash size, sector layout), the bootloader entry that worked, card layout facts (`radio.yml` schema version, sound pack folder), the switch and pot slots the radio reports | The next owner of that radio sees a profile checked on a real unit, not one written from EdgeTX source. It is the path for a board toward proven | Detection (`Connected.radio`), **Read firmware** (DFU, read-only), the card read |
+| Radio board profiles | `gear/radios/boards.rs`, about 50 rows, read-only unless proven | Board, firmware version, USB product string, VID and PID, the DFU device's descriptor (flash size, sector layout), the bootloader entry that worked, card layout facts (`radio.yml` schema version, sound pack folder), the switch and pot slots the radio reports | The next owner of that radio sees a profile checked on a real unit, not one written from EdgeTX source. It is the path for a board toward proven | Detection (`Connected.radio`), **Read Firmware** (DFU, read-only), the card read |
 | Measured USB speeds | `RadioProfile.usb_speed`, 2 of 50 measured | Board, direction (read, write), bytes, seconds, route (DFU, mass storage) | Honest time estimates for a flash, a firmware read and a card write | A read or write job already times itself |
 | Compat rows | `gear/compat.rs` `PROVEN` | Product, board, version, the job, the result, and the verify step's result (read-back equal or not) | Shows which versions other pilots ran a job on with success. It is evidence for the owner's promotion to proven, not a promotion | The apply and flash reports, after their read-back |
 | FC board notes | `gear/bf/boards.rs` `BoardNote` | Board, build version, when it applies (after a USB session, always), and the person's text | A known issue reaches every owner of that board before they meet it | Free text, typed by the person on the FC page |

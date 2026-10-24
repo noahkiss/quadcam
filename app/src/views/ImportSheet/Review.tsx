@@ -143,7 +143,7 @@ function SessionBar({ s }: { s: Session }) {
         </span>
         {onDeviceOn && onDeviceReady && (
           <Button size="sm" icon="sparkle" className={styles.suggestNames} disabled={busy || !!running} onClick={suggestNames}>
-            {running ? `Suggesting ${running.done} of ${running.total}…` : "Suggest names"}
+            {running ? `Suggesting ${running.done} of ${running.total}…` : "Suggest Names"}
           </Button>
         )}
         {deleteClips && <Checkbox label="Delete clips after import" checked={!keepClips} disabled={busy} onChange={(e) => store.setState({ keepClips: !e.target.checked })} />}
@@ -286,7 +286,7 @@ function JoinControl({ s, clip: c, imported }: { s: Session; clip: Clip; importe
       </span>
       {!imported && (
         <Button size="sm" variant="ghost" onClick={() => edit({ id: c.id, joined: !c.join!.on })}>
-          {c.join.on ? "Keep files separate" : `Join ${n} files`}
+          {c.join.on ? "Keep Files Separate" : `Join ${n} Files`}
         </Button>
       )}
     </>
@@ -533,7 +533,7 @@ function Meta({ clip: c, plan: p }: { clip: Clip; plan: ClipPlan }) {
         <div className={styles.saveRow}>
           <Input aria-label="Name this place" placeholder="Name this place" value={placeName} onChange={(e) => setPlaceName(e.target.value)} />
           <Button size="sm" variant="ghost" onClick={() => savePlace(c.id, placeName).then(() => setPlaceName(""))}>
-            Save as place
+            Save as Place
           </Button>
         </div>
       )}
@@ -568,7 +568,7 @@ function Meta({ clip: c, plan: p }: { clip: Clip; plan: ClipPlan }) {
       <p className={styles.small}>Written into the file: {effective.join(" · ")}.</p>
       <div className={styles.saveRow}>
         <Button size="sm" variant="secondary" onClick={() => metaToAll(c.id)}>
-          Apply to all clips
+          Apply to All Clips
         </Button>
         <span className={styles.small}>Aircraft, place, keywords and author.</span>
       </div>

@@ -23,7 +23,7 @@ export function StagedBar({ device }: { device: string | null }) {
             Review…
           </Button>
           <Button size="sm" variant="danger-ghost" onClick={() => void discardWithAsk(change, { edits: n, title: "Undo model edits?", ok: "Undo" })}>
-            Undo model edits
+            Undo Model Edits
           </Button>
         </>
       }

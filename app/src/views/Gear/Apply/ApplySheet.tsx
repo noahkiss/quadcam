@@ -51,12 +51,12 @@ export function ApplySheet() {
           <>
             {a?.report?.status === "failed" && a.report.backup && kind !== "sims" && kind !== "firmware" && kind !== "restore" && kind !== "ELRS flash" && (kind === "FC" || a.report.steps.some((x) => x.name === "Roll back" && x.state === "failed")) && (
               <Button variant="ghost" onClick={() => restore()}>
-                Restore backup
+                Restore Backup
               </Button>
             )}
             {more > 0 ? (
               <Button variant="primary" onClick={() => next()}>
-                Next change
+                Next Change
               </Button>
             ) : (
               <Button variant="primary" onClick={() => close()}>

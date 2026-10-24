@@ -119,7 +119,7 @@ export function CalloutsEditor({ detail, stage }: Props) {
           )}
           <div className={styles.bar}>
             <Button type="submit" variant="primary" size="sm">
-              Stage callout
+              Stage Callout
             </Button>
             <Button size="sm" onClick={() => setForm(null)}>
               Cancel
@@ -129,7 +129,7 @@ export function CalloutsEditor({ detail, stage }: Props) {
       ) : (
         <div className={styles.bar}>
           <Button size="sm" icon="add" onClick={() => open(null)}>
-            Add callout
+            Add Callout
           </Button>
         </div>
       )}

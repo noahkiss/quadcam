@@ -68,7 +68,7 @@ export function MapView() {
                 </Select>
               </span>
               <Button size="sm" onClick={() => setFitSeq((n) => n + 1)} disabled={!data.pins.length}>
-                Show all
+                Show All
               </Button>
             </>
           }
@@ -121,7 +121,7 @@ function PlaceList({ places, onShow }: { places: Place[]; onShow: (name: string)
                   label={`More actions for ${p.name}`}
                   items={[
                     { label: "Rename…", run: () => void rename(p) },
-                    { label: "Show clips", run: () => onShow(p.name) },
+                    { label: "Show Clips", run: () => onShow(p.name) },
                     null,
                     { label: "Delete…", icon: "trash-bin-trash", danger: true, run: () => void del(p) },
                   ]}
@@ -187,7 +187,7 @@ function AddPlace() {
   return (
     <span className={styles.anchor}>
       <Button ref={anchor} size="sm" icon="add" aria-haspopup="dialog" aria-expanded={open} onClick={() => (open ? close() : setOpen(true))}>
-        Add place…
+        Add Place…
       </Button>
       {open && (
         <Popover label="Add place" anchor={anchor} onClose={close}>
@@ -210,7 +210,7 @@ function AddPlace() {
                 Search
               </Button>
               <Button size="sm" variant="ghost" icon="gps" disabled={busy} onClick={() => void here()}>
-                Use current location
+                Use Current Location
               </Button>
             </div>
             {hits != null &&

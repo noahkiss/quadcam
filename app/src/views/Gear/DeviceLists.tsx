@@ -130,7 +130,7 @@ function DeviceCard({ r }: { r: DeviceRef }) {
   else if (!r.device && c.id) next = { text: "", action: { label: "Save…", primary: true, run: () => setSaving(true) } };
   else if (staged) next = { text: staged === 1 ? "1 change ready" : `${staged} changes ready`, action: { label: "Review…", primary: true, run: () => gearSlots.review(r.device!.id) } };
   else if (fresh && mount) next = { text: plural(fresh, "new clip"), action: { label: "Import…", run: () => void importFrom(mount) } };
-  else if (r.unmounted && c.id && isClipCard) next = { text: "Unmounted", action: { label: "Import clips…", run: () => void importFromDevice(c.id!, name) } };
+  else if (r.unmounted && c.id && isClipCard) next = { text: "Unmounted", action: { label: "Import Clips…", run: () => void importFromDevice(c.id!, name) } };
   const space = mount ? cards[mount] : null;
   const free = space?.free != null && space.size > 0 ? `${fmtBytes(space.free)} free of ${fmtBytes(space.size)}` : r.device?.last_space && isCard ? `${fmtBytes(r.device.last_space.free)} free` : null;
   const backup = gearSlots.lastBackup(r.device);
@@ -139,7 +139,7 @@ function DeviceCard({ r }: { r: DeviceRef }) {
   const items: (MenuItem | false)[] = [
     { label: "Open", run: () => open({ page: "device", key: r.key }) },
     isCard && r.unmounted && !!c.id && { label: "Mount", run: () => void mountCard(c.id!) },
-    isClipCard && (r.unmounted ? !!c.id : c.link.kind === "volume") && { label: "Prepare card…", run: () => void prepCard(r.unmounted ? { device: c.id! } : { mount: c.link.kind === "volume" ? c.link.mount : undefined }) },
+    isClipCard && (r.unmounted ? !!c.id : c.link.kind === "volume") && { label: "Prepare Card…", run: () => void prepCard(r.unmounted ? { device: c.id! } : { mount: c.link.kind === "volume" ? c.link.mount : undefined }) },
     !!(r.device || c.id) && { label: r.device ? "Edit…" : "Save…", run: () => setSaving(true) },
   ];
   const menu: (MenuItem | null)[] = items.filter((x): x is MenuItem => !!x);
@@ -230,7 +230,7 @@ export function DevicesPage({ refs }: { refs: DeviceRef[] }) {
           label={`More actions for ${refName(r)}`}
           items={[
             { label: "Open", run: () => open({ page: "device", key: r.key }) },
-            { label: "Back up now", disabled: !canBackUp(r), run: () => void backUpNow(r) },
+            { label: "Back Up Now", disabled: !canBackUp(r), run: () => void backUpNow(r) },
             { label: "Edit…", run: () => setEditing(r) },
             null,
             { label: "Forget…", icon: "trash-bin-trash", danger: true, run: () => void forgetDevice(r) },

@@ -63,8 +63,8 @@ export function PacksPage() {
         }
         fold={[
           seg === "charging"
-            ? { label: "Add type…", icon: "add", run: () => setType({ name: "", chemistry: "lipo", cells: 1 }) }
-            : { label: "Add pack…", icon: "add", run: () => setPack({ label: "", pack_type: data?.types[0]?.pack_type.name ?? null }) },
+            ? { label: "Add Type…", icon: "add", run: () => setType({ name: "", chemistry: "lipo", cells: 1 }) }
+            : { label: "Add Pack…", icon: "add", run: () => setPack({ label: "", pack_type: data?.types[0]?.pack_type.name ?? null }) },
         ]}
         moreLabel="Packs actions"
       />
@@ -114,14 +114,14 @@ function Packs({ v, onEdit }: { v: PacksView; onEdit: (p: Pack) => void }) {
         <div className={styles.actions}>
           {p.state !== "charged" && !p.pack.retired && (
             <Button size="sm" onClick={() => run(() => api.gearPackSave(p.pack, true))}>
-              Mark charged
+              Mark Charged
             </Button>
           )}
           <MoreMenu
             label={`More actions for ${p.pack.label}`}
             items={[
               { label: "Edit…", run: () => onEdit(p.pack) },
-              { label: p.pack.retired ? "Return to use" : "Retire", run: () => run(() => api.gearPackSave({ ...p.pack, retired: !p.pack.retired })) },
+              { label: p.pack.retired ? "Return to Use" : "Retire", run: () => run(() => api.gearPackSave({ ...p.pack, retired: !p.pack.retired })) },
             ]}
           />
         </div>

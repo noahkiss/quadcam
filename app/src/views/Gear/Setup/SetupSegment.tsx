@@ -63,9 +63,9 @@ export function SetupSegment({ d }: { d: DeviceRef }) {
             actions={
               <>
                 <Button size="sm" onClick={() => setCopying(true)}>
-                  Copy from…
+                  Copy From…
                 </Button>
-                <MoreMenu items={[{ label: "Start again from the default setup", run: () => void s.edit({ reset: true }) }]} />
+                <MoreMenu items={[{ label: "Start Again from the Default Setup", run: () => void s.edit({ reset: true }) }]} />
               </>
             }
           >
@@ -103,7 +103,7 @@ function StatusBar({ device, detail, s }: { device: string; detail: RadioSetupDe
               Review…
             </Button>
             <Button size="sm" variant="danger-ghost" onClick={() => void discardWithAsk(change, { title: "Discard the staged setup?" })}>
-              Discard staged setup
+              Discard Staged Setup
             </Button>
           </>
         }

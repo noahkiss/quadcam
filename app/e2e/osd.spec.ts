@@ -20,7 +20,7 @@ test("opens a dump and shows each profile with its check", async ({ app, page })
   // The FC's latest backup shows first.
   await expect(page.getByText(/^From backup · /)).toBeVisible();
   await app.core(`c => c.dialogAnswers.push([${JSON.stringify(DUMP)}])`);
-  await page.getByRole("button", { name: "Open dump…" }).click();
+  await page.getByRole("button", { name: "Open Dump…" }).click();
 
   const calls = await app.method("gear_osd");
   expect(calls[0]).toEqual({ paths: [], device: "fc-0a1b2c3d4e5f6071", grid: null, staged: true });
@@ -51,7 +51,7 @@ for (const scheme of axeSchemes) {
     test("the OSD segment passes axe", async ({ app, page }) => {
       await openOsd(app, page);
       await app.core(`c => c.dialogAnswers.push([${JSON.stringify(DUMP)}])`);
-      await page.getByRole("button", { name: "Open dump…" }).click();
+      await page.getByRole("button", { name: "Open Dump…" }).click();
       await expect(page.getByRole("img", { name: /OSD profile/ })).toBeVisible();
       const r = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
       expect(r.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(" ") + " " + n.failureSummary).join(", ")}`)).toEqual([]);

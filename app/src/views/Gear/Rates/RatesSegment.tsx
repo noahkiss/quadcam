@@ -177,7 +177,7 @@ export function RatesSegment({ paths: initial = [], device = null }: Props) {
           </span>
         )}
         <Button className={styles.end} icon="folder-open" onClick={open}>
-          Open dump…
+          Open Dump…
         </Button>
       </div>
       {error && (
@@ -201,7 +201,7 @@ export function RatesSegment({ paths: initial = [], device = null }: Props) {
             {profile.active && <Chip kind="accent">In use</Chip>}
             {canEdit && !editing && (
               <Button icon="pen" onClick={() => setEditing(true)}>
-                Edit profile
+                Edit Profile
               </Button>
             )}
             <label className={styles.compareLabel}>

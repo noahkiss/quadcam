@@ -66,7 +66,7 @@ test("each edit stages into one change, shows the radio's value, and Undo drops 
   await sound.getByLabel("Beep volume").selectOption("2");
   await expect(page.getByText("3 settings are staged.")).toBeVisible();
   await expect(sound.getByText("Staged", { exact: true })).toHaveCount(0);
-  await page.getByRole("button", { name: "Undo settings edits" }).click();
+  await page.getByRole("button", { name: "Undo Settings Edits" }).click();
   await expect(page.getByText(/settings? (is|are) staged/)).toHaveCount(0);
   await expect(alarms.getByLabel("Battery low")).toHaveValue("6.6");
 });

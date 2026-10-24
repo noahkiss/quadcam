@@ -152,8 +152,8 @@ export function StoragePage() {
         subtitle={view && <PathText path={view.gear_dir} />}
         fold={[
           { label: "Show in Finder", icon: "finder", disabled: !view, run: () => view && void reveal(view.gear_dir).catch((e) => toast(errText(e), true)) },
-          { label: "Import backups…", icon: "import", disabled: busy, run: () => void importFolder() },
-          { label: "Prune now", disabled: busy, run: () => void prune() },
+          { label: "Import Backups…", icon: "import", disabled: busy, run: () => void importFolder() },
+          { label: "Prune Now", disabled: busy, run: () => void prune() },
         ]}
         moreLabel="Storage actions"
       />

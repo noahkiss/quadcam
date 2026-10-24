@@ -318,7 +318,7 @@ export async function startOver() {
   const ok = await ask(
     "Start over?",
     left ? `${left} clip${left > 1 ? "s are" : " is"} not in the library yet; their names, dates and cuts are lost. Clips already in the library stay.` : "This clears the loaded clips. Clips already in the library stay.",
-    { ok: "Start over", danger: true },
+    { ok: "Start Over", danger: true },
   );
   if (!ok) return;
   try {

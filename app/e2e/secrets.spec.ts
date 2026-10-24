@@ -18,6 +18,6 @@ test("the Google Places key shows its hint and a Replace… button", async ({ ap
   await expect(page.locator("body")).not.toContainText("GOOGLEMIDDLE");
   await dlg.getByRole("button", { name: "Replace…" }).click();
   await expect(dlg.getByLabel("Google Places API key")).toHaveValue("");
-  await dlg.getByRole("button", { name: "Keep current" }).click();
+  await dlg.getByRole("button", { name: "Keep Current" }).click();
   await expect(dlg.getByLabel("Google Places API key")).toHaveText("AIza…q7Rt (22 chars)");
 });

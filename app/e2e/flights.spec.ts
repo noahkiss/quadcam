@@ -88,7 +88,7 @@ test("the session report saves as a Markdown file through the save panel", async
 test("the import's Finish step opens the session report", async ({ app, page }) => {
   await app.open("finished-card");
   await page.getByRole("button", { name: "Import…" }).first().click();
-  await page.getByRole("button", { name: "Show report" }).click();
+  await page.getByRole("button", { name: "Show Report" }).click();
   await expect(page.getByRole("heading", { name: "Flights", exact: true })).toBeVisible();
   await expect(page.getByRole("region", { name: "Session report" })).toContainText("Air time");
   expect((await app.method("gear_session_report")).every((p) => p.day === null)).toBe(true);
@@ -101,8 +101,8 @@ test("packs: history, mark charged, and Pack up passes once all are charged", as
   await packs.getByRole("button", { name: "A1", exact: true }).click();
   await expect(page.getByRole("complementary", { name: "History of A1" }).getByRole("table", { name: "Flights on A1" }).getByRole("rowheader")).toHaveCount(1);
 
-  for (const label of ["A1", "A2", "A3"]) await packs.getByRole("row", { name: new RegExp(label) }).getByRole("button", { name: "Mark charged" }).click();
-  await expect(packs.getByRole("button", { name: "Mark charged" })).toHaveCount(0);
+  for (const label of ["A1", "A2", "A3"]) await packs.getByRole("row", { name: new RegExp(label) }).getByRole("button", { name: "Mark Charged" }).click();
+  await expect(packs.getByRole("button", { name: "Mark Charged" })).toHaveCount(0);
   expect((await app.method("gear_pack_save")).map((p) => p.charged)).toEqual([true, true, true]);
 
   await page.getByRole("group", { name: "Sections" }).getByRole("button", { name: "Charging" }).click();
@@ -119,7 +119,7 @@ test("packs: history, mark charged, and Pack up passes once all are charged", as
 
 test("a pack is added in a sheet", async ({ app, page }) => {
   await openPage(app, page, "Packs");
-  await page.getByRole("button", { name: "Add pack…" }).click();
+  await page.getByRole("button", { name: "Add Pack…" }).click();
   const sheet = dialog(page, "Add pack");
   await sheet.getByLabel("Label").fill("B1");
   await sheet.getByRole("button", { name: "Save" }).click();
@@ -132,7 +132,7 @@ test("a crash logged on a clip shows there and under Repairs", async ({ app, pag
   await page.getByRole("tab", { name: "Flight" }).click();
   const crashes = page.getByRole("region", { name: "Crashes" });
   await expect(crashes).toContainText("None logged.");
-  await crashes.getByRole("button", { name: "Log crash…" }).click();
+  await crashes.getByRole("button", { name: "Log Crash…" }).click();
   const sheet = dialog(page, "Log crash");
   await sheet.getByLabel("Time in clip").fill("1:05");
   await sheet.getByLabel("What broke").fill("front left arm");

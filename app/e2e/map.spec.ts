@@ -42,7 +42,7 @@ test("the map shows a pin per place with its clip count, where the page keeps it
   await expect.poll(() => app.core<string>("(c) => c.map.style")).toBe("satellite");
   await expect.poll(async () => (await app.method("settings_set")).map((p) => (p as { values: Record<string, unknown> }).values)).toContainEqual({ mapStyle: "satellite" });
   expect((await app.core<{ fit: boolean }>("(c) => c.map")).fit).toBe(false);
-  await page.getByRole("button", { name: "Show all" }).click();
+  await page.getByRole("button", { name: "Show All" }).click();
   await expect.poll(() => app.core<boolean>("(c) => c.map.fit")).toBe(true);
 });
 
@@ -133,7 +133,7 @@ test("an empty map says what is missing", async ({ app, page }) => {
   await app.open("empty", { settings: { mapView: true, places: [] } });
   await sidebar(page).getByRole("button", { name: "Map" }).click();
   await expect(page.getByText("No places or clip locations yet.")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Show all" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Show All" })).toBeDisabled();
 });
 
 for (const scheme of axeSchemes) {

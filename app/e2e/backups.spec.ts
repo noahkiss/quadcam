@@ -30,11 +30,11 @@ test("a radio's backups: changes from the one before, files, pin, back up now", 
   await table.getByRole("checkbox").nth(1).check();
   expect((await app.method("gear_backup_pin")).at(-1)).toMatchObject({ pinned: true });
 
-  await radio.getByRole("button", { name: "Back up now" }).click();
+  await radio.getByRole("button", { name: "Back Up Now" }).click();
   await expect(page.getByText("No changes since the last backup.")).toBeVisible();
   expect((await app.method("gear_backup")).at(-1)).toEqual({ mount: "/Volumes/RADIO" });
   await app.core(`c => { c.gear.dirty = "${RADIO_ID}"; }`);
-  await radio.getByRole("button", { name: "Back up now" }).click();
+  await radio.getByRole("button", { name: "Back Up Now" }).click();
   await expect(page.getByText(/^Backed up: /)).toBeVisible();
   await expect(table.getByRole("row")).toHaveCount(5);
 });
@@ -43,7 +43,7 @@ test("a failed card check offers a repair, which asks first", async ({ page, app
   await app.open("gear");
   await app.core(`c => { c.gear.cardFails = ["${RADIO_ID}"]; }`);
   const radio = await radioBackups(page);
-  await radio.getByRole("button", { name: "Check card" }).click();
+  await radio.getByRole("button", { name: "Check Card" }).click();
   await expect(radio.getByText(/^Card check failed: /)).toBeVisible();
   await expect(bar(page).getByRole("button", { name: "Radio: Needs attention" })).toBeVisible();
   await radio.getByRole("button", { name: "Repair…" }).click();
@@ -59,7 +59,7 @@ test("Clean ._ files lists them, asks, and removes them", async ({ page, app }) 
   await app.open("gear");
   await app.core(`c => { c.gear.appleDoubles = 3; }`);
   const radio = await radioBackups(page);
-  await radio.getByRole("button", { name: "Clean ._ files" }).click();
+  await radio.getByRole("button", { name: "Clean ._ Files" }).click();
   const ask = dialog(page, "Remove 3 ._ files?");
   await expect(ask).toContainText("AppleDouble");
   await ask.getByRole("button", { name: "Remove" }).click();
@@ -68,7 +68,7 @@ test("Clean ._ files lists them, asks, and removes them", async ({ page, app }) 
   expect(calls.map((c) => c.remove)).toEqual([false, true]);
   expect(calls[1]).toMatchObject({ confirm: true });
   // Nothing left: the next click only says so.
-  await radio.getByRole("button", { name: "Clean ._ files" }).click();
+  await radio.getByRole("button", { name: "Clean ._ Files" }).click();
   await expect(page.getByText("The card holds no ._ files.")).toBeVisible();
 });
 
@@ -81,7 +81,7 @@ test("Storage: sizes per device, prune after a confirm, import a folder after a 
   await expect(table.getByRole("row", { name: /Whoop FC/ })).toBeVisible();
   await expect(page.getByRole("region", { name: "Usage" })).toContainText("Stored files");
 
-  await page.getByRole("button", { name: "Prune now" }).click();
+  await page.getByRole("button", { name: "Prune Now" }).click();
   const prune = dialog(page, "Prune backups?");
   await expect(prune).toContainText("1 backup");
   await prune.getByRole("button", { name: "Prune" }).click();
@@ -89,7 +89,7 @@ test("Storage: sizes per device, prune after a confirm, import a folder after a 
   expect((await app.method("gear_prune")).map((p) => p.dry_run)).toEqual([true, false]);
 
   await app.core(`c => { c.dialogAnswers = ["/Users/someone/old-backups"]; }`);
-  await page.getByRole("button", { name: "Import backups…" }).click();
+  await page.getByRole("button", { name: "Import Backups…" }).click();
   const imp = dialog(page, "Import these backups?");
   await expect(imp).toContainText("2 new backups");
   await imp.getByRole("button", { name: "Import" }).click();
@@ -120,7 +120,7 @@ for (const scheme of axeSchemes) {
       await app.open("gear");
       await app.core(`c => { c.gear.cardFails = ["${RADIO_ID}"]; }`);
       const radio = await radioBackups(page);
-      await radio.getByRole("button", { name: "Check card" }).click();
+      await radio.getByRole("button", { name: "Check Card" }).click();
       await expect(radio.getByText(/^Card check failed: /)).toBeVisible();
       const axe = async () => {
         const r = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();

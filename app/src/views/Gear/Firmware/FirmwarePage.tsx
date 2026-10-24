@@ -1,7 +1,7 @@
 // Gear > Firmware (design 2.2, 6.5): each saved device's installed firmware against the
 // newest release (updates first), Flash… for an EdgeTX radio QuadCam has proven, the
 // ExpressLRS section, Read firmware… (a sheet), and the saved firmware copies with Restore…
-// behind a disclosure. A check reads the network only when Check for updates is selected,
+// behind a disclosure. A check reads the network only when Check for Updates is selected,
 // or when firmwareCheck is daily. An FC in its maker's channel shows the maker's build and
 // newest file, with official Betaflight as an information line.
 import { useEffect, useState } from "react";
@@ -147,8 +147,8 @@ export function FirmwarePage() {
           </span>
         }
         fold={[
-          { label: "Read firmware…", run: () => setReading(true) },
-          { label: busy ? "Checking…" : "Check for updates", icon: "refresh", disabled: busy, run: () => void check() },
+          { label: "Read Firmware…", run: () => setReading(true) },
+          { label: busy ? "Checking…" : "Check for Updates", icon: "refresh", disabled: busy, run: () => void check() },
         ]}
         moreLabel="Firmware actions"
       />

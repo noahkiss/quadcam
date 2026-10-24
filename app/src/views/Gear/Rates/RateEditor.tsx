@@ -208,7 +208,7 @@ export function RateEditor({ profile, device, onDraft, onClose }: Props) {
       <div className={styles.editorBar}>
         {staged ? (
           <Button variant="primary" onClick={() => void open(device, staged.id)}>
-            Review and apply…
+            Review and Apply…
           </Button>
         ) : (
           <Button variant="primary" disabled={!edits.length || busy || !!error} onClick={() => void stage()}>

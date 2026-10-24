@@ -20,7 +20,7 @@ async function openFirmware(app: AppFixture, page: Page, preview: boolean) {
 test("the preview is off by default and the FC row offers no flash", async ({ app, page }) => {
   await openFirmware(app, page, false);
   await makeFlashable(app);
-  await page.getByRole("button", { name: "Check for updates" }).click();
+  await page.getByRole("button", { name: "Check for Updates" }).click();
   const fc = page.getByRole("row", { name: /Whoop FC/ });
   await expect(fc).toContainText("QuadCam checks Betaflight versions. It does not flash them.");
   await expect(fc.getByRole("button")).toHaveCount(0);
@@ -41,7 +41,7 @@ test("the Settings > Gear switch turns the preview on", async ({ app, page }) =>
 test("a flash shows its checks and the way back, and puts the settings back on Apply", async ({ app, page }) => {
   await openFirmware(app, page, true);
   await makeFlashable(app);
-  await page.getByRole("button", { name: "Check for updates" }).click();
+  await page.getByRole("button", { name: "Check for Updates" }).click();
   const fc = page.getByRole("row", { name: /Whoop FC/ });
   await expect(fc.getByRole("button", { name: "Flash 2026.6.0…" })).toBeVisible();
   const axe = await new AxeBuilder({ page }).analyze();
@@ -68,7 +68,7 @@ test("a bad read back is reported and the FC stays in its bootloader", async ({ 
   await openFirmware(app, page, true);
   await makeFlashable(app);
   await app.core(`c => { c.firmware.failNext = true; }`);
-  await page.getByRole("button", { name: "Check for updates" }).click();
+  await page.getByRole("button", { name: "Check for Updates" }).click();
   await page.getByRole("row", { name: /Whoop FC/ }).getByRole("button", { name: "Flash 2026.6.0…" }).click();
   const sheet = page.getByRole("dialog", { name: "Flash Whoop FC" });
   await sheet.getByRole("button", { name: "Apply" }).click();
@@ -80,7 +80,7 @@ test("a bad read back is reported and the FC stays in its bootloader", async ({ 
 
 test("a board QuadCam cannot flash says why", async ({ app, page }) => {
   await openFirmware(app, page, true);
-  await page.getByRole("button", { name: "Check for updates" }).click();
+  await page.getByRole("button", { name: "Check for Updates" }).click();
   const fc = page.getByRole("row", { name: /Whoop FC/ });
   await expect(fc).toContainText("QuadCam will not flash it: Board STM32F411 cannot be flashed by QuadCam yet.");
   await expect(fc.getByRole("button")).toHaveCount(0);

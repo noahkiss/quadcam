@@ -135,8 +135,8 @@ function Library({ v, view, sets, models, onCheck, onPublish }: { v: UseVoice; v
           <MoreMenu
             label={`More actions for ${k.voice}`}
             items={[
-              { label: "Apply to radios…", run: () => setApplying(k) },
-              { label: "Check speech", run: () => onCheck(k) },
+              { label: "Apply to Radios…", run: () => setApplying(k) },
+              { label: "Check Speech", run: () => onCheck(k) },
               k.local ? { label: "Publish…", run: () => onPublish(k) } : null,
               { label: "Delete…", icon: "trash-bin-trash", danger: true, run: () => setDeleting(k) },
             ]}
@@ -226,14 +226,14 @@ function MyVoice({ v, view }: { v: UseVoice; view: VoiceView }) {
           <Input aria-label="My voice" placeholder={p.voice || "the provider's default"} value={voice} onChange={(e) => setVoice(e.target.value)} />
         </label>
         <Button size="sm" onClick={() => render(true)}>
-          Check cost
+          Check Cost
         </Button>
         <Button size="sm" variant="primary" disabled={!p.ready} onClick={() => render(false)}>
-          Render my voice
+          Render My Voice
         </Button>
         {report?.needs_confirm && (
           <Button size="sm" variant="danger" onClick={() => render(false, true)}>
-            Render and pay
+            Render and Pay
           </Button>
         )}
       </div>
@@ -259,7 +259,7 @@ function GetPacks({ v, view }: { v: UseVoice; view: VoiceView }) {
       title="Get voice packs"
       actions={
         <Button size="sm" icon="refresh" onClick={() => v.act(v.refresh)}>
-          Refresh packs
+          Refresh Packs
         </Button>
       }
     >

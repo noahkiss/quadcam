@@ -18,8 +18,8 @@ async function openSwitches(app: AppFixture, page: Page) {
   await page.getByRole("table", { name: "Devices" }).getByRole("button", { name: "Whoop FC", exact: true }).click();
   await page.getByRole("group", { name: "Sections" }).getByRole("button", { name: "Switches" }).click();
   await app.core(`c => c.dialogAnswers.push(${JSON.stringify(CARD)}, [${JSON.stringify(DUMP)}])`);
-  await openFrom(page, "Open card…");
-  await openFrom(page, "Open dump…");
+  await openFrom(page, "Open Card…");
+  await openFrom(page, "Open Dump…");
 }
 
 /** Picks a source from the switch map's Open… pop-up. */
@@ -95,7 +95,7 @@ test("the Controls page draws the sticks in the chosen mode, the channels and th
 
   // The map from a card, marked as the switches move.
   await app.core(`c => c.dialogAnswers.push(${JSON.stringify(CARD)})`);
-  await openFrom(page, "Open card…");
+  await openFrom(page, "Open Card…");
   await app.core(`c => c.radioFrame(${JSON.stringify(ARMED)})`);
   await expect(control(page, "SA").locator('tr[aria-current="true"]')).toContainText("down");
   await app.core(`c => c.radioFrame([1024, 1024, 0, 1024, 0, 1024, 2048, 0])`);

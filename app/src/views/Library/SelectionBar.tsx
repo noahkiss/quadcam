@@ -34,7 +34,7 @@ export function SelectionBar() {
       <Button size="sm" variant="ghost" icon="close" aria-label="Reject" title="Reject" onClick={() => rate(ids, null, "reject")} />
       <span className={styles.sep} aria-hidden="true" />
       <Button size="sm" variant="ghost" icon="clock" onClick={() => setShifting(ids)}>
-        Shift time…
+        Shift Time…
       </Button>
       <Button size="sm" variant="ghost" icon="share" onClick={(e) => shareClips(ids, e.currentTarget)}>
         Share

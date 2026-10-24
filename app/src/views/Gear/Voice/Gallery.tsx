@@ -91,11 +91,11 @@ export function FlagControl({ text, flag, disabled, onSave }: { text: string; fl
                     onSave(null);
                   }}
                 >
-                  Clear flag
+                  Clear Flag
                 </Button>
               )}
               <Button size="sm" variant="primary" onClick={save}>
-                Save flag
+                Save Flag
               </Button>
             </div>
           </div>
@@ -187,7 +187,7 @@ function VoiceCard({ c, player, g, names, onDelete }: { c: SampleVoice; player: 
                   setDone(r);
                 }}
               >
-                Re-take and pay
+                Re-take and Pay
               </Button>
               <Button size="sm" onClick={() => setAsk(null)}>
                 Cancel
@@ -205,7 +205,7 @@ function VoiceCard({ c, player, g, names, onDelete }: { c: SampleVoice; player: 
       )}
       <div className={styles.actions}>
         <Button size="sm" icon={queued ? "pause" : "play"} aria-label={queued ? `Stop ${name}` : `Play all of ${name}`} onClick={() => (queued ? player.stop() : player.playAll(tracksOf(c), c.id))}>
-          {queued ? "Stop" : "Play all"}
+          {queued ? "Stop" : "Play All"}
         </Button>
         {studio && flagged.length > 0 && (
           <Button
@@ -219,7 +219,7 @@ function VoiceCard({ c, player, g, names, onDelete }: { c: SampleVoice; player: 
               else setDone(r);
             }}
           >
-            Re-take flagged
+            Re-take Flagged
           </Button>
         )}
         <span className={styles.grow} />
@@ -247,11 +247,11 @@ export function Gallery({ g, player, voices, models }: { g: UseGallery; player: 
         {cards.length > 0 && (
           <div className={styles.partActions}>
             <Button size="sm" icon={all ? "pause" : "play"} onClick={() => (all ? player.stop() : player.playAll(cards.flatMap(tracksOf), "all"))}>
-              {all ? "Stop" : "Play all voices"}
+              {all ? "Stop" : "Play All Voices"}
             </Button>
             {samples.length > 0 && (
               <Button size="sm" variant="danger-ghost" onClick={() => setDeleting("all")}>
-                Delete all…
+                Delete All…
               </Button>
             )}
           </div>

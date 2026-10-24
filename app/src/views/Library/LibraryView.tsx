@@ -49,7 +49,7 @@ function Banners({ list }: { list: LibClip[] }) {
   if (lib && lib.unindexed > 0) {
     const n = lib.unindexed;
     out.push(
-      <Banner key="unindexed" icon="folder-open" tint="blue" action={<Button size="sm" variant="primary" onClick={rebuildLibrary}>Scan folder</Button>}>
+      <Banner key="unindexed" icon="folder-open" tint="blue" action={<Button size="sm" variant="primary" onClick={rebuildLibrary}>Scan Folder</Button>}>
         {n} video{n === 1 ? "" : "s"} in <PathText path={lib.root} /> {n === 1 ? "is" : "are"} not in the library.
       </Banner>,
     );

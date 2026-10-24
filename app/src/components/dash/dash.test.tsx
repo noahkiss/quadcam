@@ -102,13 +102,13 @@ describe("SummaryLine, Disclosure and DetailDrawer", () => {
 describe("PageHeader fold", () => {
   it("shows the fold buttons and puts them, with the rare actions, in the narrow menu", async () => {
     const copy = vi.fn();
-    render(<PageHeader title="Bench" fold={[{ label: "Copy settings…", run: copy }]} more={[{ label: "Copy as Markdown", run: () => {} }]} moreLabel="Bench actions" />);
-    await userEvent.click(screen.getByRole("button", { name: "Copy settings…" }));
+    render(<PageHeader title="Bench" fold={[{ label: "Copy Settings…", run: copy }]} more={[{ label: "Copy as Markdown", run: () => {} }]} moreLabel="Bench actions" />);
+    await userEvent.click(screen.getByRole("button", { name: "Copy Settings…" }));
     expect(copy).toHaveBeenCalledOnce();
     // jsdom applies no container query: both menus render; the narrow one holds every action.
     const menus = screen.getAllByRole("button", { name: "Bench actions" });
     expect(menus).toHaveLength(2);
     await userEvent.click(menus[1]);
-    expect(screen.getAllByRole("menuitem").map((m) => m.textContent)).toEqual(["Copy settings…", "Copy as Markdown"]);
+    expect(screen.getAllByRole("menuitem").map((m) => m.textContent)).toEqual(["Copy Settings…", "Copy as Markdown"]);
   });
 });

@@ -157,10 +157,10 @@ export function BlackboxSegment({ d }: { d: DeviceRef }) {
           port && (
             <>
               <Button size="sm" icon="trash-bin-trash" onClick={erase} disabled={busy || !!job || !canErase}>
-                Erase flash…
+                Erase Flash…
               </Button>
               <Button size="sm" variant="primary" icon="import" onClick={pull} disabled={busy || !!job}>
-                Pull blackbox
+                Pull Blackbox
               </Button>
             </>
           )

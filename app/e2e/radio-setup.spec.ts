@@ -96,7 +96,7 @@ test("Review stages one Radio setup change and opens the apply sheet", async ({ 
   // A later change keeps the staged change up to date.
   await jobRow(page, "VTX power").getByLabel("VTX power: control").selectOption("SL1");
   await expect.poll(async () => ((await app.method("gear_radio_setup_edit")).at(-1) as { stage?: boolean }).stage).toBe(true);
-  await page.getByRole("button", { name: "Discard staged setup" }).click();
+  await page.getByRole("button", { name: "Discard Staged Setup" }).click();
   await dialog(page, "Discard the staged setup?").getByRole("button", { name: "Discard" }).click();
   await expect(page.getByText(/The setup is staged/)).toHaveCount(0);
 });
@@ -104,7 +104,7 @@ test("Review stages one Radio setup change and opens the apply sheet", async ({ 
 test("Copy from another radio stages its models first", async ({ app, page }) => {
   await openSetup(app, page);
   await app.core(`c => { c.gear.devices.push(${POCKET}); c.emit("gear-changed"); }`);
-  await page.getByRole("button", { name: "Copy from…" }).click();
+  await page.getByRole("button", { name: "Copy From…" }).click();
   const dialog = page.getByRole("dialog", { name: "Copy from another radio" });
   await dialog.getByLabel("Copy from").selectOption({ label: "Old radio" });
   await expect(dialog.getByRole("checkbox", { name: /ALPHA/ })).toBeChecked();

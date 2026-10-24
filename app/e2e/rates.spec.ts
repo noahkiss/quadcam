@@ -120,7 +120,7 @@ for (const scheme of axeSchemes) {
 test("a dump file replaces the backup", async ({ app, page }) => {
   await openRates(app, page);
   await app.core(`c => c.dialogAnswers.push([${JSON.stringify(DUMP)}])`);
-  await page.getByRole("button", { name: "Open dump…" }).click();
+  await page.getByRole("button", { name: "Open Dump…" }).click();
   await expect.poll(async () => (await app.method("gear_rates")).at(-1)).toEqual({ paths: [DUMP], device: null });
   await expect(page.getByText("quad.dump_all.txt")).toBeVisible();
   expect((await app.method("gear_sims")).at(-1)).toEqual({ paths: [DUMP], device: null, profile: 0 });

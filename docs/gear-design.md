@@ -104,7 +104,7 @@ right-hand panel, toggled with the toolbar button and ⌥⌘I) shows the selecte
 | Flights | Table of flights from radio logs, by day | Hover, sag, mAh, dropouts per flight |
 | Sims | One row per sim found, with its rate profiles | Keep sims on the quad's rates |
 | Firmware | Table of devices, installed and latest versions | Check and flash |
-| Storage | Total size; size per device (snapshots, logs, blobs only it uses); **Prune now**, **Export…**, **Import backups…** | Keep the gear folder small |
+| Storage | Total size; size per device (snapshots, logs, blobs only it uses); **Prune Now**, **Export…**, **Import Backups…** | Keep the gear folder small |
 
 **Overview** shows the identity (board, firmware, version, the date of the latest backup),
 the staged changes for the device, and the next actions. It never repeats what another
@@ -906,8 +906,8 @@ any diff tool on an export.
    replaces the stored one. A log that changed any other way is kept as a second file.
    Logs are never pruned; the flight index (7.6) reads them.
 6. **Storage view** (Gear > Storage): total size, size per device (its manifests, its logs,
-   and the blobs only it references), the number of snapshots by kind, **Prune now**,
-   **Export…** (a folder per snapshot, or a whole device), and **Import backups…**.
+   and the blobs only it references), the number of snapshots by kind, **Prune Now**,
+   **Export…** (a folder per snapshot, or a whole device), and **Import Backups…**.
 7. **Import of existing backups** (`quadcam-cli gear import-backups FOLDER`, and the same in
    the Storage view): QuadCam walks the folder and finds
    - EdgeTX card copies (a folder with `RADIO/radio.yml` or `MODELS/`): one snapshot each,
@@ -1301,7 +1301,7 @@ Every reading, kept or not, goes to stderr and `<cache>/voice/charcost.log`.
 **Voices page (built, 0.12).** Packs are not per radio, so the studio and the pack list moved
 out of the radio's Voice segment to a Gear sidebar page, `views/Gear/Voice/VoicesPage.tsx`:
 the library (every installed or rendered pack: voice, model, the line sets it covers, lines,
-size, date, the radios that chose it, a sample, Delete), **Apply to radios…**
+size, date, the radios that chose it, a sample, Delete), **Apply to Radios…**
 (`ApplyToRadios.tsx`), the index and Render my voice, and the studio. The radio's segment keeps
 Choose voice (a picker of library packs), the per-line overrides and its apply.
 
@@ -1340,7 +1340,7 @@ folder after a hash check.
 - A table of lines: path, text, and one play button per installed voice, side by side.
   Packs from the index that are not installed show a download button in their column.
   Space plays the selected line in the current voice.
-- **Choose voice** (a pop-up of installed voices) stages one `CardFiles` change that
+- **Choose Voice** (a pop-up of installed voices) stages one `CardFiles` change that
   replaces every pack line on the card with that voice. A checkbox **Keep my overrides**
   (on by default) keeps the lines the user rendered or picked per line. Apply: backup first,
   write, read back, compare hashes.
@@ -1376,7 +1376,7 @@ Flow on the Radio > Splash segment:
 1. Pick an image. The preview shows it at the radio's resolution and bit depth (128 × 64,
    1 bit for B&W radios) with a threshold slider and **Invert**, at 4× with nearest-neighbour
    scaling.
-2. **Flash with splash…** opens the flash plan: the board, the EdgeTX version (default: the one
+2. **Flash with Splash…** opens the flash plan: the board, the EdgeTX version (default: the one
    installed), the download, the patch.
 3. Patch: find the marker `SPS\0` followed by width 0x80 and height 0x40; the 1,024 bytes
    after it are the image (8 vertical pixels per byte, column-major per 8-row band, bit set =
@@ -1611,7 +1611,7 @@ binaries only (open question 10).
     new second radio of the same board is never merged by board alone.
   - **Storage-mode rules.** Already in `card.rs` (timeouts, `stuck_message`, the unmount
     after every job, the `._` removal beside each write). Added: the apply sheet's "keep the
-    radio plugged in" line while an over-USB write runs, and **Clean ._ files**
+    radio plugged in" line while an over-USB write runs, and **Clean ._ Files**
     (`gear_card_clean`: `find_apple_double` lists files that start with the AppleDouble header,
     `remove_apple_doubles` deletes them under a timeout; `confirm` is required; the card
     unmounts after). QuadCam never prompts to unplug during a write.
@@ -1639,7 +1639,7 @@ binaries only (open question 10).
     backup is the one named, else the newest that differs from the file now; the current file
     is backed up first (kept), so a second restore undoes the first. Checks: backup found and
     readable, sim closed, path inside the home folder, file present and writable, something
-    differs. Under cargo a write outside the temporary folder is refused. UI: **Restore backup**
+    differs. Under cargo a write outside the temporary folder is refused. UI: **Restore Backup**
     in the Rates segment's Sims list (the section already lists sims, profiles and sync state;
     no separate Sims page).
   - **Needs a real radio:** `ver` and `ls` reply formats and the prompt on a real CLI; `play`
@@ -1726,7 +1726,7 @@ Built in WP11 before WP1 landed: the `Core` methods live in `core/prep.rs`, the 
 `api/mod.rs`, and the CLI is `format --prep`. `core/gear.rs`, `api/gear.rs` and
 `bin/quadcam-cli/gear/` exist now; card prep moves there later.
 
-Built (shell gaps): the app has the button. **Prepare card…** is on the device page of a DVR
+Built (shell gaps): the app has the button. **Prepare Card…** is on the device page of a DVR
 card or goggles card (mounted, or unmounted but still in) and in the Finish step of a DJI
 import, which offers no Format card. The plan comes from `card_prep_plan` (`CardPrepParams`:
 a `mount` point or a `device` id); the Erase click calls the GUI-only command
@@ -1798,13 +1798,13 @@ otherwise QuadCam records the hash at first download and shows it in the flash p
 - Before each run, the file's hash is checked against `installed.json`. A changed file is
   refused with "esptool was changed after install; reinstall it."
 
-**Updates and removal.** **Check for module updates** (Settings > Modules, or with
+**Updates and removal.** **Check for Module Updates** (Settings > Modules, or with
 `firmwareCheck` = `daily`) compares installed versions with the newest pins. **Update**
 installs the new version next to the old one, then removes the old. **Remove** deletes the
 module folder. A feature that needs a removed module asks again.
 
 **Settings > Modules:** a table with name, version, size, license (a link), source (a
-link), and **Update** and **Remove** per row; **Check for updates**; the ffmpeg source
+link), and **Update** and **Remove** per row; **Check for Module Updates**; the ffmpeg source
 pop-up (QuadCam module or Homebrew).
 
 ### 7.11 Device events, on-connect steps and cues

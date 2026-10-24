@@ -92,7 +92,7 @@ test("the session bar sets aircraft, place and date for every clip", async ({ ap
 test("Apply to all clips copies the clip's metadata", async ({ app, page }) => {
   await app.open();
   await openFolder(app);
-  await sheet(page).getByRole("button", { name: "Apply to all clips" }).click();
+  await sheet(page).getByRole("button", { name: "Apply to All Clips" }).click();
   await expect(page.getByRole("status")).toContainText("Applied to every clip.");
   const all = (await batches(app)).at(-1)!;
   expect(all.map((p) => p.id)).toEqual([1, 2, 3, 4]);
@@ -121,8 +121,10 @@ test("Command-Return adds to the library, then Finish shows the files", async ({
   expect(await patches(app)).toContainEqual({ id: 0, name: "loops" });
   expect((await app.method("import"))[0]).toMatchObject({ format: "mp4", encoder: "videotoolbox", keep_originals: false });
   await expect(sheet(page).getByText("2026-09-27_loops.mp4")).toBeVisible();
-  await sheet(page).getByRole("button", { name: /Add 5 files/ }).click();
+  await sheet(page).getByRole("button", { name: /Add 5 Files/ }).click();
   await expect(sheet(page).getByText("5 added to the Drone album.")).toBeVisible();
+  // Buttons use title case (macOS HIG); a name match is case-insensitive unless exact.
+  for (const name of ["Back to Review", "Start Over", "Show Report", "Show in Library"]) await expect(sheet(page).getByRole("button", { name, exact: true })).toBeVisible();
   await sheet(page).getByRole("button", { name: "Show in Library" }).click();
   await expect(sheet(page)).toBeHidden();
   await expect(page.getByRole("article", { name: "loops" })).toBeVisible();
@@ -133,8 +135,8 @@ test("a second import of the same clips skips them as already in the library; Im
   await openFolder(app);
   await page.keyboard.press("Meta+Enter");
   await expect(sheet(page).getByRole("heading", { name: /^Added 4 clips/ })).toBeVisible();
-  await sheet(page).getByRole("button", { name: "Start over" }).click();
-  await dialog(page, "Start over?").getByRole("button", { name: "Start over" }).click();
+  await sheet(page).getByRole("button", { name: "Start Over" }).click();
+  await dialog(page, "Start over?").getByRole("button", { name: "Start Over" }).click();
   await expect(sheet(page)).toBeHidden();
   await openFolder(app);
   await page.keyboard.press("Meta+Enter");
@@ -160,9 +162,9 @@ test("Escape closes the sheet; the import stays in the sidebar", async ({ app, p
 test("Start over asks, then clears the session", async ({ app, page }) => {
   await app.open();
   await openFolder(app);
-  await sheet(page).getByRole("button", { name: "Start over" }).click();
+  await sheet(page).getByRole("button", { name: "Start Over" }).click();
   const ask = dialog(page, "Start over?");
-  await ask.getByRole("button", { name: "Start over" }).click();
+  await ask.getByRole("button", { name: "Start Over" }).click();
   await expect(sheet(page)).toBeHidden();
   expect(await app.method("clear")).toHaveLength(1);
 });
@@ -175,7 +177,7 @@ test("a DJI card names its source, dates by the clip clock and offers no Format 
   await expect(sheet(page).getByText("DJI card · 5 clips", { exact: false })).toBeVisible();
   await expect(sheet(page).getByRole("region", { name: "Format card" })).toHaveCount(0);
   await expect(sheet(page).getByRole("button", { name: /Format card/ })).toHaveCount(0);
-  await sheet(page).getByRole("button", { name: "Back to review" }).click();
+  await sheet(page).getByRole("button", { name: "Back to Review" }).click();
   await expect(sheet(page).getByText(/^clip clock \d\d:\d\d$/).first()).toBeVisible();
   expect(await app.calls("format_plan")).toHaveLength(0);
 });
@@ -186,7 +188,7 @@ test("Format card: unlock, then a dialog names the disk; Return does not erase",
   const box = sheet(page).getByRole("region", { name: "Format card" });
   await expect(box).toBeVisible();
   await expect(box.getByText("Same card: disk9, volume UUID matches")).toBeVisible();
-  const btn = box.getByRole("button", { name: "Format card…" });
+  const btn = box.getByRole("button", { name: "Format Card…" });
   await expect(btn).toBeDisabled();
   await box.getByRole("checkbox", { name: "Unlock" }).check();
   await btn.click();
@@ -224,7 +226,7 @@ test("the review panel's trim editor sets session cuts; tabs show flight and fil
   await inPt.press("Tab");
   await sheet(page).getByRole("textbox", { name: "Out point" }).fill("1:00.0");
   await sheet(page).getByRole("textbox", { name: "Out point" }).press("Tab");
-  await sheet(page).getByRole("button", { name: "Add cut" }).click();
+  await sheet(page).getByRole("button", { name: "Add Cut" }).click();
   await expect.poll(async () => (await app.method("session_cuts"))).toContainEqual({
     id: 1, cuts: [{ start: 10, end: 25 }, { start: 50, end: 60 }], removed_cuts: null,
   });
@@ -268,10 +270,10 @@ test("a recording the DVR split shows as one clip of its files; Keep files separ
   await expect(rows(page).filter({ has: page.getByRole("checkbox") })).toHaveCount(4);
   await expect(row(page, "PICT0001.AVI").getByText("PICT0001.AVI–PICT0002.AVI · 2 files")).toBeVisible();
   await expect(row(page, "PICT0002.AVI")).toHaveCount(0);
-  await row(page, "PICT0001.AVI").getByRole("button", { name: "Keep files separate" }).click();
+  await row(page, "PICT0001.AVI").getByRole("button", { name: "Keep Files Separate" }).click();
   await expect.poll(() => patches(app)).toContainEqual({ id: 0, joined: false });
   await expect(rows(page).filter({ has: page.getByRole("checkbox") })).toHaveCount(5);
-  await row(page, "PICT0001.AVI").getByRole("button", { name: "Join 2 files" }).click();
+  await row(page, "PICT0001.AVI").getByRole("button", { name: "Join 2 Files" }).click();
   await expect.poll(() => patches(app)).toContainEqual({ id: 0, joined: true });
   await expect(row(page, "PICT0002.AVI")).toHaveCount(0);
 });
@@ -280,7 +282,7 @@ test("Split by flight adds one cut per radio-log flight to the session clip", as
   await app.open("joined");
   await page.getByRole("navigation", { name: "Library" }).getByRole("button", { name: /Unfinished import/ }).click();
   await row(page, "PICT0001.AVI").getByText("2:05").click();
-  await sheet(page).getByRole("button", { name: "Split by flight (2)" }).click();
+  await sheet(page).getByRole("button", { name: "Split by Flight (2)" }).click();
   await expect.poll(async () => await app.method("session_split")).toContainEqual({ id: 0 });
   await expect(page.getByRole("status")).toContainText("2 cuts added, one per flight.");
   await expect(sheet(page).getByRole("list", { name: "Cuts" }).getByRole("listitem")).toHaveCount(2);

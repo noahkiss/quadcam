@@ -24,7 +24,7 @@ test("an unmounted DVR card offers Mount, Import clips and Prepare card", async 
   await expect(page.getByRole("button", { name: "Mount" })).toBeVisible();
 
   // Prepare card: the plan names the disk, and only the Erase click starts the erase.
-  await page.getByRole("button", { name: "Prepare card…" }).click();
+  await page.getByRole("button", { name: "Prepare Card…" }).click();
   expect((await app.method("card_prep_plan"))[0]).toMatchObject({ device: "dvr-5a6b7c8d9e0f1a2b" });
   const confirm = dialog(page, "Erase the card?");
   await expect(confirm).toContainText("Erase disk9");
@@ -40,7 +40,7 @@ test("Import clips mounts an unmounted card and loads it by device id", async ({
   await app.open("gear");
   await app.core(`c => c.plug([c.gearSeed.radioConnected()], [c.gearSeed.dvrConnected()])`);
   await page.getByRole("button", { name: "DVR card: Safe to unplug" }).click();
-  await page.getByRole("button", { name: "Import clips…" }).click();
+  await page.getByRole("button", { name: "Import Clips…" }).click();
   await expect(sheet(page)).toBeVisible();
   expect((await app.method("load"))[0]).toEqual({ source: null, device: "dvr-5a6b7c8d9e0f1a2b", join: null });
 });
@@ -54,7 +54,7 @@ test("a DJI card has no Format card, and the Finish step offers Prepare card", a
   const box = sheet(page).getByRole("region", { name: "Prepare card" });
   await expect(box).toBeVisible();
   await expect(sheet(page).getByRole("region", { name: "Format card" })).toHaveCount(0);
-  await box.getByRole("button", { name: "Prepare card…" }).click();
+  await box.getByRole("button", { name: "Prepare Card…" }).click();
   const confirm = dialog(page, "Erase the card?");
   await expect(confirm).toContainText("exFAT");
   await confirm.getByRole("button", { name: "Cancel" }).click();

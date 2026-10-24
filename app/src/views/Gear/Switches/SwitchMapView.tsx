@@ -42,9 +42,9 @@ export function MapSourceBar({ src, map, openCard, openModel, openDump }: { src:
         text="Open…"
         label="Open"
         items={[
-          { label: "Open card…", icon: "sd-card", run: openCard },
-          { label: "Open model…", icon: "folder-open", run: openModel },
-          { label: "Open dump…", icon: "folder-open", run: openDump },
+          { label: "Open Card…", icon: "sd-card", run: openCard },
+          { label: "Open Model…", icon: "folder-open", run: openModel },
+          { label: "Open Dump…", icon: "folder-open", run: openDump },
         ]}
       />
       {(map || src.radio || src.fc.length > 0) && (

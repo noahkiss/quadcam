@@ -43,7 +43,7 @@ export function Gallery() {
         <Button variant="primary" icon="import">
           Import…
         </Button>
-        <Button icon="folder-open">Open folder…</Button>
+        <Button icon="folder-open">Open Folder…</Button>
         <Button variant="ghost" icon="share">
           Share
         </Button>
@@ -123,7 +123,7 @@ export function Gallery() {
         />
       </section>
       <section aria-label="Notices" className={styles.col}>
-        <Banner icon="folder-open" tint="blue" action={<Button size="sm" variant="primary">Scan folder</Button>}>
+        <Banner icon="folder-open" tint="blue" action={<Button size="sm" variant="primary">Scan Folder</Button>}>
           2 videos in ~/Movies/quadcam are not in the library.
         </Banner>
         <Banner kind="error" icon="danger-triangle" tint="red">
@@ -134,7 +134,7 @@ export function Gallery() {
         <PageHeader
           title="Bench"
           subtitle={<SummaryLine parts={["3 staged", "1 plugged in", { text: "1 waiting for Keep", tone: "warn" }]} />}
-          fold={[{ label: "Copy settings…", run: () => {} }]}
+          fold={[{ label: "Copy Settings…", run: () => {} }]}
           more={[{ label: "Copy as Markdown", run: () => {} }]}
           moreLabel="Bench actions"
         />
@@ -188,10 +188,10 @@ export function Gallery() {
         />
       </section>
       <section aria-label="Overlays" className={styles.row}>
-        <Button onClick={() => setDialog(true)}>Open dialog</Button>
-        <Button onClick={() => toast("3 files moved to the Trash.")}>Show toast</Button>
-        <Button onClick={() => toast("Settings not saved.", true)}>Show error toast</Button>
-        <Button onClick={(e) => setMenu({ x: e.clientX, y: e.clientY })}>Open menu</Button>
+        <Button onClick={() => setDialog(true)}>Open Dialog</Button>
+        <Button onClick={() => toast("3 files moved to the Trash.")}>Show Toast</Button>
+        <Button onClick={() => toast("Settings not saved.", true)}>Show Error Toast</Button>
+        <Button onClick={(e) => setMenu({ x: e.clientX, y: e.clientY })}>Open Menu</Button>
       </section>
       <Dialog
         open={dialog}
@@ -217,7 +217,7 @@ export function Gallery() {
           onClose={() => setMenu(null)}
           items={[
             { label: "Rename", icon: "pen", keys: "⏎", run: () => {} },
-            { label: "Edit details", icon: "tag", keys: "⌘I", run: () => {} },
+            { label: "Edit Details", icon: "tag", keys: "⌘I", run: () => {} },
             null,
             { label: "Move to Trash", icon: "trash-bin-trash", keys: "⌘⌫", danger: true, run: () => {} },
           ]}

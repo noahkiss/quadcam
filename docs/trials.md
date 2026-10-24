@@ -70,7 +70,7 @@ Reads the radio's SD card, then its serial port. Writes nothing to the radio.
 2. In QuadCam open **Gear > Connected**. Wait a few seconds. QuadCam looks every 2 seconds.
 3. Open the radio. If QuadCam does not know it yet, it says **Needs attention**. Select **Save…**
    and name it.
-4. On the radio's page, read **Overview**. Then open **Backups** and select **Back up now**.
+4. On the radio's page, read **Overview**. Then open **Backups** and select **Back Up Now**.
 
 **Pass**
 
@@ -128,7 +128,7 @@ erase, write or restart the radio. Run this before any flash.
    EdgeTX bootloader, which is another mode.)
 3. Open **Gear > Firmware**. In **Read radio firmware**, pick the radio in **Radio**, or **Other
    radio** to skip the version comparison.
-4. Select **Read firmware**. The bar covers two reads of the whole 1 MB flash.
+4. Select **Read Firmware**. The bar covers two reads of the whole 1 MB flash.
 
 CLI: `quadcam-cli --json gear firmware --read [--device RADIO]`.
 
@@ -169,7 +169,7 @@ Configurator).
 
    Add `--port /dev/cu.usbmodemX` when several FCs are plugged in.
 3. Open the FC in **Gear > Connected**. If it says **Needs attention**, select **Save…**.
-4. Let the on-connect backup run, or open **Backups** and select **Back up now**.
+4. Let the on-connect backup run, or open **Backups** and select **Back Up Now**.
 
 **Pass**
 
@@ -202,7 +202,7 @@ pull may erase it.
 
 1. Open **Settings > Gear > Blackbox**. Turn **Erase blackbox after download** off. It is off by
    default. Select **Done**.
-2. Open the FC and its **Blackbox** segment. Select **Pull blackbox**.
+2. Open the FC and its **Blackbox** segment. Select **Pull Blackbox**.
 3. When it ends, open the pull in **Blackbox pulls**. Check the **Logs** table.
 4. Copy the logs out and open one in your usual blackbox viewer:
 
@@ -223,7 +223,7 @@ pull may erase it.
 Do this only after the exported log opened.
 
 1. Turn **Erase blackbox after download** on in **Settings > Gear > Blackbox**. Select **Done**.
-2. Select **Pull blackbox** again. (A pull of the same bytes adds no second record.)
+2. Select **Pull Blackbox** again. (A pull of the same bytes adds no second record.)
 
 **Pass**
 
@@ -272,7 +272,7 @@ Do this on the Pocket, then on the GX12.
 
 1. Turn the radio on, plug in USB and choose **USB Serial (VCP)**. Open **Gear > Firmware** and
    find **ExpressLRS (preview)**.
-2. Select **Read the module in <radio name>**. It can take up to 10 seconds: the module restarts
+2. Select **Read the Module in <radio name>**. It can take up to 10 seconds: the module restarts
    and QuadCam pings until it answers.
 3. When it ends, restart the radio. The radio stays in passthrough until you do. A second job
    needs the restart first.
@@ -289,12 +289,12 @@ CLI: `quadcam-cli --json gear elrs read <saved radio> --yes`.
 
 **B. Read each receiver, then stage one option and Apply**
 
-1. Plug in the Air65 II FC (battery out). Select **Read the receiver in <FC name>**. Unplug it.
+1. Plug in the Air65 II FC (battery out). Select **Read the Receiver in <FC name>**. Unplug it.
    Do the same for the Meteor75.
 2. Pass: a **Receiver** row for each, target `BFPV AIO 2G4RX`, version 4.1.0.
 3. On a radio's row select **Options**. Change one option, such as the telemetry ratio, to a
    value you can change back.
-4. Select **Stage changes**. The apply sheet opens. Read **Changes** and **Checks**. Select
+4. Select **Stage Changes**. The apply sheet opens. Read **Changes** and **Checks**. Select
    **Apply**.
 5. Restart the radio. Read the module again and check the option.
 6. Put the option back the same way.
@@ -351,7 +351,7 @@ First read the checks only, on both quads. Then, if you choose, flash.
 - A proven FC (see [Before you start](#before-you-start)), saved in QuadCam with its aircraft
   linked (the aircraft picks the maker's files), with a backup.
 - **Settings > Gear > Preview > Betaflight flashing (preview)** on. It is off by default.
-- A firmware check run since the FC was saved (**Firmware > Check now**). It reads BetaFPV's
+- A firmware check run since the FC was saved (**Firmware > Check for Updates**). It reads BetaFPV's
   files for each quad.
 - A USB cable, the battery **out**.
 
@@ -443,7 +443,7 @@ The first write to an FC's settings. It changes one harmless setting, then puts 
 
 **Steps**
 
-1. Open the FC and its **Changes** segment. Select **Edit setting…**.
+1. Open the FC and its **Changes** segment. Select **Edit Setting…**.
 2. Fill in **Setting** (`osd_cap_alarm`), **Value** (a number different from the current one) and
    **Applies to** (**The whole FC**). Select **Stage**.
 3. Open **Gear > Bench**. In the change's status list choose **Try**.
@@ -495,8 +495,8 @@ temporary name, reads each back, and puts every file back if one reads wrong.
 
 1. Open the radio and its **Models** segment. In the **Model** list pick a model.
 2. Under **Timers**, change **Timer 1 name** to `TRIAL`. (Names hold 8 characters.) If the model
-   has no timer, select **Add timer** and name it.
-3. A bar shows the staged change with **Review…** and **Undo model edits**. Open **Gear > Bench**
+   has no timer, select **Add Timer** and name it.
+3. A bar shows the staged change with **Review…** and **Undo Model Edits**. Open **Gear > Bench**
    and choose **Try** in the change's status list.
 4. Select **Review…**, read **Checks** and **Changes**, and select **Apply**.
 5. Wait for "Done, safe to unplug." Check the name on the radio.
@@ -515,11 +515,11 @@ temporary name, reads each back, and puts every file back if one reads wrong.
 **B. The voice pack**
 
 1. Open the radio's **Voice** segment.
-2. To stage one line first, use **My text…** on one line, then **Review…** and **Apply**.
-3. For a whole pack you need a local one. Select **Check cost**, then **Render my voice**. With
+2. To stage one line first, use **My Text…** on one line, then **Review…** and **Apply**.
+3. For a whole pack you need a local one. Select **Check Cost**, then **Render My Voice**. With
    `tts_provider` `say` it is free and offline. A provider that may charge stops and shows the
-   characters first. Or select **Refresh packs** and **Install** a pack from the index.
-4. Pick the voice. Leave **Keep my overrides** on. Select **Choose voice**.
+   characters first. Or select **Refresh Packs** and **Install** a pack from the index.
+4. Pick the voice. Leave **Keep my overrides** on. Select **Choose Voice**.
 5. Select **Review…**, then **Apply**. A whole pack takes minutes over USB.
 6. Optional: hear a line on the radio with
    `quadcam-cli --json gear radio-cli play --path /SOUNDS/en/<line>.wav`.
@@ -572,7 +572,7 @@ Try the sims one at a time, Uncrashed first ([Gear](gear.md#sync-the-quads-rates
 3. Read **Checks** (the game is not running, the file is understood, it reads back as written,
    it is writable) and **Warnings**. Select **Apply**.
 4. Start the game. Open its rates screen. Compare the values with the quad's.
-5. To undo, select **Restore backup** beside the sim, then **Apply**.
+5. To undo, select **Restore Backup** beside the sim, then **Apply**.
 
 CLI:
 
@@ -587,7 +587,7 @@ quadcam-cli --json gear sims uncrashed --restore
 - The result says the file read back and parsed.
 - The game shows the quad's rates, and the sim says **Matches the quad**. The **Sims** item in the
   sidebar drops its **Out of date** mark when no sim differs.
-- **Restore backup** puts the old numbers back, and the game shows them.
+- **Restore Backup** puts the old numbers back, and the game shows them.
 
 **If it fails**
 
@@ -595,7 +595,7 @@ quadcam-cli --json gear sims uncrashed --restore
 - A check fails because QuadCam does not understand the file: it writes nothing. Report the
   game version.
 - A write fails: QuadCam puts back every file it wrote.
-- The game loads the file but shows other numbers, or refuses it: select **Restore backup**.
+- The game loads the file but shows other numbers, or refuses it: select **Restore Backup**.
   This is the result that decides whether the sim leaves **Unverified**. Report it.
 - If macOS asks for a permission when QuadCam writes a game's file, report where.
 - Report: the sim and its version, the profile, the plan's warnings, and what the game's rates
@@ -612,7 +612,7 @@ can always be put back in DFU mode.
 - A RadioMaster Pocket, flashed with EdgeTX 2.12.4. Other boards, releases and prereleases are
   refused.
 - Trials 1, 2 and 8 passed. Trial 2's copy is in `firmware/<radio>/`.
-- A fresh card backup: **Back up now** on the radio's **Backups** segment. The flash plan refuses
+- A fresh card backup: **Back Up Now** on the radio's **Backups** segment. The flash plan refuses
   without one.
 - Only one radio plugged in.
 - A second route to recover: STM32CubeProgrammer, and the release's `<board>-<hash>.bin`.
@@ -687,7 +687,7 @@ not in the library. See [Format safety](format-safety.md#card-prep).
 **A. The refusal**
 
 1. Put the DVR card in. Open it under **Gear > Connected**.
-2. Select **Prepare card…**.
+2. Select **Prepare Card…**.
 
 **Pass**
 
@@ -699,8 +699,8 @@ not in the library. See [Format safety](format-safety.md#card-prep).
 1. Import the missing clip: select the card under **Import from**, then **Add to Library**, and
    finish the import.
 2. Open the card's page in **Gear** again. If the card is unmounted but still in, it shows
-   **Mount**; **Prepare card…** works either way.
-3. Select **Prepare card…**. Read the dialog. Select **Erase**.
+   **Mount**; **Prepare Card…** works either way.
+3. Select **Prepare Card…**. Read the dialog. Select **Erase**.
 4. Put the card back in the DVR. Record a short clip.
 
 **Pass**
@@ -714,7 +714,7 @@ not in the library. See [Format safety](format-safety.md#card-prep).
 
 1. Put the goggles card in. Check that every clip on it is in the library (step A refuses if
    not).
-2. On its page in **Gear**, select **Prepare card…**, then **Erase**.
+2. On its page in **Gear**, select **Prepare Card…**, then **Erase**.
 3. Put the card back in the goggles. Record a short clip.
 
 **Pass**
@@ -722,7 +722,7 @@ not in the library. See [Format safety](format-safety.md#card-prep).
 - The dialog names exFAT. The card unmounts after the erase.
 - The goggles read the card and record to it.
 - Optional: plug a DJI air unit or the goggles in over USB (storage mode). Its page offers no
-  erase: **Prepare card…** refuses with "Refused: QuadCam never formats a DJI device over USB
+  erase: **Prepare Card…** refuses with "Refused: QuadCam never formats a DJI device over USB
   …".
 
 **If it fails**
@@ -749,7 +749,7 @@ Checks a card's file system. A repair runs only after a failed check, and asks f
    safe to unplug."
 2. Open the device's **Backups** segment. Read the check's result in **Overview** (the last card
    check).
-3. If the card is unmounted, select **Mount**. Then select **Check card**. **Stop** ends a check.
+3. If the card is unmounted, select **Mount**. Then select **Check Card**. **Stop** ends a check.
 4. Try the repair refusal on the healthy card:
 
    ```bash
@@ -926,7 +926,7 @@ Checks that each cue plays once, at the right time, on each channel.
 
 1. Open **Settings > Gear > Cues**. Leave **Mute all cues** off. Under **Play cues as** turn on
    **Speech**, **Sound** and **Notification**. Leave **Voice** on **macOS**. Select **Done**.
-2. Plug in the card and run a job: **Check card** or **Back up now**.
+2. Plug in the card and run a job: **Check Card** or **Back Up Now**.
 3. Leave the card in after "done". Wait 60 seconds, then 5 minutes.
 4. Pull the card. Plug it in again and pull it while nothing runs.
 5. Set **USB power warning** to 1 minute. Plug in the FC, put the battery in, and wait. Set the
@@ -940,7 +940,7 @@ Checks that each cue plays once, at the right time, on each channel.
 - Step 2: once the job ends, the Mac says "<device> done, safe to unplug.", plays a sound, and
   posts a notification. The first notification asks to allow notifications.
 - Step 3: "<device> is still inserted." after 60 seconds, then every 5 minutes, 3 times at
-  most. **Dismiss reminder** on the device page stops it.
+  most. **Dismiss Reminder** on the device page stops it.
 - Step 4: pulling the card plays nothing. QuadCam's own mounts and unmounts play nothing.
 - Step 5: "Unplug <FC> now. It has run on USB with a battery for …" plays once for that
   battery.
@@ -976,7 +976,7 @@ Configurator, no EdgeTX Companion, no Finder copies. Do it after the other trial
 1. **Before.** Open **Pack up**. Fix each row that does not pass: **Packs charged** (**Mark
    charged** on **Packs**), **Radio model**, **Card space**, **Backups**, **Cards out**.
 2. **Back up.** Plug in the radio (USB Storage) and the FC (battery out). Let the on-connect
-   backups run, or select **Back up now** on each.
+   backups run, or select **Back Up Now** on each.
 3. **Apply.** Open **Bench**. **Next session** names the first change. For each change select
    **Review…**, read **Checks**, and select **Apply**. Wait for "done, safe to unplug." each
    time.
@@ -985,7 +985,7 @@ Configurator, no EdgeTX Companion, no Finder copies. Do it after the other trial
 5. **Fly.** Fly the session with the DVR or goggles recording, and the radio logging.
 6. **Keep or revert.** For each applied Try change, select **Keep** or **Revert…**.
 7. **Import.** Plug in the radio (USB Storage) and the card. Import the clips with the radio's
-   logs, and finish. Select **Show report** in the Finish step.
+   logs, and finish. Select **Show Report** in the Finish step.
 8. **Analyse.** On **Flights** pick each flight's pack. Read hover, sag, resting voltage, used
    mAh, worst link and dropouts. Read the **Session report**.
 9. **After.** Pull the blackbox if you fly with one (trial 4). Open **Pack up** again.

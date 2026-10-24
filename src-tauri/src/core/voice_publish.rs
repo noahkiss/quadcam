@@ -233,7 +233,7 @@ impl Core {
         let (unheard, wrong) = publish::not_heard(m);
         if !unheard.is_empty() {
             bail!(
-                "The speech check has not heard {} of the pack's {} lines: run Check speech (quadcam-cli gear voice check {src}) first.",
+                "The speech check has not heard {} of the pack's {} lines: run Check Speech (quadcam-cli gear voice check {src}) first.",
                 unheard.len(),
                 m.files.len()
             );

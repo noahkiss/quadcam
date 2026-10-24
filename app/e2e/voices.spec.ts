@@ -32,7 +32,7 @@ async function openVoices(app: AppFixture, page: Page, more = false) {
 }
 
 async function installDemo(page: Page) {
-  await page.getByRole("button", { name: "Refresh packs" }).click();
+  await page.getByRole("button", { name: "Refresh Packs" }).click();
   await page.getByRole("button", { name: "Install Demo" }).click();
   await expect(library(page)).toContainText("Demo");
 }
@@ -43,7 +43,7 @@ test("the library lists each pack with its model, line sets, lines, size and dat
   await openVoices(app, page);
   await expect(page.getByRole("region", { name: "Library" })).toContainText("No voice pack on this Mac.");
   await expect(page.getByRole("region", { name: "Get voice packs" })).not.toContainText("Demo");
-  await page.getByRole("button", { name: "Refresh packs" }).click();
+  await page.getByRole("button", { name: "Refresh Packs" }).click();
   expect((await app.method("gear_voice")).some((p) => p.refresh_index === true && p.radio === null)).toBe(true);
   await expect(page.getByRole("list", { name: "Packs in the index" })).toContainText("Demo (en-demo-v1) · demo · 7 lines · 2 MB · CC BY 4.0");
   await page.getByRole("button", { name: "Install Demo" }).click();
@@ -61,7 +61,7 @@ test("the library lists each pack with its model, line sets, lines, size and dat
 test("the library fits the narrowest window: no sideways scroll, one short row per pack", async ({ app, page }) => {
   await page.setViewportSize({ width: 960, height: 800 });
   await openVoices(app, page);
-  await page.getByRole("button", { name: "Render my voice" }).click();
+  await page.getByRole("button", { name: "Render My Voice" }).click();
   await installDemo(page);
   const wrap = library(page).locator("xpath=..");
   const size = await wrap.evaluate((el) => ({ scroll: el.scrollWidth, client: el.clientWidth }));
@@ -72,7 +72,7 @@ test("the library fits the narrowest window: no sideways scroll, one short row p
 
 test("Delete asks first, and keeps the raw takes unless the box is ticked", async ({ app, page }) => {
   await openVoices(app, page);
-  await page.getByRole("button", { name: "Render my voice" }).click();
+  await page.getByRole("button", { name: "Render My Voice" }).click();
   await installDemo(page);
   await packMenu(page, "Samantha", "Delete…");
   const confirm = dialog(page, "Delete Samantha?");
@@ -93,10 +93,10 @@ test("Delete asks first, and keeps the raw takes unless the box is ticked", asyn
 
 test("Delete names the radios that chose the pack and clears their choice", async ({ app, page }) => {
   await openVoices(app, page, true);
-  await page.getByRole("button", { name: "Render my voice" }).click();
+  await page.getByRole("button", { name: "Render My Voice" }).click();
   await expect(library(page)).toContainText("Samantha");
   await app.core(`c => { c.gear.voice.chosen = { "${RADIO_ID}": "local-say-samantha", "radio-two": "local-say-samantha" }; }`);
-  await page.getByRole("button", { name: "Refresh packs" }).click();
+  await page.getByRole("button", { name: "Refresh Packs" }).click();
   await packMenu(page, "Samantha", "Delete…");
   const confirm = dialog(page, "Delete Samantha?");
   await expect(confirm).toContainText("Chosen for Field radio, Bench radio: the delete clears that choice.");
@@ -108,7 +108,7 @@ test("Delete names the radios that chose the pack and clears their choice", asyn
 test("Apply to radios stages one change per radio, says which cards are connected, and opens the apply sheet", async ({ app, page }) => {
   await openVoices(app, page, true);
   await installDemo(page);
-  await packMenu(page, "Demo", "Apply to radios…");
+  await packMenu(page, "Demo", "Apply to Radios…");
   const sheet = dialog(page, "Apply Demo to radios");
   const radios = sheet.getByRole("group", { name: "Radios" });
   // EdgeTX radios only.
@@ -145,13 +145,13 @@ test("Render my voice checks the cost first, and a provider that may charge wait
   await openVoices(app, page);
   const get = page.getByRole("region", { name: "Mac and other voices" });
   await expect(get).toContainText("macOS voices");
-  await get.getByRole("button", { name: "Check cost" }).click();
+  await get.getByRole("button", { name: "Check Cost" }).click();
   await expect(get.getByRole("status")).toContainText("Would render 7 of 7 lines with say; 0 come from the cache; 46 characters.");
   await app.core(`c => { c.gear.voice.paid = true; }`);
-  await get.getByRole("button", { name: "Render my voice" }).click();
+  await get.getByRole("button", { name: "Render My Voice" }).click();
   await expect(get.getByRole("status")).toContainText("Not rendered: 46 characters would go to say, which may charge for them.");
   expect((await app.method("gear_voice_render")).at(-1)).toMatchObject({ confirm: false, dry_run: false });
-  await get.getByRole("button", { name: "Render and pay" }).click();
+  await get.getByRole("button", { name: "Render and Pay" }).click();
   expect((await app.method("gear_voice_render")).at(-1)).toMatchObject({ confirm: true });
   await expect(get.getByRole("status")).toContainText("Rendered 7 of 7 lines into local-say-samantha");
   await expect(library(page).getByRole("row", { name: /^Samantha / })).toContainText("Rendered here");
@@ -159,16 +159,16 @@ test("Render my voice checks the cost first, and a provider that may charge wait
 
 test("the speech check says why it is unavailable and installs the speech assets on request", async ({ app, page }) => {
   await openVoices(app, page);
-  await page.getByRole("button", { name: "Render my voice" }).click();
+  await page.getByRole("button", { name: "Render My Voice" }).click();
   await app.core(`c => { c.gear.voice.speech = false; }`);
-  await page.getByRole("button", { name: "Refresh packs" }).click();
+  await page.getByRole("button", { name: "Refresh Packs" }).click();
   const row = library(page).getByRole("row", { name: /^Samantha / });
   await expect(row).toContainText("Not checked");
-  await packMenu(page, "Samantha", "Check speech");
+  await packMenu(page, "Samantha", "Check Speech");
   const check = page.getByRole("dialog", { name: /^Speech check/ });
   await expect(check).toContainText("The speech check is unavailable: The speech assets for en-US are not installed");
-  await expect(check.getByRole("button", { name: "Check speech" })).toBeDisabled();
-  await check.getByRole("button", { name: "Install speech assets" }).click();
+  await expect(check.getByRole("button", { name: "Check Speech" })).toBeDisabled();
+  await check.getByRole("button", { name: "Install Speech Assets" }).click();
   expect((await app.method("gear_voice_check")).at(-1)).toEqual({ pack: "local-say-samantha", lines: [], accept: [], install: true });
   await expect(check.getByRole("status")).toContainText("The speech assets for en-US are installed.");
   await expect(row).toContainText("Heard right");
@@ -179,7 +179,7 @@ test("the speech check says why it is unavailable and installs the speech assets
 
 test("an index pack plays its preview lines before an install", async ({ app, page }) => {
   await openVoices(app, page);
-  await page.getByRole("button", { name: "Refresh packs" }).click();
+  await page.getByRole("button", { name: "Refresh Packs" }).click();
   await page.getByRole("button", { name: "Preview Demo" }).click();
   expect((await app.method("gear_voice_pack_preview")).at(-1)).toEqual({ pack: "en-demo-v1", source: null });
   const lines = page.getByRole("list", { name: "Preview lines of Demo" });
@@ -196,10 +196,10 @@ const STUDIO = "local-elevenlabs-voice-callum-eleven_v3";
 async function checkedPack(app: AppFixture, page: Page) {
   await openVoices(app, page);
   await app.core(`c => { c.gear.voice.installed.push("${STUDIO}"); c.gear.voice.misheard = "SOUNDS/en/lowbat.wav"; }`);
-  await page.getByRole("button", { name: "Refresh packs" }).click();
-  await packMenu(page, "Callum", "Check speech");
+  await page.getByRole("button", { name: "Refresh Packs" }).click();
+  await packMenu(page, "Callum", "Check Speech");
   const check = page.getByRole("dialog", { name: /^Speech check/ });
-  await check.getByRole("button", { name: "Check speech" }).click();
+  await check.getByRole("button", { name: "Check Speech" }).click();
   await check.getByRole("button", { name: "Accept what was heard for Battery low" }).click();
   await check.getByRole("button", { name: "Done" }).click();
 }
@@ -207,7 +207,7 @@ async function checkedPack(app: AppFixture, page: Page) {
 test("Publish needs the speech check, reviews every line, and publishes only on Approve", async ({ app, page }) => {
   await openVoices(app, page);
   await app.core(`c => { c.gear.voice.installed.push("${STUDIO}"); }`);
-  await page.getByRole("button", { name: "Refresh packs" }).click();
+  await page.getByRole("button", { name: "Refresh Packs" }).click();
   await packMenu(page, "Callum", "Publish…");
   const pub = page.getByRole("region", { name: "Publish" });
   await pub.getByRole("button", { name: "Prepare" }).click();
@@ -227,16 +227,16 @@ test("Publish needs the speech check, reviews every line, and publishes only on 
   await expect(pub.getByRole("table", { name: "Spot check" }).getByRole("row")).toHaveCount(8);
   await every.getByRole("button", { name: "Play Armed" }).click();
   expect(await app.method("gear_voice_publish_approve")).toEqual([]);
-  await pub.getByRole("button", { name: "Approve and publish" }).click();
+  await pub.getByRole("button", { name: "Approve and Publish" }).click();
   expect((await app.method("gear_voice_publish_approve")).at(-1)).toEqual({ digest: "mock-en-callum-2", id: "en-callum" });
   await expect(pub).toContainText("Released en-callum v2.");
   await expect(pub.getByRole("button", { name: "Open the pull request" })).toBeVisible();
-  await expect(pub.getByRole("button", { name: "Approve and publish" })).toHaveCount(0);
+  await expect(pub.getByRole("button", { name: "Approve and Publish" })).toHaveCount(0);
 });
 
 test("a pack made with say cannot be published", async ({ app, page }) => {
   await openVoices(app, page);
-  await page.getByRole("button", { name: "Render my voice" }).click();
+  await page.getByRole("button", { name: "Render My Voice" }).click();
   await packMenu(page, "Samantha", "Publish…");
   const pub = page.getByRole("region", { name: "Publish" });
   await pub.getByRole("button", { name: "Prepare" }).click();
@@ -251,13 +251,13 @@ for (const scheme of axeSchemes) {
       await installDemo(page);
       let r = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
       expect(r.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(" ") + " " + n.failureSummary).join(", ")}`)).toEqual([]);
-      await packMenu(page, "Demo", "Apply to radios…");
+      await packMenu(page, "Demo", "Apply to Radios…");
       await expect(dialog(page, "Apply Demo to radios")).toBeVisible();
       r = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
       expect(r.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(" ") + " " + n.failureSummary).join(", ")}`)).toEqual([]);
       await dialog(page, "Apply Demo to radios").getByRole("button", { name: "Cancel" }).click();
-      await packMenu(page, "Demo", "Check speech");
-      await page.getByRole("dialog", { name: /^Speech check/ }).getByRole("button", { name: "Check speech" }).click();
+      await packMenu(page, "Demo", "Check Speech");
+      await page.getByRole("dialog", { name: /^Speech check/ }).getByRole("button", { name: "Check Speech" }).click();
       await expect(page.getByRole("table", { name: "Speech check of Demo" })).toBeVisible();
       r = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
       expect(r.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(" ") + " " + n.failureSummary).join(", ")}`)).toEqual([]);
@@ -278,7 +278,7 @@ for (const scheme of axeSchemes) {
       await page.mouse.move(0, 0);
       let r = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
       expect(r.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(" ") + " " + n.failureSummary).join(", ")}`)).toEqual([]);
-      await pub.getByRole("button", { name: "Approve and publish" }).click();
+      await pub.getByRole("button", { name: "Approve and Publish" }).click();
       await expect(pub).toContainText("Released");
       r = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
       expect(r.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(" ") + " " + n.failureSummary).join(", ")}`)).toEqual([]);

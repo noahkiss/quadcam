@@ -56,7 +56,7 @@ A card with no clips needs no library. QuadCam formats it as FAT32 for an analog
 
 Card prep has a button in the app, a command and an agent tool:
 
-- **App:** open the card's page in **Gear** and select **Prepare card…**. After a DJI import, the Finish step has a **Prepare card** panel with the same button. A dialog names the disk, the volume, the size, the file system and any size advice. Only a click on **Erase** starts the erase. A card that is unmounted but still in is mounted for the plan and the erase, and unmounted again.
+- **App:** open the card's page in **Gear** and select **Prepare Card…**. After a DJI import, the Finish step has a **Prepare card** panel with the same button. A dialog names the disk, the volume, the size, the file system and any size advice. Only a click on **Erase** starts the erase. A card that is unmounted but still in is mounted for the plan and the erase, and unmounted again.
 - **Command line:** `format --prep`. Name the card with `--mount` (a mounted card) or `--card` (its device id from `gear status`), then give `--device`, `--volume-uuid` and `--yes`.
 - **Agent:** `quadcam_format_card` with `prep=true`. If the app is running, you must still select **Erase** in the app.
 

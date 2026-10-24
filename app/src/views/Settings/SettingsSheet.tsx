@@ -225,7 +225,7 @@ function LibraryPane({ d, set }: { d: Draft; set: SetFn }) {
           <option value="YY.MM.DD">26.09.25_name.mp4</option>
         </SelectField>
         <Button size="sm" variant="ghost" className={styles.alignEnd} onClick={() => applyNameFormat(d.nameDateFormat)}>
-          Rename library files to this format
+          Rename Library Files to This Format
         </Button>
       </div>
       <div className={styles.info}>
@@ -234,10 +234,10 @@ function LibraryPane({ d, set }: { d: Draft; set: SetFn }) {
           The files hold every detail. The index in <span className="mono">.quadcam/</span> is a cache.
         </p>
         <Button size="sm" variant="ghost" onClick={rebuildLibrary}>
-          Rebuild from files
+          Rebuild from Files
         </Button>
         <Button size="sm" variant="ghost" onClick={matchLibraryLogs}>
-          Match radio logs
+          Match Radio Logs
         </Button>
       </div>
     </section>
@@ -277,7 +277,7 @@ function AircraftPane({ d, setD, at, setAt }: { d: Draft; setD: (f: (d: Draft) =
             <button type="button" onClick={add}>
               <b>
                 <Icon name="add" tint="blue" />
-                Add aircraft
+                Add Aircraft
               </b>
             </button>
           </li>
@@ -462,7 +462,7 @@ function PlacesPane({ d, set }: { d: Draft; set: SetFn }) {
               Search
             </Button>
             <Button size="sm" variant="ghost" icon="gps" onClick={here} disabled={locating}>
-              Use current location
+              Use Current Location
             </Button>
           </div>
           {hits != null && (
@@ -504,7 +504,7 @@ function PlacesPane({ d, set }: { d: Draft; set: SetFn }) {
             ))}
           </div>
           <Button size="sm" variant="ghost" icon="add" onClick={() => set("places", [...d.places, { name: "", lat: "", lon: "" }])}>
-            Add place
+            Add Place
           </Button>
         </>
       )}

@@ -150,7 +150,7 @@ test("right-click opens the clip menu; arrows move, Escape closes", async ({ pag
   await card(page, "gap-run").click({ button: "right" });
   const menu = page.getByRole("menu", { name: "Clip actions" });
   await expect(menu).toBeVisible();
-  for (const item of ["Rename", "Edit details", "Trim and cuts", "Share…", "Add to Drone Album", "Show in Finder", "Find dead air again", "Move to Trash"]) {
+  for (const item of ["Rename", "Edit Details", "Trim and Cuts", "Share…", "Add to Drone Album", "Show in Finder", "Find Dead Air Again", "Move to Trash"]) {
     await expect(menu.getByRole("menuitem", { name: new RegExp(`^${item.replace(/[…]/g, ".")}`) })).toBeVisible();
   }
   await expect(menu.getByRole("menuitem").first()).toBeFocused();

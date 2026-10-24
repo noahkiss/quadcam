@@ -102,7 +102,7 @@ test("an aircraft profile is added and made the default", async ({ app, page }) 
   await page.getByRole("button", { name: "Settings" }).click();
   const dlg = settingsDialog(page);
   await dlg.getByRole("button", { name: "Aircraft" }).click();
-  await dlg.getByRole("button", { name: "Add aircraft" }).click();
+  await dlg.getByRole("button", { name: "Add Aircraft" }).click();
   await dlg.getByLabel("Name", { exact: true }).fill("Cine");
   await dlg.getByRole("button", { name: "DJI O4" }).click();
   await dlg.getByRole("checkbox", { name: /Default aircraft/ }).check();
