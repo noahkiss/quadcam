@@ -164,6 +164,8 @@ impl Core {
             .library
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
+        // Another process's change lands before this one loads, never between load and save.
+        let _lock = root.is_dir().then(|| Index::lock(&root)).transpose()?;
         let on_disk = mtime(&root);
         if guard
             .as_ref()

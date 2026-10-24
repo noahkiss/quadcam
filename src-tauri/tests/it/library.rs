@@ -1352,3 +1352,20 @@ fn a_rating_one_file_refuses_rates_the_rest() {
         Some("4")
     );
 }
+
+/// An index that a newer QuadCam wrote is refused, never replaced by an empty one.
+#[test]
+fn a_newer_index_is_refused_not_replaced() {
+    let l = lab(Layout::YearDay, false, false);
+    import(&l);
+    let p = library::index_path(&l.root);
+    let mut v: serde_json::Value = serde_json::from_slice(&std::fs::read(&p).unwrap()).unwrap();
+    v["version"] = serde_json::json!(library::INDEX_VERSION + 1);
+    let newer = serde_json::to_vec_pretty(&v).unwrap();
+    std::fs::write(&p, &newer).unwrap();
+    let e = l.core.library(&Filter::default()).unwrap_err();
+    assert!(format!("{e:#}").contains("newer QuadCam"), "{e:#}");
+    let id = v["clips"][0]["id"].as_str().unwrap().to_string();
+    assert!(l.core.library_rate(&[id], Some(3), None).is_err());
+    assert_eq!(std::fs::read(&p).unwrap(), newer);
+}

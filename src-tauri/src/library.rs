@@ -346,6 +346,14 @@ impl Index {
         }
         let ix: Index = serde_json::from_slice(&std::fs::read(&p)?)
             .with_context(|| format!("parsing {}", p.display()))?;
+        if ix.version > INDEX_VERSION {
+            // Starting empty would replace a newer QuadCam's index on the first write.
+            bail!(
+                "{} was written by a newer QuadCam (index version {}); update QuadCam to open this library.",
+                p.display(),
+                ix.version
+            );
+        }
         if ix.version != INDEX_VERSION {
             return Ok(None);
         }
@@ -355,10 +363,30 @@ impl Index {
     pub fn save(&self, root: &Path) -> Result<()> {
         let p = index_path(root);
         std::fs::create_dir_all(p.parent().unwrap())?;
-        let tmp = p.with_extension("json.tmp");
-        std::fs::write(&tmp, serde_json::to_vec_pretty(self)?)?;
+        // A name of this process's own, so two saves never rename each other's half-written
+        // file into place.
+        let tmp = p.with_extension(format!("json.{}.tmp", std::process::id()));
+        let mut f = std::fs::File::create(&tmp)?;
+        std::io::Write::write_all(&mut f, &serde_json::to_vec_pretty(self)?)?;
+        f.sync_all()?;
         std::fs::rename(&tmp, &p)?;
         Ok(())
+    }
+
+    /// Locks `<library>/.quadcam/index.lock` until the returned file is dropped, so the app
+    /// and a command-line or MCP process never load, change and save the index at once. A
+    /// volume without locks is used unlocked.
+    pub fn lock(root: &Path) -> Result<std::fs::File> {
+        let p = index_path(root).with_file_name("index.lock");
+        std::fs::create_dir_all(p.parent().unwrap())?;
+        let f = std::fs::File::options()
+            .create(true)
+            .truncate(false)
+            .write(true)
+            .open(&p)
+            .with_context(|| format!("opening {}", p.display()))?;
+        let _ = f.lock();
+        Ok(f)
     }
 
     /// The clip with this id, or with this earlier id.

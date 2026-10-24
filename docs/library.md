@@ -70,6 +70,8 @@ QuadCam writes every detail it shows into the file's QuickTime metadata: the dat
 
 The index in `<library>/.quadcam/index.json` is a cache that makes the app start fast. **Rebuild from files** in Settings > Library makes it again from the files alone. A rebuild never moves or writes a file. Only cut ranges that you set but did not save yet live in the index alone.
 
+The app, the command line and the MCP server take turns on the index: each holds a lock on `.quadcam/index.lock` while it reads, changes and saves it. An index that a newer QuadCam wrote is refused: update QuadCam to open that library.
+
 ### Clip identity
 
 QuadCam knows a clip by the content of its source file, not by its name. DVRs start again at `PICT0001` after every format, so a name proves nothing. The card's "N new" count in the sidebar uses the same identity.
