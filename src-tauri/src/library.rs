@@ -527,7 +527,8 @@ pub fn sidecar_suffix(rest: &str) -> bool {
         return false;
     };
     match rest.split_once('.') {
-        None => !rest.is_empty(),
+        // `X.mp4` beside an `X.avi` original is another clip's original, not a sidecar.
+        None => !rest.is_empty() && !matches!(rest.to_lowercase().as_str(), "mp4" | "mov" | "avi"),
         Some((part, ext)) => {
             part.strip_prefix("part")
                 .is_some_and(|n| !n.is_empty() && n.chars().all(|c| c.is_ascii_digit()))
@@ -633,10 +634,20 @@ pub fn read_file(root: &Path, rel: &Path) -> Result<Found> {
             .map(|s| s.trim().to_string())
             .filter(|s| !s.is_empty())
     });
+    // The original has the source file's extension, which `dvr` names; only a file without
+    // it falls back to the first one that exists.
+    let dvr_ext = dvr
+        .as_deref()
+        .and_then(|d| Path::new(d).extension())
+        .map(|e| e.to_string_lossy().to_lowercase())
+        .filter(|e| matches!(e.as_str(), "avi" | "mp4"));
+    let exts: Vec<String> = match &dvr_ext {
+        Some(e) => vec![e.clone(), e.to_uppercase()],
+        None => ["avi", "AVI", "mp4", "MP4"].map(String::from).to_vec(),
+    };
     let original = path.parent().and_then(|dir| {
         let o = dir.join(ORIGINALS);
-        ["avi", "AVI", "mp4", "MP4"]
-            .iter()
+        exts.iter()
             .map(|e| o.join(format!("{stem}.{e}")))
             .find(|p| p.is_file())
             .and_then(|p| p.strip_prefix(root).ok().map(Path::to_path_buf))
@@ -1079,6 +1090,9 @@ mod tests {
             ".part2.",
             ".a.b.c",
             ".part2.avi.bak",
+            ".mp4",
+            ".MOV",
+            ".avi",
         ] {
             assert!(!sidecar_suffix(no), "{no}");
         }

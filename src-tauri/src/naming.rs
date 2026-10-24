@@ -128,16 +128,27 @@ impl NamePlanner {
         Self::default()
     }
 
+    /// The first free `stem.ext`, `stem-2.ext`, ... in `dir`. A video name is taken when a
+    /// video of that stem exists in any of the video extensions: `X.mp4` and `X.mov` side by
+    /// side would share one original in `originals/`.
     pub fn claim(&mut self, dir: &Path, stem: &str, ext: &str) -> PathBuf {
+        const VIDEO: [&str; 3] = ["mp4", "mov", "avi"];
+        let video = VIDEO.contains(&ext.to_ascii_lowercase().as_str());
         let mut n = 1;
         loop {
-            let file = if n == 1 {
-                format!("{stem}.{ext}")
+            let s = if n == 1 {
+                stem.to_string()
             } else {
-                format!("{stem}-{n}.{ext}")
+                format!("{stem}-{n}")
             };
-            let path = dir.join(file);
-            if !self.taken.contains(&path) && !path.exists() {
+            let path = dir.join(format!("{s}.{ext}"));
+            let free = |p: &Path| !self.taken.contains(p) && !p.exists();
+            let others_free = !video
+                || VIDEO.iter().all(|e| {
+                    free(&dir.join(format!("{s}.{e}")))
+                        && free(&dir.join(format!("{s}.{}", e.to_ascii_uppercase())))
+                });
+            if free(&path) && others_free {
                 self.taken.insert(path.clone());
                 return path;
             }
@@ -221,5 +232,16 @@ mod tests {
         assert!(p2
             .claim(dir.path(), "2026-09-30_x", "mp4")
             .ends_with("2026-09-30_x-2.mp4"));
+    }
+
+    #[test]
+    fn a_video_name_is_taken_in_any_video_extension() {
+        let d = tempfile::tempdir().unwrap();
+        std::fs::write(d.path().join("x.mov"), b"").unwrap();
+        let mut p = NamePlanner::new();
+        assert_eq!(p.claim(d.path(), "x", "mp4"), d.path().join("x-2.mp4"));
+        assert_eq!(p.claim(d.path(), "x", "mov"), d.path().join("x-3.mov"));
+        // Not a video: only its own extension counts.
+        assert_eq!(p.claim(d.path(), "x", "srt"), d.path().join("x.srt"));
     }
 }
