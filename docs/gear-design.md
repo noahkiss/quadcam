@@ -617,6 +617,8 @@ QuadCam implements these rules from the file format; it copies no EdgeTX code.
   line).
 - Write a file only when its bytes change (FAT writes are slow on macOS). Write to a
   temporary name, rename, read back, compare bytes, `F_FULLFSYNC`.
+- Write in dependency order: new and changed files, then `RADIO/radio.yml`, then deletes. A
+  crash between two files then never leaves `radio.yml` selecting a model that is gone.
 
 **Encodings that bit before**
 

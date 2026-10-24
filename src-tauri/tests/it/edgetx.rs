@@ -605,6 +605,43 @@ fn radio_edits_never_change_the_selected_model_unless_asked() {
     let copy = String::from_utf8(plan.files[0].after.clone().unwrap()).unwrap();
     assert!(copy.contains("name: \"CHARLIE\""));
     assert!(!copy.contains("value: 120"), "timer values start at 0");
+    // Select another model and delete the selected one: the writer takes the copy first,
+    // radio.yml next and the delete last, so a stop between files leaves no dangling selection.
+    let plan = c
+        .plan(
+            &[
+                Edit::ModelCopy {
+                    from: "model01.yml".into(),
+                    to: "model02.yml".into(),
+                    name: "CHARLIE".into(),
+                },
+                Edit::Radio {
+                    ops: vec![RadioOp::SelectModel {
+                        file: "model02.yml".into(),
+                    }],
+                },
+                Edit::ModelDelete {
+                    file: "model01.yml".into(),
+                },
+            ],
+            None,
+        )
+        .unwrap();
+    assert!(plan.ready(), "{:?}", plan.checks);
+    let order: Vec<(&str, bool)> = plan
+        .files
+        .iter()
+        .map(|f| (f.path.as_str(), f.after.is_some()))
+        .filter(|(p, _)| p.starts_with("MODELS/") || p.starts_with("RADIO/"))
+        .collect();
+    assert_eq!(
+        order,
+        [
+            ("MODELS/model02.yml", true),
+            ("RADIO/radio.yml", true),
+            ("MODELS/model01.yml", false),
+        ]
+    );
 }
 
 #[test]

@@ -538,6 +538,7 @@ impl Card {
                 after,
             });
         }
+        plan.files.sort_by(write_order);
         if let (Some(m), false) = (marker, plan.files.is_empty()) {
             if read_marker(&self.root).is_none() {
                 plan.files.push(FileChange {
@@ -612,7 +613,7 @@ impl Card {
                 after,
             });
         }
-        plan.files.sort_by(|a, b| a.path.cmp(&b.path));
+        plan.files.sort_by(write_order);
         if !plan.files.is_empty() && !self.root.join(NEVER_INDEX).exists() {
             plan.files.push(FileChange {
                 path: NEVER_INDEX.into(),
@@ -1257,6 +1258,19 @@ fn is_text(path: &str) -> bool {
     [".yml", ".txt", ".lua", ".csv", MARKER_FILE]
         .iter()
         .any(|s| path.ends_with(s))
+}
+
+/// The order the writer takes files in: new and changed files, then `RADIO/radio.yml`, then
+/// deletes, each by path. A stop between two files leaves the radio pointing at no missing
+/// model: a copy lands before `radio.yml` selects it, and a model goes only after
+/// `radio.yml` stopped selecting it.
+fn write_order(a: &FileChange, b: &FileChange) -> std::cmp::Ordering {
+    let rank = |f: &FileChange| match (&f.after, f.path == RADIO_FILE) {
+        (None, _) => 2,
+        (Some(_), true) => 1,
+        (Some(_), false) => 0,
+    };
+    (rank(a), &a.path).cmp(&(rank(b), &b.path))
 }
 
 fn diff_items(files: &[FileChange]) -> Vec<DiffItem> {
