@@ -247,7 +247,7 @@ export class MockCore {
       case "load_dropped":
         return this.load((args.paths as string[])[0] ?? "dropped");
       case "format_card":
-        return this.formatCard(String(args.label));
+        return this.formatCard(args.req as { device: string; volume_uuid: string; label: string | null; confirm: boolean });
       case "answer_format_request":
         this.formatAnswers.push({ id: Number(args.id), approve: !!args.approve });
         return null;
@@ -1494,23 +1494,44 @@ export class MockCore {
     return { added: ok.flatMap((r) => [r.output!, ...r.cuts.map((k) => k.output!)]), failed: [], album };
   }
 
+  /** `Core::format_plan`: the same refusals, in the same order. */
   formatPlan(label: string | null) {
     const s = this.need();
-    if (s.kind === "dji") throw "Refused: QuadCam does not format DJI cards after an import. Card prep can erase a removable card once every clip is in the library.";
+    if (s.kind === "dji" || s.clips.some((c) => c.kind === "dji")) throw "Refused: QuadCam does not format DJI cards after an import. Card prep can erase a removable card once every clip is in the library.";
     if (!s.card) throw "Clips came from a folder, not a card.";
+    canFormat(s);
     return { disk: "disk9", device: "/dev/disk9", volume_uuid: s.card.volume_uuid || "", volume_name: s.card.volume_name || "", size: s.card.total_size, media_name: s.card.media_name || "", clip_count: s.clips.length, label: label || "DVR", filesystem: "FAT32", warnings: s.card.total_size > 34e9 ? ["Card is larger than 32 GB. Most analog DVRs take cards up to 32 GB; this DVR may not read it."] : [] };
   }
 
-  formatCard(label: string) {
-    const plan = this.formatPlan(label);
+  /** `Core::format` from the GUI's Erase button: the request must name the plan's card. */
+  formatCard(req: { device: string; volume_uuid: string; label: string | null; confirm: boolean }) {
+    if (!req.confirm) throw "Refused: format needs an explicit confirm.";
+    const plan = this.formatPlan(req.label);
+    if (req.device.trim() !== plan.device) throw `Refused: --device ${req.device.trim()} is not the card's whole disk ${plan.device}.`;
+    if (!plan.volume_uuid || req.volume_uuid.trim().toLowerCase() !== plan.volume_uuid.toLowerCase()) throw `Refused: volume UUID ${req.volume_uuid.trim()} does not match the card (${plan.volume_uuid}).`;
     const s = this.need();
     s.card = null;
     s.card_volume = null;
-    s.warnings = [...s.warnings, "The card was erased and is safe to remove."];
+    s.erased = true;
+    s.warnings = [...s.warnings, `Card ${plan.device} was erased and is safe to remove.`];
     this.volumes = this.volumes.filter((v) => !v.is_card);
     this.sessionChanged();
     this.emit("volumes-changed");
     return plan;
+  }
+}
+
+/** `pipeline::can_format`: every clip copied off the card and verified or skipped in the library. */
+function canFormat(s: Session) {
+  if (!s.clips.length) throw "No clips were read from this card.";
+  const staged = s.clips.find((c) => c.stage_error);
+  if (staged) throw `${staged.name} did not copy off the card (${staged.stage_error}). Never format.`;
+  for (const c of s.clips) {
+    const id = c.part_of ?? c.id;
+    const outcome = [...s.results].reverse().find((r) => r.id === id)?.outcome;
+    if (c.status === "empty" && c.size > 0 && outcome !== "verified") throw `${c.name} could not be read, so nothing was imported from it. Copy it off the card before you format it.`;
+    if (outcome === "failed") throw `${c.name} failed to import.`;
+    if (!outcome) throw `${c.name} has not been imported.`;
   }
 }
 

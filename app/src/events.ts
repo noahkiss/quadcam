@@ -2,7 +2,7 @@
 // only the parts whose data changed.
 import { api } from "./ipc/api";
 import { on, onDragDrop } from "./ipc/events";
-import { confirmText, importDropped, sessionChanged } from "./actions/session";
+import { confirmText, importDropped, refusePendingAgentFormat, sessionChanged } from "./actions/session";
 import { store } from "./store";
 import { dialogOpen } from "./store/ui";
 import { sel } from "./store/settings";
@@ -50,6 +50,7 @@ export async function start(): Promise<() => void> {
     }),
     // An agent asked to erase the card: the person must click Erase here.
     on("agent-format-request", ({ id, plan }) => {
+      if (S().agentFormat !== id) refusePendingAgentFormat();
       store.setState({ agentFormat: id });
       S().setFormatConfirm({ text: confirmText(plan), agent: true });
     }),

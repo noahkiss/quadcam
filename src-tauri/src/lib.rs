@@ -261,21 +261,12 @@ async fn load_dropped(state: State<'_, AppState>, paths: Vec<PathBuf>) -> Result
 }
 
 /// The GUI's own Erase button: the click in its confirm dialog is the confirmation.
+/// `req` comes from the plan the dialog showed; `format` checks it against the card again.
 #[tauri::command]
 #[specta::specta]
-async fn format_card(state: State<'_, AppState>, label: String) -> Result<FormatPlan, String> {
+async fn format_card(state: State<'_, AppState>, req: FormatRequest) -> Result<FormatPlan, String> {
     let core = state.core.clone();
-    blocking(move || {
-        let plan = core.format_plan(Some(&label))?;
-        let req = FormatRequest {
-            device: plan.device.clone(),
-            volume_uuid: plan.volume_uuid.clone(),
-            label: Some(label),
-            confirm: true,
-        };
-        core.format(&req, true)
-    })
-    .await
+    blocking(move || core.format(&req, true)).await
 }
 
 /// The GUI's own card prep button: the click in its confirm dialog is the confirmation.

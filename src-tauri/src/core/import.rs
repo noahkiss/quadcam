@@ -598,6 +598,7 @@ impl Core {
         let eject_error = formatted?;
         let mut latest = self.current()?;
         latest.card = None;
+        latest.erased = true;
         match &eject_error {
             None => latest.warnings.push(format!(
                 "Card {} was erased and is safe to remove.",

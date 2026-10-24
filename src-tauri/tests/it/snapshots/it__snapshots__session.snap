@@ -115,6 +115,7 @@ expression: session
     }
   ],
   "date_warnings": [],
+  "erased": false,
   "in_photos": [],
   "join": null,
   "kind": "analog",

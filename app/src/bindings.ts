@@ -41,6 +41,8 @@ export const commands = {
 	 *  `join_split_recordings` setting.
 	 */
 	join: boolean | null,
+	/**  The format step erased this session's card. */
+	erased: boolean,
 } | null, string>(__TAURI_INVOKE("session")),
 	/**  Forgets the session and deletes the session file. */
 	clear: () => typedError<Cleared, string>(__TAURI_INVOKE("clear")),
@@ -690,8 +692,11 @@ export const commands = {
 	step_p50_us: number | null,
 	step_p99_us: number | null,
 } | null, string>(__TAURI_INVOKE("sim_stop")),
-	/**  The GUI's own Erase button: the click in its confirm dialog is the confirmation. */
-	formatCard: (label: string) => typedError<FormatPlan, string>(__TAURI_INVOKE("format_card", { label })),
+	/**
+	 *  The GUI's own Erase button: the click in its confirm dialog is the confirmation.
+	 *  `req` comes from the plan the dialog showed; `format` checks it against the card again.
+	 */
+	formatCard: (req: FormatRequest) => typedError<FormatPlan, string>(__TAURI_INVOKE("format_card", { req })),
 	/**
 	 *  The GUI's own card prep button: the click in its confirm dialog is the confirmation.
 	 *  `req` comes from the plan the dialog showed; `card_prep` checks it against the card again.
@@ -7284,6 +7289,8 @@ export type Session_Deserialize = {
 	 *  `join_split_recordings` setting.
 	 */
 	join?: boolean | null,
+	/**  The format step erased this session's card. */
+	erased?: boolean,
 };
 
 export type Session_Serialize = {
@@ -7314,6 +7321,8 @@ export type Session_Serialize = {
 	 *  `join_split_recordings` setting.
 	 */
 	join: boolean | null,
+	/**  The format step erased this session's card. */
+	erased: boolean,
 };
 
 /**  What a person sees of a set. */

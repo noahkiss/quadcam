@@ -27,7 +27,7 @@ export interface UiSlice {
   menuAt: { id: string; x: number; y: number } | null;
   dropping: boolean;
   /** The erase confirmation (the person's own, or an agent's). */
-  formatConfirm: { text: string; agent: boolean; /** Card prep: the request the Erase click sends. */ prep?: FormatRequest } | null;
+  formatConfirm: { text: string; agent: boolean; /** Card prep: the request the Erase click sends. */ prep?: FormatRequest; /** The format step: the request of the plan the dialog shows. */ erase?: FormatRequest } | null;
   /** The third-party notices window. */
   noticesOpen: boolean;
   /** The sidebar shows over the page (a narrow window only). */

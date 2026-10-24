@@ -191,6 +191,9 @@ pub struct Session {
     /// `join_split_recordings` setting.
     #[serde(default)]
     pub join: Option<bool>,
+    /// The format step erased this session's card.
+    #[serde(default)]
+    pub erased: bool,
 }
 
 /// A time of day from `HH:MM` or `HH:MM:SS`; empty is None (local noon).
@@ -338,6 +341,7 @@ impl Session {
             in_photos: Vec::new(),
             output_dir: None,
             join: None,
+            erased: false,
         }
     }
 
@@ -855,6 +859,7 @@ mod tests {
             in_photos: Vec::new(),
             output_dir: None,
             join: None,
+            erased: false,
         }
     }
 

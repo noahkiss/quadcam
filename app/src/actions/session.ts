@@ -98,7 +98,7 @@ export function sessionChanged(s: Session | null) {
   const st = S();
   const hadCard = !!st.session?.card;
   const oldResults = st.session?.results.length || 0;
-  if (hadCard && s && !s.card && s.warnings.some((w) => w.includes("erased"))) {
+  if (hadCard && s && !s.card && s.erased) {
     toast("Card erased. Safe to remove.");
     st.setSession(null);
     api.clearSession().catch(() => {});
@@ -368,8 +368,16 @@ export async function askFormat() {
   } catch (e) {
     return toast(errText(e), true);
   }
+  refusePendingAgentFormat();
+  S().setFormatConfirm({ text: confirmText(plan), agent: false, erase: { device: plan.device, volume_uuid: plan.volume_uuid, label: plan.label, confirm: true } });
+}
+
+/** An agent's erase request this confirm replaces is refused, so its call returns. */
+export function refusePendingAgentFormat() {
+  const id = S().agentFormat;
+  if (id == null) return;
   store.setState({ agentFormat: null });
-  S().setFormatConfirm({ text: confirmText(plan), agent: false });
+  api.answerFormatRequest(id, false);
 }
 
 /** Card prep from the app: the plan names the disk, the person's Erase click confirms. A
@@ -382,7 +390,7 @@ export async function prepCard(target: { mount?: string; device?: string }) {
   } catch (e) {
     return toast(errText(e), true);
   }
-  store.setState({ agentFormat: null });
+  refusePendingAgentFormat();
   S().setFormatConfirm({
     text: confirmText(plan),
     agent: false,
@@ -414,8 +422,10 @@ export async function confirmErase() {
     toast("Erasing the card…");
     return;
   }
+  const erase = st.formatConfirm?.erase;
+  if (!erase) return st.setFormatConfirm(null);
   try {
-    await api.formatCard(st.formatLabelDraft || sel.formatLabel(st));
+    await api.formatCard(erase);
     st.setFormatConfirm(null);
     store.setState({ formatUnlocked: false });
   } catch (e) {

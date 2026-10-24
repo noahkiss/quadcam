@@ -51,7 +51,7 @@ export const api = {
   importClips: (options: ImportOptions) => ok(commands.import(options)),
   addToPhotos: (ids: number[], album: string | null) => ok(commands.photos({ ids, album })),
   formatPlan: (label: string | null) => ok(commands.formatPlan({ label })),
-  formatCard: (label: string) => ok(commands.formatCard(label)),
+  formatCard: (req: FormatRequest) => ok(commands.formatCard(req)),
   cardPrepPlan: (target: { mount?: string; device?: string }, label: string | null = null) => ok(commands.cardPrepPlan({ mount: target.mount ?? null, device: target.device ?? null, label })),
   cardPrepClick: (req: FormatRequest) => ok(commands.cardPrepClick(req)),
   answerFormatRequest: (id: number, approve: boolean) => commands.answerFormatRequest(id, approve),

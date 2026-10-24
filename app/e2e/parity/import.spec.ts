@@ -175,7 +175,8 @@ test("Format card: unlock, then a dialog names the disk; Return does not erase",
   await page.keyboard.press("Enter");
   await expect(confirm).toBeVisible();
   await confirm.getByRole("button", { name: "Erase" }).click();
-  await expect.poll(async () => (await app.calls("format_card")).length).toBe(1);
+  await expect.poll(async () => (await app.calls("format_card")).map((c) => c.args.req)).toEqual([{ device: "/dev/disk9", volume_uuid: expect.any(String), label: "DVR", confirm: true }]);
+  await expect(sheet(page)).toHaveCount(0);
 });
 
 test("an agent's format request waits for the person's click", async ({ app, page }) => {
