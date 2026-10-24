@@ -163,7 +163,7 @@ Each trap names the guard. A guard refuses before any download or write.
 | Every production radio has full-speed USB (12 Mb/s), H7 included | `usb_speed` holds a measured speed (Pocket, GX12) or None, never an assumed faster one |
 | A chip radio has no card to pull | Write route by storage kind (2.3) |
 | Serial gimbals are factory calibrated (GX12) | No calibration prompt; the Settings editor hides calibration |
-| A large or high-rate `hello.wav` can freeze the GX12's switches at boot (2.12.4 reports) | The voice pack apply on a GX12 checks `SYSTEM/hello.wav`: refuse over a size cap, or over the pack's normal sample rate. The owner's own pack keeps it short |
+| A large or high-rate `hello.wav` can freeze the GX12's switches at boot (2.12.4 reports) | Not built yet. The plan: the voice pack apply on a GX12 checks `SYSTEM/hello.wav` and refuses over a size cap, or over the pack's normal sample rate. Until then, the owner's own pack keeps it short |
 | ELRS upload methods differ per target. The GX12 module has no UART route | The ELRS plan offers only the target's methods; QuadCam uses `etx` |
 | ELRS Lua must match the module's major version. A forced target mismatch left a TX15 module reporting V0.0.0 | After a TX flash, the plan's next step installs `elrs.lua` and removes `elrsV3.lua*` |
 | ROM DFU and the H7 bootloader DFU share `0483:df11` | Tell them apart by the product string |
@@ -221,7 +221,7 @@ the app checks. Where QuadCam already does the step for the Pocket, the table sa
 
 | # | Step by hand | What the app must check or do | QuadCam today |
 |---|---|---|---|
-| 1 | Copied the whole factory storage to the Mac over USB Storage | A card backup exists and is newer than the last write. On a chip radio this is the only copy of the models | Done (the flash plan requires a backup) |
+| 1 | Copied the whole factory storage to the Mac over USB Storage | A card backup exists and is newer than the last write. On a chip radio this is the only copy of the models | Partly: the flash plan requires a backup, but does not check it is newer than the last write |
 | 2 | Downloaded `edgetx-firmware-v2.12.5.zip` and matched its SHA-256 to the release | The release digest, else the digest recorded at the first download | Done |
 | 3 | Took `gx12-<hash>.bin` from the zip | One file matches the board's names. The image names `edgetx-gx12-2.12.5` | Pocket only: `BOARDS` lists `pocket` |
 | 4 | Patched the splash: found `SPS\0` once, 0x80 0x40, 1,024 bytes, `SPE`; decoded it back | The same marker checks as the Pocket. The `Splash` pair (`gx12`, 2.12.5) proven | Pocket 2.12.4 only |

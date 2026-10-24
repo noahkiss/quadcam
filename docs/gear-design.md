@@ -2189,8 +2189,9 @@ Refusals are exit code 3 on the CLI and an error with the code and the reason ov
 - **Card:** each file read back and compared. On a mismatch QuadCam writes the backed-up bytes
   back at once and reports both.
 - **Sim:** the file read back and parsed.
-- **Flash:** after the radio reboots, QuadCam asks for USB Storage mode and reads `semver`;
-  for ELRS, the device-info ping when available.
+- **Flash:** after the radio reboots, QuadCam asks the person to connect in USB Storage mode.
+  Reading `semver` back is not built yet (radio-design 3.1 step 10). For ELRS, the
+  device-info ping when available.
 
 ## 9. Testing strategy
 
