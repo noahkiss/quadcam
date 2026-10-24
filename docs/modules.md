@@ -82,7 +82,7 @@ Settings > Modules shows the ffmpeg that is in use. The Homebrew cask does not i
 
 - QuadCam downloads with `/usr/bin/curl`, over HTTPS only. A downloaded file carries no quarantine attribute. If a module folder has one (a file copied in by hand), QuadCam removes it only after the checksum matched.
 - Both pinned modules are signed with their maker's Developer ID and notarized by Apple. Each pin names its maker's Apple Team ID (`team_id`), and an install refuses an executable that this team did not sign. A newer pin from `modules.json` keeps the built-in pin's team and release path. A pin without a team ID gets a local ad-hoc signature for an unsigned binary after the checksum matched.
-- `installed.json` in the version folder records each tool's SHA-256. Before a tool runs, QuadCam checks the file against it. A changed file is refused: "ffmpeg was changed after install; reinstall it."
+- `installed.json` in the version folder records each tool's SHA-256. Before a tool runs, QuadCam checks the file against it. The check covers the tool's executable only, not other files in its folder (esptool unpacks to a folder of support files). A changed file is refused: "ffmpeg was changed after install; reinstall it."
 - A module runs only as a separate process, by its full path, with an argument list (never a shell). Nothing is loaded into QuadCam itself.
 
 ### How the pins were checked

@@ -286,7 +286,7 @@ pub fn install(
 /// The installed version of a module, read from its folder (the newest when there are
 /// several), with that version's folder.
 pub fn installed(module_dir: &Path) -> Option<(Installed, PathBuf)> {
-    let mut found: Vec<(Installed, PathBuf)> = std::fs::read_dir(module_dir)
+    let found: Vec<(Installed, PathBuf)> = std::fs::read_dir(module_dir)
         .ok()?
         .flatten()
         .filter(|e| !e.file_name().to_string_lossy().starts_with('.'))
@@ -297,19 +297,58 @@ pub fn installed(module_dir: &Path) -> Option<(Installed, PathBuf)> {
             Some((rec, dir))
         })
         .collect();
-    found.sort_by(|a, b| {
-        if super::manifest::newer(&a.0.version, &b.0.version) {
+    // Two folders of the same version (a copy) compare equal: a total order.
+    let order = |a: &str, b: &str| {
+        use super::manifest::newer;
+        if newer(a, b) {
             std::cmp::Ordering::Greater
-        } else {
+        } else if newer(b, a) {
             std::cmp::Ordering::Less
+        } else {
+            std::cmp::Ordering::Equal
         }
-    });
-    found.pop()
+    };
+    found
+        .into_iter()
+        .max_by(|a, b| order(&a.0.version, &b.0.version).then_with(|| a.1.cmp(&b.1)))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn installed_picks_the_newest_and_takes_a_copied_folder() {
+        let d = tempfile::tempdir().unwrap();
+        let rec = |dir: &str, version: &str| {
+            let r = Installed {
+                name: "x".into(),
+                version: version.into(),
+                installed_at: String::new(),
+                license: String::new(),
+                license_url: String::new(),
+                source: String::new(),
+                homepage: String::new(),
+                assets: vec![],
+                tools: BTreeMap::new(),
+                size: 0,
+            };
+            std::fs::create_dir_all(d.path().join(dir)).unwrap();
+            std::fs::write(
+                d.path().join(dir).join(RECORD),
+                serde_json::to_vec(&r).unwrap(),
+            )
+            .unwrap();
+        };
+        // Many folders of one version: a comparator without Equal may panic in the sort.
+        for i in 0..40 {
+            rec(&format!("1.0 copy {i}"), "1.0");
+        }
+        rec("2.0", "2.0");
+        let (r, dir) = installed(d.path()).unwrap();
+        assert_eq!(r.version, "2.0");
+        assert!(dir.ends_with("2.0"));
+    }
 
     #[test]
     fn mach_o_detection() {
