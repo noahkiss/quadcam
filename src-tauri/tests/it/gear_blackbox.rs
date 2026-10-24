@@ -260,6 +260,22 @@ fn an_erase_that_does_not_finish_keeps_the_pull_and_says_so() {
         .unwrap()
         .contains("did not finish"));
     assert_eq!(b.cues.spoken(), vec!["Blackbox failed on The FC."]);
+    // The chip finishes later: the next pull finds the flash empty and marks the pull
+    // erased, so it bounds the flights of the pulls after it.
+    fc.finish_erase();
+    let r = pull(&b).unwrap();
+    assert!(r.pull.is_none());
+    assert!(
+        r.notes.iter().any(|n| n.contains("now counts as erased")),
+        "{:?}",
+        r.notes
+    );
+    let list = b.core.gear_blackbox(&BlackboxFilter::default()).unwrap();
+    assert_eq!(list.len(), 1);
+    assert!(list[0].pull.erased);
+    // Once marked, an empty flash changes nothing more.
+    let r = pull(&b).unwrap();
+    assert!(!r.notes.iter().any(|n| n.contains("now counts as erased")));
 }
 
 #[test]

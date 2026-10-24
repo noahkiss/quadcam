@@ -291,6 +291,10 @@ impl FakeFc {
         self.flash(|f| f.stuck_erase = true);
         self
     }
+    /// A stuck erase ends now, as a slow chip's would.
+    pub fn finish_erase(&self) {
+        self.flash(|f| f.erasing = 0);
+    }
     /// The flash bytes now.
     pub fn dataflash(&self) -> Vec<u8> {
         self.flash(|f| f.image.clone())

@@ -1982,7 +1982,9 @@ ran. `gear/blackbox.rs::link` pairs a pull's logs with the flights of the FC's a
 logs, 7.6) that ended before the pull and started after the device's last erased pull, by order:
 the newest flight-sized log (32 KB or more) with the newest flight, and so on back. Extra logs or
 flights stay unpaired. Each pair carries `fits`: bytes per second of flight within half to double the
-median pair (three pairs or more). The result carries a note that this is a guess. Matching the
+median pair (three pairs or more). The result carries a note that this is a guess. A pull that
+finds the flash empty marks the device's latest pull erased (`erase_note` says so), so a pull
+whose erase timed out or was skipped still bounds the pairing once the flash reads empty. Matching the
 blackbox RC traces with the radio's 10 Hz logs needs the decoder and is not done here.
 
 **Header reader, not a decoder.** `bf/blackbox.rs` reads `H name:value` lines: firmware revision,

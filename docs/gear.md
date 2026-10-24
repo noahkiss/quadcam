@@ -228,8 +228,8 @@ refused ("USB heat") and reads nothing; unplug the battery, or force the pull (`
 --force`). A forced pull still
 never starts an erase it could not finish: the erase estimate (4 s per MiB, 20 to 120 s) plus 10 s
 must fit in the time left, else the erase is skipped and the answer says so. With no battery in,
-there is no timer. With a battery in and no timer counting (reads paused, or the FC plugged in
-moments ago), the pull runs and its answer warns.
+there is no timer. With a battery in and no timer counting (reads paused, the FC plugged in
+moments ago, or the app not running), the pull runs and its answer warns.
 
 **Other programs and Pause reads.** A pull refuses a port another program has open. The on-connect
 step skips a port whose reads you paused; a pull you start yourself still runs.
@@ -241,8 +241,9 @@ step skips a port whose reads you paused; a pull you start yourself still runs.
 **Dates and flights.** A flight controller has no clock, so its logs read `0000-01-01`. QuadCam
 dates a pull by the day it ran. If the FC is linked to an aircraft (Overview, or `gear devices
 save --aircraft`), the Blackbox segment pairs the pull's logs with that aircraft's flights from the
-radio logs **by order**, newest log with newest flight, since the previous erased pull. This is a
-guess: the segment's column reads "Flight, paired by order". Logs under 32 KB (test arms) are skipped. Pairs whose size per
+radio logs **by order**, newest log with newest flight, since the previous erased pull. A pull
+whose erase did not finish, or was skipped, counts as erased once a later pull finds the flash
+empty. This is a guess: the segment's column reads "Flight, paired by order". Logs under 32 KB (test arms) are skipped. Pairs whose size per
 second of flight differ from the others by more than 2 times are marked "Size does not fit". QuadCam
 does not decode the flight data yet.
 

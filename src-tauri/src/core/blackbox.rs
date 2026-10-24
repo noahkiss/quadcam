@@ -311,6 +311,19 @@ impl Core {
         if used == 0 {
             res.notes
                 .push("The blackbox flash is empty; nothing to pull.".into());
+            // The flash was erased after the latest pull, even one whose erase timed out or
+            // was skipped: that pull bounds the next one's flights (`blackbox_flights`).
+            let pulls = self.pulls();
+            if let Some(mut last) = pulls.latest(&id).filter(|l| !l.erased && l.used > 0) {
+                last.erased = true;
+                last.erase_note = Some("The flash read empty at a later pull.".into());
+                pulls.save(&last)?;
+                self.hooks.gear_changed();
+                res.notes.push(format!(
+                    "The pull {} now counts as erased: the flash was erased after it.",
+                    last.id
+                ));
+            }
             return Ok((info, res));
         }
 
