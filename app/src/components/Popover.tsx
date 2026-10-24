@@ -10,10 +10,16 @@ interface Props {
   children: ReactNode;
 }
 
-/** A panel under its button. A press outside it closes it, as does Escape, which returns focus
- *  to the button. */
+/** A panel under its button. On open, focus moves to its first control. A press outside it
+ *  closes it, as does Escape, which returns focus to the button. */
 export function Popover({ label, anchor, onClose, children }: Props) {
   const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const p = ref.current;
+    if (!p || p.contains(document.activeElement)) return;
+    p.querySelector<HTMLElement>("input, select, textarea, button, [href], [tabindex]:not([tabindex='-1'])")?.focus();
+  }, []);
 
   useEffect(() => {
     const away = (e: PointerEvent) => {

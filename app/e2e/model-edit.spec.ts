@@ -5,7 +5,7 @@
 // verifies. Axe in both themes.
 import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
-import { axeSchemes, expect, test, type AppFixture } from "./fixtures";
+import { axeSchemes, dialog, expect, test, type AppFixture } from "./fixtures";
 
 const RADIO_ID = "radio-1f2e3d4c5b6a7980";
 const RADIO_LINK = `{ kind: "volume", mount: "/Volumes/RADIO", volume_uuid: null, bus_protocol: "USB", whole_disk: "disk4" }`;
@@ -58,6 +58,7 @@ test("a timer edit stages, and a second edit of the same timer joins the same ch
   ]);
   // Undo discards the change.
   await page.getByRole("button", { name: "Undo model edits" }).click();
+  await dialog(page, "Undo model edits?").getByRole("button", { name: "Undo" }).click();
   await expect(page.getByText(/model edits? (is|are) staged/)).toHaveCount(0);
   await expect(timers.getByLabel("Timer 2 name")).toHaveValue("FLT");
 });

@@ -46,6 +46,16 @@ test("the clip clock skew saves inside tunables", async ({ app, page }) => {
   expect(t.tolerance_s).toBe(30);
 });
 
+test("Return in a field saves, as Done does", async ({ app, page }) => {
+  await page.getByRole("button", { name: "Settings" }).click();
+  const dlg = settingsDialog(page);
+  await dlg.getByRole("button", { name: "Photos" }).click();
+  await dlg.getByLabel("Album (empty: library only)").fill("Quads");
+  await page.keyboard.press("Enter");
+  await expect(dlg).toBeHidden();
+  await expect.poll(async () => changed(app)).toEqual({ photosAlbum: "Quads" });
+});
+
 test("Cancel and Escape save nothing", async ({ app, page }) => {
   await page.getByRole("button", { name: "Settings" }).click();
   const dlg = settingsDialog(page);

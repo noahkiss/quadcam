@@ -39,6 +39,9 @@ test("arrow keys move the selection", async ({ page }) => {
   await expect(clipCell(page, "backyard-loops")).toHaveAttribute("aria-selected", "true");
   await page.keyboard.press("ArrowRight");
   await expect(clipCell(page, "gap-run")).toHaveAttribute("aria-selected", "true");
+  // One Tab stop in the grid: the clip the arrows reached.
+  await expect(page.locator('[role="gridcell"][tabindex="0"]')).toHaveCount(1);
+  await expect(clipCell(page, "gap-run")).toHaveAttribute("tabindex", "0");
 });
 
 test("number keys rate, P X U flag, and Command-Z undoes", async ({ app, page }) => {
@@ -93,6 +96,8 @@ test("Command-Delete moves to the Trash after asking; undo puts it back", async 
   await page.keyboard.press("Meta+Backspace");
   const dlg = dialog(page, "Move river-dive to the Trash?");
   await expect(dlg).toBeVisible();
+  // A destructive question starts on Cancel.
+  await expect(dlg.getByRole("button", { name: "Cancel" })).toBeFocused();
   await dlg.getByRole("button", { name: "Move to Trash" }).click();
   await expect(card(page, "river-dive")).toHaveCount(0);
   await expect(page.getByRole("status")).toContainText("moved to the Trash");

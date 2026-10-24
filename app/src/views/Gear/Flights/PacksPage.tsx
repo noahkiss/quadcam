@@ -181,7 +181,7 @@ function PackSheet({ pack, types, onClose }: { pack: Pack; types: string[]; onCl
       actions={
         <>
           {!isNew && (
-            <Button type="submit" value="delete" variant="danger-ghost">
+            <Button variant="danger-ghost" onClick={() => void close("delete")}>
               Delete…
             </Button>
           )}
@@ -279,7 +279,7 @@ function TypeSheet({ t: start, onClose }: { t: PackType; onClose: () => void }) 
       actions={
         <>
           {!isNew && (
-            <Button type="submit" value="delete" variant="danger-ghost">
+            <Button variant="danger-ghost" onClick={() => void close("delete")}>
               Delete…
             </Button>
           )}

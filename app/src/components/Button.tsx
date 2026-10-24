@@ -24,6 +24,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       ref={ref}
       type={type}
       className={[styles.button, styles[variant], styles[size], iconOnly && styles.iconOnly, className].filter(Boolean).join(" ")}
+      data-variant={variant}
       {...rest}
     >
       {icon && <Icon name={icon} size={size === "sm" ? 14 : 16} />}

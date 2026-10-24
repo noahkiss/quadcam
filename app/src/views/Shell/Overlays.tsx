@@ -44,10 +44,10 @@ function AskDialog() {
       onClose={(v) => req?.resolve(v === "ok" ? (req.input == null ? true : input.current?.value ?? "") : null)}
       actions={
         <>
-          <Button type="submit" value="cancel" variant="ghost">
+          <Button type="submit" value="cancel" variant="ghost" autoFocus={req?.input == null && !!req?.danger}>
             Cancel
           </Button>
-          <Button type="submit" value="ok" variant={req?.danger ? "danger" : "primary"} autoFocus={req?.input == null}>
+          <Button type="submit" value="ok" variant={req?.danger ? "danger" : "primary"} autoFocus={req?.input == null && !req?.danger}>
             {req?.ok || "OK"}
           </Button>
         </>

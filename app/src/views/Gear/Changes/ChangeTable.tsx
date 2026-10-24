@@ -12,6 +12,7 @@ import { MoreMenu } from "../../../components/dash/MoreMenu";
 import { StatusDot, type StatusTone } from "../../../components/dash/StatusDot";
 import { fmtWhen } from "../../../lib/backups";
 import { STATUS_HINT, STATUS_LABEL, summary, WAITING } from "../../../lib/bench";
+import { discardWithAsk } from "./discard";
 import styles from "./Changes.module.css";
 
 const TONE: Partial<Record<StagedChange["status"], StatusTone>> = { verified: "ok", failed: "error", applied: "warn" };
@@ -49,7 +50,6 @@ const state: Column<StagedChange> = { key: "status", header: "Status", width: "7
 export function StagedTable({ rows, label, present }: { rows: StagedChange[]; label: string; present: boolean }) {
   const open = useStore((s) => s.openApply);
   const setStatus = useStore((s) => s.setChangeStatus);
-  const discard = useStore((s) => s.discardChange);
   const columns: Column<StagedChange>[] = [
     title,
     edit,
@@ -81,7 +81,7 @@ export function StagedTable({ rows, label, present }: { rows: StagedChange[]; la
             items={[
               { label: [`By ${c.editor === "agent" ? "an agent" : "you"}`, fmtWhen(c.history?.at(-1)?.at)].filter(Boolean).join(", "), disabled: true, run: () => {} },
               null,
-              { label: "Discard", icon: "trash-bin-trash", danger: true, run: () => void discard(c.id) },
+              { label: "Discard", icon: "trash-bin-trash", danger: true, run: () => void discardWithAsk(c) },
             ]}
           />
         </span>
