@@ -11,8 +11,9 @@ pub const DEFAULT_ALBUM: &str = "Drone";
 
 pub trait PhotosLibrary: Send + Sync {
     /// Adds every file as a video asset in one change, and into `album` when given
-    /// (created if missing). All or nothing: an Err means none were added.
-    fn add_videos(&self, files: &[PathBuf], album: Option<&str>) -> Result<()>;
+    /// (created if missing). An Err means none were added. Ok holds the files Photos would
+    /// not take (no asset made for them); every other file was added.
+    fn add_videos(&self, files: &[PathBuf], album: Option<&str>) -> Result<Vec<PathBuf>>;
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, specta::Type)]
@@ -65,7 +66,17 @@ pub fn share(
         return Ok(report);
     }
     match lib.add_videos(&good, album.as_deref()) {
-        Ok(()) => report.added = good,
+        Ok(skipped) => {
+            for f in good {
+                if skipped.contains(&f) {
+                    report
+                        .failed
+                        .push((f, "Photos did not take this file".to_string()));
+                } else {
+                    report.added.push(f);
+                }
+            }
+        }
         Err(e) => report
             .failed
             .extend(good.into_iter().map(|f| (f, format!("{e:#}")))),
@@ -139,7 +150,7 @@ mod photokit {
     }
 
     impl PhotosLibrary for PhotoKit {
-        fn add_videos(&self, files: &[PathBuf], album: Option<&str>) -> Result<()> {
+        fn add_videos(&self, files: &[PathBuf], album: Option<&str>) -> Result<Vec<PathBuf>> {
             // Add-only access is enough for the library; an album needs read-write to find it.
             let level = if album.is_some() {
                 PHAccessLevel::ReadWrite
@@ -154,17 +165,23 @@ mod photokit {
                 .collect();
             let existing = album.and_then(find_album);
             let album = album.map(str::to_string);
+            // The files PhotoKit made no creation request for: it skips them in silence.
+            let skipped = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+            let skipped_in = skipped.clone();
             let change = RcBlock::new(move || unsafe {
                 let mut placeholders: Vec<Retained<PHObjectPlaceholder>> = Vec::new();
-                for url in &urls {
-                    if let Some(req) =
-                        PHAssetChangeRequest::creationRequestForAssetFromVideoAtFileURL(url)
-                    {
-                        if let Some(ph) = req.placeholderForCreatedAsset() {
-                            placeholders.push(ph);
+                let mut skip = Vec::new();
+                for (i, url) in urls.iter().enumerate() {
+                    match PHAssetChangeRequest::creationRequestForAssetFromVideoAtFileURL(url) {
+                        Some(req) => {
+                            if let Some(ph) = req.placeholderForCreatedAsset() {
+                                placeholders.push(ph);
+                            }
                         }
+                        None => skip.push(i),
                     }
                 }
+                *skipped_in.lock().unwrap_or_else(|e| e.into_inner()) = skip;
                 if let Some(title) = &album {
                     let req = match &existing {
                         Some(c) => PHAssetCollectionChangeRequest::changeRequestForAssetCollection(c),
@@ -180,7 +197,12 @@ mod photokit {
             });
             let lib = unsafe { PHPhotoLibrary::sharedPhotoLibrary() };
             unsafe { lib.performChangesAndWait_error(RcBlock::as_ptr(&change)) }
-                .map_err(|e| anyhow!("Photos refused the import: {}", e.localizedDescription()))
+                .map_err(|e| anyhow!("Photos refused the import: {}", e.localizedDescription()))?;
+            let skipped = skipped.lock().unwrap_or_else(|e| e.into_inner());
+            Ok(skipped
+                .iter()
+                .filter_map(|&i| files.get(i).cloned())
+                .collect())
         }
     }
 }
@@ -191,10 +213,12 @@ mod photokit {
 pub struct Recorder {
     pub calls: std::sync::Mutex<Vec<(Vec<PathBuf>, Option<String>)>>,
     pub fail: bool,
+    /// Files to report as not taken, as PhotoKit does for a file it will not import.
+    pub skip: Vec<PathBuf>,
 }
 
 impl PhotosLibrary for Recorder {
-    fn add_videos(&self, files: &[PathBuf], album: Option<&str>) -> Result<()> {
+    fn add_videos(&self, files: &[PathBuf], album: Option<&str>) -> Result<Vec<PathBuf>> {
         self.calls
             .lock()
             .unwrap()
@@ -202,7 +226,11 @@ impl PhotosLibrary for Recorder {
         if self.fail {
             bail!("Photos refused the import: mock failure");
         }
-        Ok(())
+        Ok(files
+            .iter()
+            .filter(|f| self.skip.contains(f))
+            .cloned()
+            .collect())
     }
 }
 
@@ -254,5 +282,22 @@ mod tests {
             "an empty album means library only"
         );
         assert!(share(&m, &[], None).is_err());
+    }
+
+    #[test]
+    fn a_file_photos_skips_is_reported_failed_not_added() {
+        let d = tempfile::tempdir().unwrap();
+        let a = d.path().join("a.mp4");
+        let b = d.path().join("b.mp4");
+        std::fs::write(&a, b"x").unwrap();
+        std::fs::write(&b, b"x").unwrap();
+        let m = Recorder {
+            skip: vec![b.clone()],
+            ..Default::default()
+        };
+        let r = share(&m, &[a.clone(), b.clone()], None).unwrap();
+        assert_eq!(r.added, vec![a]);
+        assert_eq!(r.failed.len(), 1);
+        assert_eq!(r.failed[0].0, b);
     }
 }
