@@ -163,7 +163,7 @@ Each trap names the guard. A guard refuses before any download or write.
 | Every production radio has full-speed USB (12 Mb/s), H7 included | `usb_speed` holds a measured speed (Pocket, GX12) or None, never an assumed faster one |
 | A chip radio has no card to pull | Write route by storage kind (2.3) |
 | Serial gimbals are factory calibrated (GX12) | No calibration prompt; the Settings editor hides calibration |
-| A large or high-rate `hello.wav` can freeze the GX12's switches at boot (2.12.4 reports) | Not built yet. The plan: the voice pack apply on a GX12 checks `SYSTEM/hello.wav` and refuses over a size cap, or over the pack's normal sample rate. Until then, the owner's own pack keeps it short |
+| A large or high-rate `hello.wav` can freeze the GX12's switches at boot (2.12.4 reports) | `hello_wav` on the profile (`HelloWavCap`, set on `gx12` only). A card files plan (a voice pack, an override, a storage pack) on such a board checks every `SOUNDS/<lang>/SYSTEM/hello.wav` it puts (**Boot sound fits the board**, `incompatible`): over 163,840 bytes or over 32,000 Hz refuses, and the refusal names the file, its size or rate, and the limit. The cap comes from EdgeTX's own packs (`EdgeTX/edgetx-sdcard-sounds`, main on 2026-10-30): 26 `hello.wav` files of 57,646 to 158,764 bytes (`ko` the largest), mono 16-bit PCM at 16 or 32 kHz. A file whose rate cannot be read is held to the size cap |
 | ELRS upload methods differ per target. The GX12 module has no UART route | The ELRS plan offers only the target's methods; QuadCam uses `etx` |
 | ELRS Lua must match the module's major version. A forced target mismatch left a TX15 module reporting V0.0.0 | After a TX flash, the plan's next step installs `elrs.lua` and removes `elrsV3.lua*` |
 | ROM DFU and the H7 bootloader DFU share `0483:df11` | Tell them apart by the product string |
@@ -191,7 +191,7 @@ What shipped:
 - **Fields added to 2.1's list:** `variants`, `look_alikes`, `target_history`, `fork`,
   `usb_speed`, `sd_pack`, `yaml_schema`, `slots` (each switch and pot slot with what the
   hardware reads and EdgeTX's default type; the fitted type stays `radio.yml`'s), `trims`,
-  `usb_ports`, `internal_rf`, `quirks`. `elrs` became a list: a board sold in 2.4 GHz and
+  `usb_ports`, `internal_rf`, `hello_wav` (the boot sound cap, 2.4), `quirks`. `elrs` became a list: a board sold in 2.4 GHz and
   900 MHz versions (Jumper T20, T14, T-Pro) has one target per version, and the ELRS plan takes
   a board's target only when there is one.
 - **Detection.** `Connected.radio` carries the profile of a radio volume (from `radio.yml`'s
@@ -230,7 +230,7 @@ the app checks. Where QuadCam already does the step for the Pocket, the table sa
 | 7 | Read the full 1 MB flash (`dfu-util -a 0 -s 0x08000000:1048576 -U`) | `dfu::read_verified`: two equal reads, not all zeros, saved and read back from disk. The current image names `gx12` | Done for any board in `BOARDS` |
 | 8 | Wrote the image at `0x08000000` and left DFU (`-s 0x08000000:leave -D`) | The layout string gives 1 MB. 2,048-byte transfers. Segment read-back, full read-back, leave | Done for any board in `BOARDS` |
 | 9 | The radio restarted. The owner chose USB Storage | Ask the owner to power-cycle if the screen stays dark | Done (text) |
-| 10 | Read `radio.yml`: `semver: 2.12.5`, `board: gx12` | Read the version in Storage mode and record it on the saved radio. Link the DFU serial to the radio | Partly: the report leaves the read to the person |
+| 10 | Read `radio.yml`: `semver: 2.12.5`, `board: gx12` | Read the version in Storage mode and record it on the saved radio. Link the DFU serial to the radio | Done: the flash waits up to 3 minutes for the storage and reports **Read the version** (gear-design 8.4); a verified flash links the DFU serial |
 | 11 | Copied `elrs.lua` into `SCRIPTS/TOOLS/` and deleted `elrsV3.lua` and `elrsV3.luac` | A post-flash step, staged as a card change: the Lua that matches the module's ELRS major | Missing |
 | 12 | Renamed the volume from `NO NAME` to a short label for the radio | Offer a volume label from the radio's saved name (`diskutil rename`). Labels help a person; QuadCam's identity stays the card markers | Missing |
 
@@ -268,23 +268,23 @@ table maps each thing it writes to what QuadCam has.
 | Patcher | What it writes | QuadCam today | Gap |
 |---|---|---|---|
 | Model name | `header.name` | `ModelOp::Rename` | none |
-| Second model | Clones model00 to model01, timer values 0 | `Edit::ModelCopy` | Cross-board copy: stage 2 |
+| Second model | Clones model00 to model01, timer values 0 | `Edit::ModelCopy`; `Edit::ModelImport` across boards (stage 2) | none |
 | ELRS model ID | `header.modelId` 0 and 1 | `ModelOp::SetModelId` | none |
-| Mixes | CH3 throttle with the turtle cut; CH5 arm with the turtle pulses; CH6, CH7 at weight -100; CH10 blackbox erase on a trim; CH11 the wheel; CH12-15 trims as sim buttons; CH16 +100 | `ModelOp::SetMixes` | Generated from the assignment (5.3), not typed by hand |
-| Logical switches | L1-L23: the flying latch, battery alarms, the finder edges, the link test, the turtle gate, the DVR reminder | `ModelOp::SetLogicalSwitch` | Generated from the assignment |
-| Special functions | Callouts per position (`!1x`), finder screen on edges, turtle sound and haptic, logging every 0.1 s, battery haptics, DVR reminder, timer reset, trims as read-outs | `SpecialFunctions`, `MoveSpecialFunction`, callouts, logging | Generated from the assignment |
-| Switch warnings | SA up only, as the 2.12 list | `SetSwitchWarnings` | The editor picks which controls are checked |
+| Mixes | CH3 throttle with the turtle cut; CH5 arm with the turtle pulses; CH6, CH7 at weight -100; CH10 blackbox erase on a trim; CH11 the wheel; CH12-15 trims as sim buttons; CH16 +100 | `ModelOp::SetMixes`, generated from the assignment (5.3) | none |
+| Logical switches | L1-L23: the flying latch, battery alarms, the finder edges, the link test, the turtle gate, the DVR reminder | `ModelOp::SetLogicalSwitch`, generated from the assignment | none |
+| Special functions | Callouts per position (`!1x`), finder screen on edges, turtle sound and haptic, logging every 0.1 s, battery haptics, DVR reminder, timer reset, trims as read-outs | `SpecialFunctions`, `MoveSpecialFunction`, callouts, logging, generated from the assignment | none |
+| Switch warnings | SA up only, as the 2.12 list | `SetSwitchWarnings`, from the template's `switch_warnings` jobs | none |
 | Timers | TOT (lifetime), FLT (this flight), DVR (reminder), swap | `SetTimer`, `RemoveTimer`, `SwapTimers` | none |
 | Telemetry screens | Screen 1 values; screen 2 `volt`, screen 3 `finder` | `SetScreenValues`, `SetScreen` | none for the YAML |
-| Lua screen files | `SCRIPTS/TELEMETRY/volt.lua`, `finder.lua` | `Edit::CardFiles` exists for voice | QuadCam must ship its own scripts (MIT, its own code) and install them. `finder.lua` reads `sd` by name: it must take the finder control from the assignment |
-| Custom sounds | Nine clips in `SOUNDS/en/`, copied only when missing | Voice packs and `CardFiles` | The setup names the clips it needs; a missing clip is a check |
-| Checklist | Text files, flags off | `SetChecklist`, `Edit::Checklist` | B&W line length is 20 on 128x64: take it from the profile |
+| Lua screen files | `SCRIPTS/TELEMETRY/volt.lua`, `finder.lua` | QuadCam's own `volt.lua` and `finder.lua` (`setup/lua.rs`), put as `Edit::CardText`; `finder.lua` takes the finder control from the assignment; a script QuadCam did not write stays | none |
+| Custom sounds | Nine clips in `SOUNDS/en/`, copied only when missing | Voice packs and `CardFiles`; the generator lists the clips the functions play, and a missing one is a warning | none |
+| Checklist | Text files, flags off | `SetChecklist`, `Edit::Checklist`; the line width comes from the board (`checklist_width`, 20 on 128x64) | none |
 | `radio.yml` scalars | `hapticMode: mode_nokeys`, volumes, `currModel` | `RadioOp::SetScalar`, `SelectModel` | none |
-| `radio.yml` switch types | Fixed SA, SD `2POS` and SE `TOGGLE` on the Pocket | Missing | A radio op to set `switchConfig` and `potsConfig` types (5.4) |
+| `radio.yml` switch types | Fixed SA, SD `2POS` and SE `TOGGLE` on the Pocket | `RadioOp::SetControlType` (`switchConfig` and `potsConfig`, in the file's own case), generated from the setup | none |
 | Old models | Deletes other `model*.yml` | `Edit::ModelDelete` | none |
-| Retired items | Removes callouts and functions older revisions made | Ownership by track name and by change | Ownership per setup (5.3) |
+| Retired items | Removes callouts and functions older revisions made | Ownership by track name, by change and per setup (5.3) | none |
 | Sensor slots | `{RxBt}` and friends become `tele(N)`; refuses with no sensor | The same rule | A new GX12 model has no sensors. A copy from the Pocket brings them; a fresh model needs "discover sensors" on the radio first |
-| Custom switches | not done | Missing | SW1-SW6 type, group, start state and LED colours per model (5.4) |
+| Custom switches | not done | Read (`ModelView.custom_switches`); a cross-board import carries them | Writing SW1-SW6 type, group, start state and LED colours per model (5.4) |
 | Line endings | Keeps CRLF | Done | none |
 | `checksum: 0` | On every edited file | Done | none |
 

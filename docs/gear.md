@@ -608,6 +608,10 @@ pack records its firmware family (`edgetx`) in `pack.json`.
   each radio's overrides**. A radio whose card is connected has **Review…**, which opens the
   apply sheet (it mounts and unmounts the card as usual). The others keep the staged change
   and apply it when they are next plugged in, like any staged change.
+- **The boot sound on a GX12.** A large or high-rate `hello.wav` can freeze a GX12's switches
+  at boot. The apply refuses a `SOUNDS/<lang>/SYSTEM/hello.wav` over 163,840 bytes (160 KB,
+  about 2.5 s) or over 32,000 Hz, and names the file, its size or rate, and the limit. Those
+  limits sit just above what EdgeTX's own voice packs ship. Other boards have no limit.
 - **Delete.** **Delete…** asks first, and names the radios that chose the pack. It
   removes the pack's folder and clears those radios' choice, and every line override that
   takes the pack's take; radio cards keep the sounds they have, and a staged voice change keeps
@@ -1862,7 +1866,18 @@ lists the profiles.
      back before it writes the next;
    - reads the whole image back and compares every byte;
    - leaves DFU mode, and the radio restarts.
-5. Connect the radio in USB Storage mode to see its version.
+5. On the radio, pick **USB Storage**. QuadCam waits up to 3 minutes for the radio's storage,
+   reads `semver` and `board` from `RADIO/radio.yml`, and compares them with the image
+   (**Read the version**). It mounts and unmounts the storage as for any card job, and records
+   the version on the saved radio.
+   - The same version and board: the flash is verified.
+   - Another version or board: the flash fails, though the bytes were written and read back.
+     Turn the radio off and on, and connect it in USB Storage mode again. If it still reads the
+     old version, flash again.
+   - No storage within 3 minutes (or **Stop**): the step is skipped and the flash is verified
+     by its bytes. Connect the radio in USB Storage mode to see its version.
+
+A restore from a saved copy ends with the same step.
 
 If a segment or the final read back differs, QuadCam does not start the image. The radio
 stays in DFU mode: select Apply again, or unplug it, turn it off and plug it in again.
@@ -1913,6 +1928,7 @@ Where a failure can leave the radio, and what QuadCam does:
 | A block does not program | A corrupt image | Caught by the segment read back; the image is not started |
 | The final read back differs | A corrupt image | The image is not started |
 | The image is not the board's or the version's | A wrong file | Refused in the plan |
+| `radio.yml` reads another version after the restart | The radio did not start the new image | The flash fails; the report names both versions |
 
 ### Flash a Betaflight FC (preview)
 

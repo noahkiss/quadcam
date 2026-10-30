@@ -2189,8 +2189,14 @@ Refusals are exit code 3 on the CLI and an error with the code and the reason ov
 - **Card:** each file read back and compared. On a mismatch QuadCam writes the backed-up bytes
   back at once and reports both.
 - **Sim:** the file read back and parsed.
-- **Flash:** after the radio reboots, QuadCam asks the person to connect in USB Storage mode.
-  Reading `semver` back is not built yet (radio-design 3.1 step 10). For ELRS, the
+- **Flash:** after the radio reboots, the person picks USB Storage. The flash job waits up to
+  3 minutes (a fake flasher looks once) for a volume whose id is the radio's or an alias, through
+  the card mount cycle (`locate_card`, then `card_quiet_unmount`). It reads `radio.yml`
+  `semver` and `board` and compares them with the image's `edgetx-<board>-<version>` string
+  (radio-design 3.1 step 10). The step is **Read the version**: a match is Done and the flash
+  Verified; another version or board is Failed and so is the flash (`saved` stays true: the
+  bytes were verified); no volume, or Stop, is Skipped and the flash stays Verified. A read
+  version is recorded on the saved radio. A restore ends with the same step. For ELRS, the
   device-info ping when available.
 
 ## 9. Testing strategy
