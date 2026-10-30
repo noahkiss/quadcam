@@ -72,6 +72,26 @@ pub fn read(bytes: &[u8]) -> Result<Pcm> {
     Ok(Pcm { rate, samples })
 }
 
+/// The sample rate in a WAV's format chunk, for any encoding. None: not a RIFF WAV, or no
+/// format chunk.
+pub fn rate(bytes: &[u8]) -> Option<u32> {
+    if bytes.len() < 12 || &bytes[0..4] != b"RIFF" || &bytes[8..12] != b"WAVE" {
+        return None;
+    }
+    let mut at = 12;
+    while at + 8 <= bytes.len() {
+        let size = u32::from_le_bytes(bytes[at + 4..at + 8].try_into().unwrap()) as usize;
+        let body = at + 8;
+        if &bytes[at..at + 4] == b"fmt " {
+            return bytes
+                .get(body + 4..body + 8)
+                .map(|b| u32::from_le_bytes(b.try_into().unwrap()));
+        }
+        at = body.checked_add(size)?.checked_add(size & 1)?;
+    }
+    None
+}
+
 /// A mono 16-bit PCM WAV with a 44-byte header.
 pub fn write(p: &Pcm) -> Vec<u8> {
     let data = p.samples.len() * 2;
@@ -96,6 +116,17 @@ pub fn write(p: &Pcm) -> Vec<u8> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn rate_reads_the_format_chunk_of_any_wav() {
+        let w = write(&Pcm {
+            rate: 16_000,
+            samples: vec![0; 10],
+        });
+        assert_eq!(rate(&w), Some(16_000));
+        assert_eq!(rate(b"\xff\xf3LAME3.100"), None);
+        assert_eq!(rate(&w[..20]), None);
+    }
+
     use super::*;
 
     #[test]

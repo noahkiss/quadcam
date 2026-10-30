@@ -65,6 +65,7 @@ pub const PROFILES: &[RadioProfile] = &[
             slot("P1", Kind::Pot, "FLEX", Some("POT")),
         ],
         trims: 4,
+        hello_wav: None,
         quirks: &[
             "The factory radio.yml had SA, SD and SE types inverted (fixed by hand 2026-09-27).",
         ],
@@ -140,9 +141,10 @@ pub const PROFILES: &[RadioProfile] = &[
             slot("SL2", Kind::Slider, "FLEX", Some("SLIDER")),
         ],
         trims: 4,
+        hello_wav: Some(super::EDGETX_HELLO_WAV),
         quirks: &[
             "Switches can freeze behind the I2C expander (EdgeTX #6159); 2.12 adds a 100 ms poll (PR #6325).",
-            "A large or high-rate hello.wav can freeze the switches at boot (2.12.4 reports): keep it short.",
+            "A large or high-rate hello.wav can freeze the switches at boot (2.12.4 reports): a card write refuses one larger or faster than EdgeTX's own packs ship.",
             "The gimbals are serial and factory calibrated: calibrate only after removing a gimbal.",
         ],
     },
@@ -207,6 +209,7 @@ pub const PROFILES: &[RadioProfile] = &[
             slot("EXT4", Kind::Pot, "FLEX", None),
         ],
         trims: 6,
+        hello_wav: None,
         quirks: &[],
     },
     RadioProfile {
@@ -274,6 +277,7 @@ pub const PROFILES: &[RadioProfile] = &[
             slot("EXT2", Kind::Pot, "FLEX", Some("NONE")),
         ],
         trims: 6,
+        hello_wav: None,
         quirks: &[
             "RadioMaster's page asks for EdgeTX 3.0.0; its own factory pack is 2.12.0 and 2.12.5 builds the target.",
         ],
@@ -335,6 +339,7 @@ pub const PROFILES: &[RadioProfile] = &[
             slot("P2", Kind::Pot, "FLEX", Some("POT")),
         ],
         trims: 4,
+        hello_wav: None,
         quirks: &[
             "A forced ExpressLRS flash with a mismatched target left the module reporting V0.0.0 until the Lua and the firmware matched.",
         ],
@@ -404,6 +409,7 @@ pub const PROFILES: &[RadioProfile] = &[
             slot("EXT2", Kind::Pot, "FLEX", None),
         ],
         trims: 6,
+        hello_wav: None,
         quirks: &[],
     },
     RadioProfile {
@@ -453,6 +459,7 @@ pub const PROFILES: &[RadioProfile] = &[
             slot("P2", Kind::Pot, "FLEX", Some("POT_CENTER")),
         ],
         trims: 4,
+        hello_wav: None,
         quirks: &[
             "The TX12 build lacks serial passthrough, so USB Serial (VCP) may be missing. Not confirmed on hardware.",
         ],
@@ -509,6 +516,7 @@ pub const PROFILES: &[RadioProfile] = &[
             slot("P2", Kind::Pot, "FLEX", Some("POT_CENTER")),
         ],
         trims: 4,
+        hello_wav: None,
         quirks: &[
             "Internal ELRS passthrough needs EdgeTX 2.8.0 or later.",
         ],
@@ -565,6 +573,7 @@ pub const PROFILES: &[RadioProfile] = &[
             slot("P2", Kind::Pot, "FLEX", Some("POT")),
         ],
         trims: 4,
+        hello_wav: None,
         quirks: &[
             "The factory EdgeTX 2.7.0 build 2bdd4974 often fails to flash the internal ExpressLRS module; update EdgeTX first.",
         ],
@@ -620,6 +629,7 @@ pub const PROFILES: &[RadioProfile] = &[
             slot("P3", Kind::Pot, "FLEX", Some("MULTIPOS")),
         ],
         trims: 4,
+        hello_wav: None,
         quirks: &[],
     },
     RadioProfile {
@@ -672,6 +682,7 @@ pub const PROFILES: &[RadioProfile] = &[
             slot("P4", Kind::Pot, "FLEX", Some("NONE")),
         ],
         trims: 5,
+        hello_wav: None,
         quirks: &[
             "A surface radio: wheel and trigger, no gimbals.",
         ],
@@ -724,6 +735,7 @@ pub const PROFILES: &[RadioProfile] = &[
             slot("SD", Kind::Switch, "2POS", Some("2POS")),
         ],
         trims: 4,
+        hello_wav: None,
         quirks: &[
             "Serial passthrough needs USB-VCP set to CLI (EdgeTX #2837).",
         ],
@@ -793,6 +805,7 @@ pub const PROFILES: &[RadioProfile] = &[
             slot("P2", Kind::Pot, "FLEX", Some("POT_CENTER")),
         ],
         trims: 4,
+        hello_wav: None,
         quirks: &[
             "The internal ExpressLRS module cannot recover from a failed flash: Jumper did not wire passthrough. A failed Wi-Fi flash may need the radio opened.",
         ],
@@ -851,6 +864,7 @@ pub const PROFILES: &[RadioProfile] = &[
             slot("P2", Kind::Pot, "FLEX", Some("POT_CENTER")),
         ],
         trims: 4,
+        hello_wav: None,
         quirks: &[
             "Jumper's page says chip storage; the manual, EdgeTX and owners show a card slot.",
         ],
@@ -903,6 +917,7 @@ pub const PROFILES: &[RadioProfile] = &[
             slot("P2", Kind::Pot, "FLEX", Some("POT_CENTER")),
         ],
         trims: 4,
+        hello_wav: None,
         quirks: &[],
     },
     RadioProfile {
@@ -964,6 +979,7 @@ pub const PROFILES: &[RadioProfile] = &[
             slot("P2", Kind::Pot, "FLEX", Some("POT_CENTER")),
         ],
         trims: 4,
+        hello_wav: None,
         quirks: &[
             "Its USB storage reports the product `Bumblebe` (eight letters).",
         ],
@@ -1013,6 +1029,7 @@ pub const PROFILES: &[RadioProfile] = &[
             slot("P2", Kind::Pot, "FLEX", Some("POT")),
         ],
         trims: 4,
+        hello_wav: None,
         quirks: &[],
     },
     RadioProfile {
@@ -1066,6 +1083,7 @@ pub const PROFILES: &[RadioProfile] = &[
             slot("P2", Kind::Pot, "FLEX", Some("POT_CENTER")),
         ],
         trims: 4,
+        hello_wav: None,
         quirks: &[
             "Jumper lists an STM32F407ZET6 (512 KB); EdgeTX builds it for F407xG (1 MB).",
         ],
@@ -1127,6 +1145,7 @@ pub const PROFILES: &[RadioProfile] = &[
             slot("P2", Kind::Pot, "FLEX", Some("POT_CENTER")),
         ],
         trims: 4,
+        hello_wav: None,
         quirks: &[
             "It powers on when plugged in to charge.",
             "EdgeTX 2.11 has a battery calibration bug on it (#6391).",
@@ -1205,6 +1224,7 @@ pub const PROFILES: &[RadioProfile] = &[
             slot("SL4", Kind::Slider, "FLEX", Some("SLIDER")),
         ],
         trims: 8,
+        hello_wav: None,
         quirks: &[
             "It charges at about 4 W, 5 V only; PD chargers do not work.",
             "Simulators may name it Radiomaster TX16S.",
@@ -1289,6 +1309,7 @@ pub const PROFILES: &[RadioProfile] = &[
             slot("SL4", Kind::Slider, "FLEX", Some("SLIDER")),
         ],
         trims: 8,
+        hello_wav: None,
         quirks: &[
             "EdgeTX 2.11 flashed by the bootloader left radios dead (#6241, #7082): flash the new bootloader first, or use DFU.",
         ],
@@ -1358,6 +1379,7 @@ pub const PROFILES: &[RadioProfile] = &[
             slot("P2", Kind::Pot, "FLEX", Some("POT_CENTER")),
         ],
         trims: 4,
+        hello_wav: None,
         quirks: &[
             "EdgeTX 2.11 broke the charge-LED display (#6102).",
             "Some computers do not see it over USB (owner reports).",
@@ -1411,6 +1433,7 @@ pub const PROFILES: &[RadioProfile] = &[
             slot("P2", Kind::Pot, "FLEX", Some("POT_CENTER")),
         ],
         trims: 4,
+        hello_wav: None,
         quirks: &[
             "Some units ship a factory build with a Chinese-only menu.",
         ],
@@ -1465,6 +1488,7 @@ pub const PROFILES: &[RadioProfile] = &[
             slot("P2", Kind::Pot, "FLEX", Some("POT_CENTER")),
         ],
         trims: 4,
+        hello_wav: None,
         quirks: &[],
     },
     RadioProfile {
@@ -1525,6 +1549,7 @@ pub const PROFILES: &[RadioProfile] = &[
             slot("SL4", Kind::Slider, "FLEX", Some("SLIDER")),
         ],
         trims: 4,
+        hello_wav: None,
         quirks: &[
             "Early boards cannot be flashed over ROM DFU (#7534): use the EdgeTX bootloader (UF2) on them.",
         ],
@@ -1574,6 +1599,7 @@ pub const PROFILES: &[RadioProfile] = &[
             slot("P4", Kind::Pot, "FLEX", Some("POT")),
         ],
         trims: 6,
+        hello_wav: None,
         quirks: &[],
     },
     RadioProfile {
@@ -1630,6 +1656,7 @@ pub const PROFILES: &[RadioProfile] = &[
             slot("EXT4", Kind::Pot, "FLEX", None),
         ],
         trims: 6,
+        hello_wav: None,
         quirks: &[],
     },
     RadioProfile {
@@ -1686,6 +1713,7 @@ pub const PROFILES: &[RadioProfile] = &[
             slot("EXT4", Kind::Pot, "FLEX", None),
         ],
         trims: 6,
+        hello_wav: None,
         quirks: &[],
     },
     RadioProfile {
@@ -1734,6 +1762,7 @@ pub const PROFILES: &[RadioProfile] = &[
             slot("P2", Kind::Pot, "FLEX", Some("POT_CENTER")),
         ],
         trims: 4,
+        hello_wav: None,
         quirks: &[
             "It powers on with SYS and MDL pressed together.",
             "Plugged in while off it runs a charging loop: it does not boot, and ROM DFU does not appear.",
@@ -1785,6 +1814,7 @@ pub const PROFILES: &[RadioProfile] = &[
             slot("P3", Kind::Pot, "FLEX", Some("MULTIPOS")),
         ],
         trims: 4,
+        hello_wav: None,
         quirks: &[
             "Voice commands work in Chinese only; motion and voice need the vendor's Lua scripts.",
         ],
@@ -1834,6 +1864,7 @@ pub const PROFILES: &[RadioProfile] = &[
             slot("P3", Kind::Pot, "FLEX", Some("MULTIPOS")),
         ],
         trims: 4,
+        hello_wav: None,
         quirks: &[
             "Upstream EdgeTX builds v14lcd from 2.12.3; earlier LCD units ran the maker's builds.",
         ],
@@ -1886,6 +1917,7 @@ pub const PROFILES: &[RadioProfile] = &[
             slot("P2", Kind::Pot, "FLEX", Some("POT_CENTER")),
         ],
         trims: 4,
+        hello_wav: None,
         quirks: &[
             "It powers on with SYS and MDL pressed together.",
             "Upstream EdgeTX builds v15 from 2.12.5.",
@@ -1950,6 +1982,7 @@ pub const PROFILES: &[RadioProfile] = &[
             slot("EXT4", Kind::Pot, "FLEX", None),
         ],
         trims: 6,
+        hello_wav: None,
         quirks: &[
             "Voice recognition needs SOUNDS/<lang>/SYSTEM/helloradio.wav and okay.wav on the card.",
         ],
@@ -2001,6 +2034,7 @@ pub const PROFILES: &[RadioProfile] = &[
             slot("SD", Kind::Switch, "2POS", Some("2POS")),
         ],
         trims: 4,
+        hello_wav: None,
         quirks: &[],
     },
     RadioProfile {
@@ -2042,6 +2076,7 @@ pub const PROFILES: &[RadioProfile] = &[
             slot("SD", Kind::Switch, "2POS", Some("2POS")),
         ],
         trims: 4,
+        hello_wav: None,
         quirks: &[
             "The internal and external modules cannot run together.",
             "ELRS V2 units need the internal module set to CRSF.",
@@ -2084,6 +2119,7 @@ pub const PROFILES: &[RadioProfile] = &[
             slot("SL2", Kind::Slider, "FLEX", Some("SLIDER")),
         ],
         trims: 4,
+        hello_wav: None,
         quirks: &[],
     },
     RadioProfile {
@@ -2135,6 +2171,7 @@ pub const PROFILES: &[RadioProfile] = &[
             slot("SL2", Kind::Slider, "FLEX", Some("SLIDER")),
         ],
         trims: 8,
+        hello_wav: None,
         quirks: &[
             "EdgeTX support needs a hardware mod.",
         ],
@@ -2192,6 +2229,7 @@ pub const PROFILES: &[RadioProfile] = &[
             slot("EXT4", Kind::Pot, "FLEX", Some("MULTIPOS")),
         ],
         trims: 8,
+        hello_wav: None,
         quirks: &[
             "EdgeTX support needs a hardware mod.",
         ],
@@ -2236,6 +2274,7 @@ pub const PROFILES: &[RadioProfile] = &[
             slot("SL2", Kind::Slider, "FLEX", Some("SLIDER")),
         ],
         trims: 6,
+        hello_wav: None,
         quirks: &[],
     },
     RadioProfile {
@@ -2284,6 +2323,7 @@ pub const PROFILES: &[RadioProfile] = &[
             slot("P2", Kind::Pot, "FLEX", Some("POT_CENTER")),
         ],
         trims: 4,
+        hello_wav: None,
         quirks: &[],
     },
     RadioProfile {
@@ -2332,6 +2372,7 @@ pub const PROFILES: &[RadioProfile] = &[
             slot("P2", Kind::Pot, "FLEX", Some("POT_CENTER")),
         ],
         trims: 4,
+        hello_wav: None,
         quirks: &[
             "The external bay's power is weak.",
         ],
@@ -2391,6 +2432,7 @@ pub const PROFILES: &[RadioProfile] = &[
             slot("SL2", Kind::Slider, "FLEX", Some("SLIDER")),
         ],
         trims: 4,
+        hello_wav: None,
         quirks: &[],
     },
     RadioProfile {
@@ -2449,6 +2491,7 @@ pub const PROFILES: &[RadioProfile] = &[
             slot("SL2", Kind::Slider, "FLEX", Some("SLIDER")),
         ],
         trims: 4,
+        hello_wav: None,
         quirks: &[
             "EdgeTX does not support its internal RF module.",
         ],
@@ -2493,6 +2536,7 @@ pub const PROFILES: &[RadioProfile] = &[
             slot("P2", Kind::Pot, "FLEX", Some("POT")),
         ],
         trims: 2,
+        hello_wav: None,
         quirks: &[
             "EdgeTX support needs a hardware mod.",
         ],
@@ -2536,6 +2580,7 @@ pub const PROFILES: &[RadioProfile] = &[
             slot("SL2", Kind::Slider, "FLEX", Some("SLIDER")),
         ],
         trims: 4,
+        hello_wav: None,
         quirks: &[],
     },
     RadioProfile {
@@ -2580,6 +2625,7 @@ pub const PROFILES: &[RadioProfile] = &[
             slot("SL2", Kind::Slider, "FLEX", Some("SLIDER")),
         ],
         trims: 4,
+        hello_wav: None,
         quirks: &[],
     },
     RadioProfile {
@@ -2624,6 +2670,7 @@ pub const PROFILES: &[RadioProfile] = &[
             slot("SL2", Kind::Slider, "FLEX", Some("SLIDER")),
         ],
         trims: 4,
+        hello_wav: None,
         quirks: &[],
     },
     RadioProfile {
@@ -2659,6 +2706,7 @@ pub const PROFILES: &[RadioProfile] = &[
             slot("P2", Kind::Pot, "FLEX", Some("POT")),
         ],
         trims: 4,
+        hello_wav: None,
         quirks: &[],
     },
     RadioProfile {
@@ -2696,6 +2744,7 @@ pub const PROFILES: &[RadioProfile] = &[
             slot("P2", Kind::Pot, "FLEX", Some("POT")),
         ],
         trims: 4,
+        hello_wav: None,
         quirks: &[],
     },
     RadioProfile {
@@ -2734,6 +2783,7 @@ pub const PROFILES: &[RadioProfile] = &[
             slot("P2", Kind::Pot, "FLEX", Some("POT_CENTER")),
         ],
         trims: 4,
+        hello_wav: None,
         quirks: &[],
     },
 ];

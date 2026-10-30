@@ -196,6 +196,11 @@ pub fn plan(
             return out(checks, Some(cand.clone()), cand.connected.identity.clone());
         }
     };
+    if let CardWork::Files(files) = work {
+        if let Some(c) = hello_wav_check(&card, files) {
+            checks.push(c);
+        }
+    }
     let planned = match work {
         CardWork::Edits(edits) => card.plan(edits, None),
         CardWork::Files(files) => card.plan_files(files.clone()),
@@ -245,6 +250,24 @@ pub fn plan(
         warnings: cp.warnings.clone(),
         files: Some(cp),
     }
+}
+
+/// The boot sound check, on a board whose profile caps `hello.wav` (radio-design 2.4): every
+/// `SOUNDS/<lang>/SYSTEM/hello.wav` the files put must fit the cap. None when the board has
+/// no cap or the files put no boot sound.
+fn hello_wav_check(card: &Card, files: &[(String, Option<Vec<u8>>)]) -> Option<Check> {
+    let board = card.identity().board?;
+    let cap = crate::gear::radios::profile(&board)?.hello_wav?;
+    let mut hellos = files
+        .iter()
+        .filter(|(p, _)| crate::gear::radios::is_hello_wav(p))
+        .filter_map(|(p, b)| b.as_ref().map(|b| (p, b)))
+        .peekable();
+    hellos.peek()?;
+    Some(check(
+        "Boot sound fits the board",
+        hellos.try_for_each(|(p, b)| cap.check(&board, p, b)),
+    ))
 }
 
 /// What `roll_back` did.
@@ -513,6 +536,77 @@ mod tests {
             &CardFacts::default(),
         );
         assert_eq!(first_failed(&draft), Some(RefusalCode::Draft));
+    }
+
+    fn tone_wav(rate: u32, secs: f64) -> Vec<u8> {
+        crate::gear::voice::wav::write(&crate::gear::voice::wav::Pcm {
+            rate,
+            samples: vec![1000; (f64::from(rate) * secs) as usize],
+        })
+    }
+
+    #[test]
+    fn a_gx12_refuses_a_hello_wav_over_edgetxs_size_or_rate() {
+        let d = tempfile::tempdir().unwrap();
+        let gx = d.path().join("GX12");
+        synth::write_card(&gx, &SynthCard::gx12()).unwrap();
+        let pocket = d.path().join("POCKET");
+        synth::write_card(&pocket, &SynthCard::default()).unwrap();
+        let c = change(ChangeStatus::Ready, "r1", vec![]);
+        let put = |root: &Path, path: &str, bytes: Vec<u8>| {
+            plan(
+                &c,
+                &CardWork::Files(vec![(path.into(), Some(bytes))]),
+                &[cand(root, "r1")],
+                &CardFacts::default(),
+            )
+        };
+        let reason = |p: &CardPlanned| {
+            p.plan
+                .checks
+                .iter()
+                .find_map(|c| c.refusal.as_ref().map(|r| r.reason.clone()))
+                .unwrap_or_default()
+        };
+        let hello = "SOUNDS/en/SYSTEM/hello.wav";
+
+        // 2 s at 32 kHz is 128,044 bytes: inside the cap.
+        let ok = put(&gx, hello, tone_wav(32_000, 2.0));
+        assert_eq!(first_failed(&ok), None, "{:?}", ok.plan.checks);
+        assert!(ok
+            .plan
+            .checks
+            .iter()
+            .any(|c| c.name == "Boot sound fits the board"));
+
+        // 3 s at 32 kHz is 192,044 bytes: over 163,840.
+        let big = put(&gx, hello, tone_wav(32_000, 3.0));
+        assert_eq!(first_failed(&big), Some(RefusalCode::Incompatible));
+        let why = reason(&big);
+        assert!(
+            why.contains(hello) && why.contains("192044 bytes") && why.contains("163840"),
+            "{why}"
+        );
+
+        // A short 44.1 kHz file is small but too fast; the path's case does not matter.
+        let fast = put(&gx, "sounds/en/system/HELLO.WAV", tone_wav(44_100, 1.0));
+        assert_eq!(first_failed(&fast), Some(RefusalCode::Incompatible));
+        let why = reason(&fast);
+        assert!(
+            why.contains("44100 Hz") && why.contains("32000 Hz"),
+            "{why}"
+        );
+
+        // Another sound, or a board with no cap, takes the same bytes.
+        let other = put(&gx, "SOUNDS/en/SYSTEM/bye.wav", tone_wav(44_100, 3.0));
+        assert_eq!(first_failed(&other), None, "{:?}", other.plan.checks);
+        let p = put(&pocket, hello, tone_wav(44_100, 3.0));
+        assert_eq!(first_failed(&p), None, "{:?}", p.plan.checks);
+        assert!(!p
+            .plan
+            .checks
+            .iter()
+            .any(|c| c.name == "Boot sound fits the board"));
     }
 
     #[test]

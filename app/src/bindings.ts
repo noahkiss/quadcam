@@ -3863,6 +3863,15 @@ export type HeardLine = {
 	confidence?: number | null,
 };
 
+/**
+ *  The largest boot sound a board takes: a bigger or faster `hello.wav` can freeze its
+ *  switches at boot (the GX12 on 2.12.4).
+ */
+export type HelloWavCap = {
+	max_bytes: number,
+	max_rate_hz: number,
+};
+
 /**  A secret as QuadCam may show it. */
 export type Hint = {
 	/**  `sk_9…8d4d (51 chars)`; `(3 chars)` for a value under 4 characters. */
@@ -6562,6 +6571,11 @@ export type RadioProfile = {
 	/**  The switch and pot slots on the case. */
 	slots: ControlSlot[],
 	trims: number,
+	/**
+	 *  The limit on the boot sound (`SOUNDS/<lang>/SYSTEM/hello.wav`) a card write may put.
+	 *  None: no limit.
+	 */
+	hello_wav: HelloWavCap | null,
 	/**  Known bugs and oddities, one sentence each. */
 	quirks: string[],
 };

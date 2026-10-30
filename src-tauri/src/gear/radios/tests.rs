@@ -400,3 +400,18 @@ fn a_radio_board_reads_back_from_the_table() {
     )
     .is_err());
 }
+
+#[test]
+fn the_gx12_caps_its_boot_sound_and_no_other_board_does() {
+    let capped: Vec<&str> = PROFILES
+        .iter()
+        .filter(|p| p.hello_wav.is_some())
+        .map(|p| p.board)
+        .collect();
+    assert_eq!(capped, ["gx12"]);
+    assert_eq!(profile("gx12").unwrap().hello_wav, Some(EDGETX_HELLO_WAV));
+    assert!(is_hello_wav("SOUNDS/en/SYSTEM/hello.wav"));
+    assert!(is_hello_wav("/sounds/de/system/Hello.WAV"));
+    assert!(!is_hello_wav("SOUNDS/en/hello.wav"));
+    assert!(!is_hello_wav("SOUNDS/en/SYSTEM/bye.wav"));
+}

@@ -115,6 +115,62 @@ pub struct UsbSpeed {
     pub read_kb_s: u32,
 }
 
+/// The largest boot sound a board takes: a bigger or faster `hello.wav` can freeze its
+/// switches at boot (the GX12 on 2.12.4).
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq, Type)]
+pub struct HelloWavCap {
+    pub max_bytes: u32,
+    pub max_rate_hz: u32,
+}
+
+/// EdgeTX's own voice packs (`EdgeTX/edgetx-sdcard-sounds`, `SOUNDS/*/SYSTEM/hello.wav` on
+/// main, 2026-10-30): 26 packs, 57,646 to 158,764 bytes (`ko` the largest), mono 16-bit PCM
+/// at 16 kHz or 32 kHz (`voice-gen-elevenlabs.py` resamples to 32,000 Hz). The cap sits just
+/// above the largest: 160 KiB, about 2.5 s at 32 kHz.
+pub const EDGETX_HELLO_WAV: HelloWavCap = HelloWavCap {
+    max_bytes: 160 * 1024,
+    max_rate_hz: 32_000,
+};
+
+/// True for a voice pack's boot sound, `SOUNDS/<lang>/SYSTEM/hello.wav`, in any case.
+pub fn is_hello_wav(path: &str) -> bool {
+    let parts: Vec<String> = path
+        .trim_start_matches('/')
+        .split('/')
+        .map(|s| s.to_ascii_lowercase())
+        .collect();
+    matches!(parts.as_slice(), [s, _, sys, f] if s == "sounds" && sys == "system" && f == "hello.wav")
+}
+
+impl HelloWavCap {
+    /// Refuses a boot sound over the cap. The refusal names the file, its size or rate,
+    /// and the limit. A file whose rate cannot be read is held to the size cap only.
+    pub fn check(&self, board: &str, path: &str, bytes: &[u8]) -> Result<(), Refusal> {
+        let size = bytes.len();
+        if size > self.max_bytes as usize {
+            return Err(Refusal::new(
+                RefusalCode::Incompatible,
+                format!(
+                    "{path} is {size} bytes; a {board} takes a hello.wav of at most {} bytes (a large one can freeze its switches at boot). Shorten it.",
+                    self.max_bytes
+                ),
+            ));
+        }
+        if let Some(rate) = super::voice::wav::rate(bytes) {
+            if rate > self.max_rate_hz {
+                return Err(Refusal::new(
+                    RefusalCode::Incompatible,
+                    format!(
+                        "{path} is {rate} Hz; a {board} takes a hello.wav of at most {} Hz (a high-rate one can freeze its switches at boot). Resample it.",
+                        self.max_rate_hz
+                    ),
+                ));
+            }
+        }
+        Ok(())
+    }
+}
+
 /// A radio that looks like this one but takes other firmware.
 #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq, Type)]
 pub struct LookAlike {
@@ -225,6 +281,9 @@ pub struct RadioProfile {
     /// The switch and pot slots on the case.
     pub slots: &'static [ControlSlot],
     pub trims: u8,
+    /// The limit on the boot sound (`SOUNDS/<lang>/SYSTEM/hello.wav`) a card write may put.
+    /// None: no limit.
+    pub hello_wav: Option<HelloWavCap>,
     /// Known bugs and oddities, one sentence each.
     pub quirks: &'static [&'static str],
 }
