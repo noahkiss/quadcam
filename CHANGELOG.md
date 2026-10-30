@@ -3,6 +3,10 @@
 User-facing changes in each release, newest first. Release notes on
 [GitHub](https://github.com/noahkiss/quadcam/releases) hold the test steps for the later ones.
 
+## Unreleased
+
+- **Old staging folders are deleted.** A new load deletes the replaced import's copies from the cache, unless the new import is the same card. At launch and after each load, QuadCam also deletes staging folders that no session uses and that have not changed for a day. Folders staged by an earlier version stay; delete `~/Library/Caches/app.quadcam/staging` by hand to free them while no import is open.
+
 ## 0.24.0 (2026-10-24)
 
 - **A card imported twice is not copied twice.** An import into the library skips each clip the library already holds, so a re-import after **Start Over** no longer writes `-2` copies. The Finish step says how many it skipped and marks each one "already in the library". **Import Anyway** converts them again. The CLI takes `import --force`, MCP `quadcam_export` takes `force`.

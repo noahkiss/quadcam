@@ -962,6 +962,9 @@ pub fn run() {
                 .with_settings(settings_file),
             );
             core.forget_unrestorable();
+            // Staging folders no session owns go, off the launch path.
+            let sweep = core.clone();
+            std::thread::spawn(move || sweep.sweep_staging());
             // The CLI and a headless MCP server write these files directly.
             let (a, b) = (handle.clone(), handle.clone());
             watch::spawn(

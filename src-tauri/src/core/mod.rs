@@ -52,6 +52,7 @@ mod sim_host;
 mod sim_profiles;
 mod sim_restore;
 mod sim_sync;
+mod staging;
 mod switchmap;
 mod update;
 mod video;

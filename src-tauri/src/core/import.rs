@@ -77,7 +77,7 @@ impl Core {
             },
         )?;
         let s = Session { join, ..s };
-        self.commit(Some(s.clone()))?;
+        self.replace_staged(s.clone())?;
         Ok(s)
     }
 
@@ -98,8 +98,21 @@ impl Core {
                 }));
             },
         )?;
-        self.commit(Some(s.clone()))?;
+        self.replace_staged(s.clone())?;
         Ok(s)
+    }
+
+    /// Makes `s`, just staged, the session. The old session's staging folder goes, and so
+    /// do staging folders no session owns.
+    fn replace_staged(&self, s: Session) -> Result<()> {
+        let old = self.session().map(|o| o.staging);
+        self.own_staging(&s.staging);
+        self.commit(Some(s.clone()))?;
+        if let Some(old) = old {
+            self.release_staging(&old, &s.staging);
+        }
+        self.sweep_staging();
+        Ok(())
     }
 
     /// What the GUI does with things dropped on its window: one folder loads like a card;

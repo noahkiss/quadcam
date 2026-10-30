@@ -52,6 +52,7 @@ mod sim_input;
 mod sim_profiles;
 mod sim_validate;
 mod snapshots;
+mod staging;
 mod surface;
 mod switchmap;
 mod upgrade;

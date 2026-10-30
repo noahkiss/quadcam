@@ -54,9 +54,9 @@ quadcam-cli format --prep --plan --card <device id>      # the same, for a card 
 quadcam-cli format --prep --device /dev/diskN --volume-uuid <uuid> --yes
 ```
 
-`clear` deletes the session file. The staged copies stay.
+`clear` deletes the session file. The staged copies stay until the sweep deletes them, a day later at the earliest.
 
-`stage` starts a new session. When an import is loaded and not exported yet, `stage` refuses with exit code 3, because its names, dates and cuts would be lost. `--replace` replaces it. The app asks first in the same case, and the MCP server needs `replace=true`.
+`stage` starts a new session. When an import is loaded and not exported yet, `stage` refuses with exit code 3, because its names, dates and cuts would be lost. `--replace` replaces it. A new session deletes the old one's staged copies, unless both come from the same card. The app asks first in the same case, and the MCP server needs `replace=true`.
 
 **Mount, work, unmount.** The end of `import` unmounts the session's card (a removable card; never a DJI device over USB), and the result says so under `card`. `format`, `format --plan` and `eject` mount it again when they need it. `stage --card` and `format --prep --card` take a card that an earlier job unmounted and mounted by its device id from `gear status`.
 
