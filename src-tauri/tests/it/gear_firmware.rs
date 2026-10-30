@@ -6,8 +6,11 @@ use quadcam_lib::core::{
     BackupFilter, Core, FirmwareParams, FirmwareReadParams, FlashParams, FlashRequest, Hooks,
     NoHooks,
 };
+use quadcam_lib::disk::{DiskInfo, Volume};
+use quadcam_lib::gear::apply::StepState;
 use quadcam_lib::gear::detect::DfuInfo;
 use quadcam_lib::gear::dfu::FakeDfu;
+use quadcam_lib::gear::edgetx::synth::{self, SynthCard};
 use quadcam_lib::gear::firmware::check::{
     FirmwareState, BETAFLIGHT_RELEASES, EDGETX_RELEASES, ELRS_INDEX,
 };
@@ -21,7 +24,7 @@ use quadcam_lib::photos::Recorder;
 use serde_json::json;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 const VERSION: &str = "2.12.4";
@@ -147,6 +150,10 @@ struct Bench {
     old: Vec<u8>,
     new: Vec<u8>,
     radio: String,
+    /// The radio's storage in USB Storage mode: it shows once the radio has left DFU, or
+    /// at once while `storage_now` is set. None: the person never picks USB Storage.
+    storage: Arc<Mutex<Option<Volume>>>,
+    storage_now: Arc<AtomicBool>,
 }
 
 fn bench(hooks: Arc<dyn Hooks>, board: &str, version: &str, backed_up: bool) -> Bench {
@@ -182,6 +189,18 @@ fn bench_release(
         Arc::new(quadcam_lib::gear::serial::FakePorts::new(vec![])),
     );
     env.dfu = Arc::new(move || d2.lock().unwrap().clone());
+    let storage: Arc<Mutex<Option<Volume>>> = Arc::default();
+    let storage_now = Arc::new(AtomicBool::new(false));
+    let (st, now, fl) = (storage.clone(), storage_now.clone(), flasher.clone());
+    env.volumes = Arc::new(move || {
+        let shows = now.load(Ordering::SeqCst) || fl.device.lock().unwrap().left;
+        st.lock()
+            .unwrap()
+            .clone()
+            .filter(|_| shows)
+            .into_iter()
+            .collect()
+    });
     let core = Arc::new(
         Core::new(
             dir.path().join("cache"),
@@ -225,7 +244,51 @@ fn bench_release(
         old,
         new,
         radio: radio.id,
+        storage,
+        storage_now,
     }
+}
+
+/// Gives the bench's radio a storage that reads `board` and `semver` after the restart, and
+/// makes the volume's id one of the saved radio's.
+fn with_storage(b: &Bench, board: &str, semver: &str) {
+    let root = b._dir.path().join("STORAGE");
+    synth::write_card(
+        &root,
+        &SynthCard {
+            board: board.into(),
+            semver: semver.into(),
+            ..SynthCard::default()
+        },
+    )
+    .unwrap();
+    *b.storage.lock().unwrap() = Some(Volume {
+        mount: root,
+        info: DiskInfo {
+            volume_uuid: Some("AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE".into()),
+            parent_whole_disk: "disk42".into(),
+            bus_protocol: Some("USB".into()),
+            removable: true,
+            ..Default::default()
+        },
+        is_card: false,
+        source: None,
+        is_radio: true,
+        warnings: vec![],
+    });
+    b.storage_now.store(true, Ordering::SeqCst);
+    let id = b
+        .core
+        .gear_connected()
+        .unwrap()
+        .into_iter()
+        .find_map(|c| c.id)
+        .expect("the storage reads as a radio");
+    b.storage_now.store(false, Ordering::SeqCst);
+    b.core
+        .gear_store()
+        .edit_device(&b.radio, None, |d| d.aliases.push(id))
+        .unwrap();
 }
 
 fn plain() -> Bench {
@@ -599,13 +662,19 @@ fn a_flash_backs_up_writes_reads_back_and_leaves() {
             "Erase",
             "Write",
             "Read back",
-            "Leave DFU"
+            "Leave DFU",
+            "Read the version"
         ]
     );
-    assert!(report
-        .steps
-        .iter()
-        .all(|s| s.state == quadcam_lib::gear::apply::StepState::Done));
+    // No storage mounted after the restart: the bytes verify it; the version is the
+    // person's to read.
+    assert!(report.steps[..5].iter().all(|s| s.state == StepState::Done));
+    assert_eq!(report.steps[5].state, StepState::Skipped);
+    assert!(
+        report.message.contains("Connect it in USB Storage mode"),
+        "{}",
+        report.message
+    );
 
     // The radio holds the patched image, and the splash decodes to the picture.
     let dev = b.flasher.device.lock().unwrap();
@@ -1029,6 +1098,73 @@ fn a_blank_radio_can_be_flashed_once_linked_and_a_wrong_sized_chip_cannot() {
 
 fn gx12() -> Bench {
     bench_release(Arc::new(NoHooks), "gx12", "2.12.5", true, "gx12", "2.12.5")
+}
+
+#[test]
+fn after_a_flash_the_version_radio_yml_reports_is_read_back_and_compared() {
+    // Match: the restarted radio's storage reads the flashed release.
+    let b = gx12();
+    with_storage(&b, "gx12", "2.12.5");
+    let p = params(&b, None);
+    let plan = b.core.gear_flash_plan(&p).unwrap();
+    assert!(plan.ready(), "{:?}", failed(&plan));
+    let report = b.core.gear_flash(&request(&p, &plan)).unwrap();
+    assert_eq!(report.status, ChangeStatus::Verified, "{}", report.message);
+    let last = report.steps.last().unwrap();
+    assert_eq!(last.name, "Read the version");
+    assert_eq!(last.state, StepState::Done);
+    let detail = last.detail.clone().unwrap_or_default();
+    assert!(detail.contains("2.12.5 on gx12, as flashed"), "{detail}");
+    assert!(
+        report.message.contains("reports EdgeTX 2.12.5"),
+        "{}",
+        report.message
+    );
+    let saved = b.core.gear_store().device(&b.radio).unwrap().unwrap();
+    assert_eq!(saved.identity.version.as_deref(), Some("2.12.5"));
+
+    // Mismatch: the storage still reads the old release. The flash fails its verify and the
+    // saved radio records what the radio reports.
+    let b = gx12();
+    with_storage(&b, "gx12", "2.11.0");
+    let p = params(&b, None);
+    let plan = b.core.gear_flash_plan(&p).unwrap();
+    let report = b.core.gear_flash(&request(&p, &plan)).unwrap();
+    assert_eq!(report.status, ChangeStatus::Failed, "{}", report.message);
+    assert!(report.saved, "the bytes were written and read back");
+    let last = report.steps.last().unwrap();
+    assert_eq!(last.state, StepState::Failed);
+    let detail = last.detail.clone().unwrap_or_default();
+    assert!(
+        detail.contains("reads EdgeTX 2.11.0 on gx12; the image is 2.12.5"),
+        "{detail}"
+    );
+    assert!(report.message.contains("not 2.12.5"), "{}", report.message);
+    let saved = b.core.gear_store().device(&b.radio).unwrap().unwrap();
+    assert_eq!(saved.identity.version.as_deref(), Some("2.11.0"));
+
+    // Another board's storage is not this radio's flash either.
+    let b = gx12();
+    with_storage(&b, "pocket", "2.12.5");
+    let p = params(&b, None);
+    let plan = b.core.gear_flash_plan(&p).unwrap();
+    let report = b.core.gear_flash(&request(&p, &plan)).unwrap();
+    assert_eq!(report.status, ChangeStatus::Failed, "{}", report.message);
+
+    // No mount: the storage never shows; the flash is verified by its bytes alone.
+    let b = gx12();
+    let p = params(&b, None);
+    let plan = b.core.gear_flash_plan(&p).unwrap();
+    let report = b.core.gear_flash(&request(&p, &plan)).unwrap();
+    assert_eq!(report.status, ChangeStatus::Verified, "{}", report.message);
+    let last = report.steps.last().unwrap();
+    assert_eq!(last.state, StepState::Skipped);
+    let saved = b.core.gear_store().device(&b.radio).unwrap().unwrap();
+    assert_eq!(
+        saved.identity.version.as_deref(),
+        Some("2.12.5"),
+        "unchanged"
+    );
 }
 
 #[test]

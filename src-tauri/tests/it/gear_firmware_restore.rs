@@ -281,7 +281,8 @@ fn a_restore_backs_up_the_current_firmware_writes_reads_back_and_leaves() {
             ("Erase", Done),
             ("Write", Done),
             ("Read back", Done),
-            ("Leave DFU", Done)
+            ("Leave DFU", Done),
+            ("Read the version", Skipped)
         ]
     );
     let dev = b.flasher.device.lock().unwrap();

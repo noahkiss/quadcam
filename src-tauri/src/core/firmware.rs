@@ -35,7 +35,7 @@ use crate::gear::firmware::edgetx::{self, HashSource};
 use crate::gear::firmware::{Flasher, FwEnv};
 use crate::gear::fwcopy::{self, CopyKind, FwCopy};
 use crate::gear::model::{
-    ApplyPlan, ChangeStatus, Check, Device, DeviceKind, DiffItem, Refusal, RefusalCode,
+    ApplyPlan, ChangeStatus, Check, Device, DeviceKind, DiffItem, Identity, Refusal, RefusalCode,
     StagedChange,
 };
 use crate::gear::radios;
@@ -44,6 +44,9 @@ use anyhow::{anyhow, bail, Result};
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use specta::Type;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 /// The id of the stand-in change a flash's sheet and report carry.
 pub const FLASH_CHANGE: &str = "flash";
@@ -158,7 +161,11 @@ impl Core {
         info: &DfuInfo,
         device: Option<&str>,
         step: &str,
-    ) -> Result<(super::backup::JobGuard<'_>, super::gear::Hold<'_>)> {
+    ) -> Result<(
+        super::backup::JobGuard<'_>,
+        super::gear::Hold<'_>,
+        Arc<AtomicBool>,
+    )> {
         let handle = dfu_handle(info);
         let busy = |what: &str| {
             refuse(
@@ -169,7 +176,7 @@ impl Core {
         if let Some(j) = self.gear_jobs().into_iter().find(|j| j.handle == handle) {
             return Err(busy(&j.step));
         }
-        let (job, _) = self
+        let (job, stop) = self
             .job_start(&handle, device, step)
             .map_err(|_| busy("Another job"))?;
         let hold = self.gear_hold(&super::gear::link_handle(&crate::gear::model::Link::Dfu {
@@ -177,7 +184,7 @@ impl Core {
             pid: info.pid,
             serial: info.serial.clone(),
         }));
-        Ok((job, hold))
+        Ok((job, hold, stop))
     }
 
     /// Replaces the network and the USB path the firmware code uses (tests pass fakes).
@@ -697,7 +704,7 @@ impl Core {
     pub(super) fn dfu_write(&self, w: &DfuWrite<'_>) -> Result<ApplyReport> {
         let dfu_info = w.dfu;
         let device = w.device;
-        let _job = self.dfu_job(
+        let (_job, _hold, stop) = self.dfu_job(
             dfu_info,
             Some(&device.id),
             if w.restore.is_some() {
@@ -862,12 +869,20 @@ impl Core {
                         });
                     }
                 }
-                (
-                    ChangeStatus::Verified,
-                    format!(
-                        "Verified: {name} holds {what} byte for byte and restarted. Connect it in USB Storage mode to check the version."
-                    ),
-                )
+                self.job_step(&dfu_handle(dfu_info), "Waiting for USB Storage");
+                let read = self.storage_identity(device, quick, &stop);
+                let (state, detail, status, message) =
+                    version_check(&name, &what, edgetx::image_identity(w.image), read.as_ref());
+                steps.push(step("Read the version", state, Some(detail)));
+                if let Some(id) = read.filter(|id| id.version.is_some()) {
+                    let _ = self.gear_store().edit_device(&device.id, None, |d| {
+                        d.identity.version = id.version.clone();
+                        if id.board.is_some() {
+                            d.identity.board = id.board.clone();
+                        }
+                    });
+                }
+                (status, message)
             }
             Err(e) => {
                 // The steps begun: the last one failed, the rest were not reached.
@@ -915,6 +930,99 @@ impl Core {
             at: Utc::now(),
         })
     }
+}
+
+/// How long a flash waits, after the radio left DFU, for its storage: the radio restarts and
+/// the person picks USB Storage on it. A fake flasher looks once.
+const STORAGE_WAIT: Duration = Duration::from_secs(180);
+
+impl Core {
+    /// The identity `radio.yml` reports once the flashed radio's storage mounts (radio-design
+    /// 3.1 step 10), through the card mount cycle: a card QuadCam mounts is unmounted again.
+    /// None: no storage of this radio mounted within `STORAGE_WAIT`, or Stop was pressed.
+    fn storage_identity(
+        &self,
+        device: &Device,
+        quick: bool,
+        stop: &AtomicBool,
+    ) -> Option<Identity> {
+        let ids: Vec<&str> = std::iter::once(device.id.as_str())
+            .chain(device.aliases.iter().map(String::as_str))
+            .collect();
+        let until = Instant::now() + STORAGE_WAIT;
+        loop {
+            (self.gear.refresh_volumes)();
+            for id in &ids {
+                if let Ok(Some(l)) = self.locate_card(id, true) {
+                    let identity = crate::gear::detect::radio_identity(&l.root);
+                    self.card_quiet_unmount(&l);
+                    return Some(identity);
+                }
+            }
+            if quick || stop.load(Ordering::SeqCst) || Instant::now() >= until {
+                return None;
+            }
+            std::thread::sleep(Duration::from_secs(1));
+        }
+    }
+}
+
+/// The version step of a flash or restore: the image's board and version against what
+/// `radio.yml` reads after the restart. Returns the step's state and detail, and the report's
+/// status and message. Another version or board fails the flash; no storage leaves it
+/// verified by its bytes, with the read left to the person.
+fn version_check(
+    name: &str,
+    what: &str,
+    image: Option<(String, String)>,
+    read: Option<&Identity>,
+) -> (StepState, String, ChangeStatus, String) {
+    let Some(read) = read else {
+        return (
+            StepState::Skipped,
+            format!(
+                "the radio's storage did not mount within {} minutes",
+                STORAGE_WAIT.as_secs() / 60
+            ),
+            ChangeStatus::Verified,
+            format!(
+                "Verified: {name} holds {what} byte for byte and restarted. Connect it in USB Storage mode to check the version."
+            ),
+        );
+    };
+    let got = read.version.as_deref().unwrap_or("no version");
+    let board = read.board.as_deref().unwrap_or_default();
+    let Some((want_board, want)) = image else {
+        return (
+            StepState::Done,
+            format!("radio.yml reads EdgeTX {got}; the image names no version to compare"),
+            ChangeStatus::Verified,
+            format!("Verified: {name} holds {what} byte for byte and reports EdgeTX {got}."),
+        );
+    };
+    if read.version.as_deref() == Some(want.as_str()) && edgetx::same_board(board, &want_board) {
+        return (
+            StepState::Done,
+            format!("radio.yml reads EdgeTX {want} on {board}, as flashed"),
+            ChangeStatus::Verified,
+            format!(
+                "Verified: {name} holds {what} byte for byte, restarted and reports EdgeTX {want}."
+            ),
+        );
+    }
+    let on = if board.is_empty() {
+        "no board".to_string()
+    } else {
+        board.to_string()
+    };
+    (
+        StepState::Failed,
+        format!("radio.yml reads EdgeTX {got} on {on}; the image is {want} for {want_board}"),
+        ChangeStatus::Failed,
+        format!(
+            "{name} holds {what} byte for byte, but after the restart its radio.yml reads EdgeTX {got} on {on}, not {want} on {want_board}. Turn the radio off and on, connect it in USB Storage mode and read it again. If it still reads {got}, flash again."
+        ),
+    )
 }
 
 /// The stand-in change the sheet and an agent's confirm request carry.
