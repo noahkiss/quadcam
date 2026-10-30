@@ -126,6 +126,7 @@ export type {
 } from "../bindings";
 
 export type { SimPreset, SimStartParams, SimStopInfo } from "../bindings";
+export type { CheckResult, FitGroup, FitReport, FitValue, SimFit, SimFitParams, SimProfileInfo, ValidationReport } from "../bindings";
 
 // The sim host's answers, with the numbers narrowed (specta types every f64 as number | null;
 // the core sends a finite number, and the loop skips a frame that holds anything else).

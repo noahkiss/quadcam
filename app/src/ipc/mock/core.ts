@@ -41,6 +41,7 @@ import * as blackbox from "./blackbox";
 import * as firmware from "./firmware";
 import * as elrs from "./elrs";
 import * as update from "./update";
+import * as simfit from "./simfit";
 import * as ratemath from "./ratemath";
 import { MockHost, MockSim, defaults as simDefaults } from "./sim";
 import { location as normLocation, spans as normSpans } from "../normalize";
@@ -54,6 +55,7 @@ const DISPATCH = new Set([
   "modules", "module_install", "module_remove", "modules_check", "gear_osd", "gear_osd_edit", "gear_model", "gear_model_edit", "gear_radio_settings", "gear_radio_settings_edit", "gear_radio_setup", "gear_radio_setup_edit", "gear_voice", "gear_voice_edit", "gear_voice_preview", "gear_voice_render", "gear_voice_key", "gear_voice_sets", "gear_voice_catalog", "gear_voice_estimate", "gear_voice_sample", "gear_voice_samples", "gear_voice_samples_delete", "gear_voice_flag", "gear_voice_flags", "gear_voice_retake", "gear_voice_render_packs", "gear_voice_library", "gear_voice_add", "gear_voice_library_preview", "gear_voice_import_takes", "gear_voice_check", "gear_voice_pack_install", "gear_voice_pack_preview", "gear_voice_publish", "gear_voice_choose", "gear_voice_choose_radios", "gear_voice_pack_delete", "gear_rates", "gear_rates_preview", "gear_sims", "gear_sim_sync_plan", "gear_sim_sync", "gear_sim_restore_plan", "gear_sim_restore", "gear_radio_cli", "gear_dfu_link", "gear_firmware", "gear_firmware_read", "gear_splash", "gear_flash_plan", "gear_flash", "gear_firmware_copies", "gear_firmware_restore_plan", "gear_firmware_restore", "gear_elrs", "gear_elrs_read", "gear_elrs_flash_plan", "gear_elrs_flash",
   "gear_status", "gear_devices", "gear_device_save", "gear_device_forget", "gear_dismiss_reminder", "gear_poll_pause",
   "gear_switch_map", "gear_radio", "gear_radio_watch", "gear_sim_calibration", "gear_sim_calibration_save", "gear_sim_defaults", "gear_sim_calibrate",
+  "gear_sim_profiles", "gear_sim_fit", "gear_sim_fit_save", "gear_sim_profile_delete",
   "gear_flights", "gear_flight_set", "gear_flight_folders", "gear_packs", "gear_pack_save", "gear_pack_delete", "gear_pack_type_save",
   "gear_pack_type_delete", "gear_pack_notes", "gear_session_report", "gear_session_report_save", "gear_preflight", "gear_crashes", "gear_crash_save", "gear_crash_delete",
   "gear_blackbox", "gear_blackbox_summary", "gear_blackbox_pull", "gear_blackbox_erase", "gear_blackbox_export", "gear_backup", "gear_backups", "gear_backup_read", "gear_backup_diff", "gear_backup_pin", "gear_storage", "gear_prune",
@@ -153,6 +155,8 @@ export class MockCore {
   setups: setup.MockSetups = {};
   /** The sim host's canned flight (`./sim.ts`). */
   simHost = new MockHost();
+  /** Fitted sim profiles and the canned fit (`./simfit.ts`). */
+  simFits = simfit.freshSimFits();
   /** What the FC's `MSP_RC` reports (µs, CH1 first). */
   fcRc: number[] = [1500, 1500, 988, 1500, 988, 988, 988, 988];
   /** Answers given to agent format requests. */
@@ -315,7 +319,7 @@ export class MockCore {
       case "update_restart":
         return update.restart(this.update);
       case "sim_presets":
-        return this.simHost.presets();
+        return [...this.simHost.presets(), ...simfit.presets(this.simFits)];
       case "sim_start":
         return this.simHost.start(p as never);
       case "sim_frame":
@@ -471,6 +475,14 @@ export class MockCore {
         this.emit("sim-calibration-event", v);
         return v;
       }
+      case "gear_sim_profiles":
+        return simfit.list(this.simFits);
+      case "gear_sim_fit":
+        return simfit.fit(this.simFits, p as never, this.profiles().map((x) => x.name));
+      case "gear_sim_fit_save":
+        return simfit.save(this.simFits, p as never, this.profiles().map((x) => x.name));
+      case "gear_sim_profile_delete":
+        return simfit.remove(this.simFits, p as never);
       case "gear_radio_watch":
         this.radio.watching = !!p.on;
         if (this.radio.watching) this.emitRadio();

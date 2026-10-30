@@ -21,11 +21,12 @@ export const GEAR_PAGES: GearPageSlot[] = [
   // The voice packs on this Mac and the Voice studio; a radio's Voice segment picks one.
   { id: "voices", label: "Voices", icon: "volume-loud", render: () => <VoicesPage /> },
   // The sim: Fly in the plain room (S5, behind `simPreview`), Radio (the sim's radio
-  // calibration, S4) and Rates (the sims on this Mac against the quad's rates, WP8). The
-  // badge says when a sim's rates differ.
+  // calibration, S4), Rates (the sims on this Mac against the quad's rates, WP8) and
+  // Profiles (the fit from a quad's logs, S3). The badge says when a sim's rates differ.
   { id: "sim", label: "Sim", icon: "quad", badge: (s) => ((s.gear?.sims_out_of_date ?? 0) > 0 ? "Out of date" : null), render: () => <SimHub at="fly" /> },
   { id: "sim-radio", label: "Sim radio", icon: "radio", under: "sim", render: () => <SimHub at="radio" /> },
   { id: "sims", label: "Sims", icon: "play", under: "sim", render: () => <SimHub at="rates" /> },
+  { id: "sim-profiles", label: "Sim profiles", icon: "quad", under: "sim", render: () => <SimHub at="profiles" /> },
   { id: "packup", label: "Pack up", icon: "check-circle", render: () => <PackUpPage /> },
   { id: "flights", label: "Flights", icon: "stopwatch", render: () => <FlightsPage /> },
   { id: "packs", label: "Packs", icon: "battery", render: () => <PacksPage /> },

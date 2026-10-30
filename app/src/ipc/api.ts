@@ -7,7 +7,7 @@ import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialo
 import { openPath, openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { commands, type MapFrame, type MapPin, type MapStyle } from "../bindings";
 import * as N from "./normalize";
-import type { ProfileGear, ElrsFlashParams, FormatRequest, ChangeStatus, CopyRequest, Edit, SimFrame, SimPreset, SimStartInfo, SimStartParams, SimStopInfo, CrashSaveParams, ImportOptions, LibEdit, LibraryFilter, Moved, ModelEditParams, ModelParams, RadioSettingsEditParams, RadioSettingsParams, RadioSetupEditParams, RadioSetupEdited, RadioSetupParams, PackDeleteParams, PackInstallParams, PackPreviewParams, PublishApproveParams, PublishParams, SaveSetsParams, CatalogParams, EstimateParams, ImportTakesParams, KeyParams, LibraryParams, RenderPacksParams, SampleParams, SamplesDeleteParams, FlagParams, RetakeParams, SetsParams, VoiceCheckParams, VoiceChooseParams, VoiceChooseRadiosParams, VoiceEditParams, VoiceParams, VoicePreviewParams, VoiceRenderParams, OsdEditParams, OsdParams, RatesParams, RatesPreview, RateProfile, FirmwareRestoreParams, FlashParams, SplashParams, SimRestoreParams, SimSyncParams, SimsParams, Pack, PackType, PlanPatch, RemovedCuts, SettingsValues, Span, SwitchMapParams, SimCalibrationSaveParams, CalibrateParams } from "./types";
+import type { ProfileGear, ElrsFlashParams, FormatRequest, ChangeStatus, CopyRequest, Edit, SimFrame, SimPreset, SimStartInfo, SimStartParams, SimStopInfo, CrashSaveParams, ImportOptions, LibEdit, LibraryFilter, Moved, ModelEditParams, ModelParams, RadioSettingsEditParams, RadioSettingsParams, RadioSetupEditParams, RadioSetupEdited, RadioSetupParams, PackDeleteParams, PackInstallParams, PackPreviewParams, PublishApproveParams, PublishParams, SaveSetsParams, CatalogParams, EstimateParams, ImportTakesParams, KeyParams, LibraryParams, RenderPacksParams, SampleParams, SamplesDeleteParams, FlagParams, RetakeParams, SetsParams, VoiceCheckParams, VoiceChooseParams, VoiceChooseRadiosParams, VoiceEditParams, VoiceParams, VoicePreviewParams, VoiceRenderParams, OsdEditParams, OsdParams, RatesParams, RatesPreview, RateProfile, FirmwareRestoreParams, FlashParams, SplashParams, SimRestoreParams, SimSyncParams, SimsParams, Pack, PackType, PlanPatch, RemovedCuts, SettingsValues, Span, SwitchMapParams, SimCalibrationSaveParams, CalibrateParams, SimFitParams } from "./types";
 
 type Result<T> = Promise<{ status: "ok"; data: T } | { status: "error"; error: string }>;
 
@@ -228,6 +228,13 @@ export const api = {
   gearSimCalibrationSave: (p: SimCalibrationSaveParams) => ok(commands.gearSimCalibrationSave(p)),
   gearSimDefaults: (aircraft: string | null) => ok(commands.gearSimDefaults({ aircraft, radio: null, fc: [] })),
   gearSimCalibrate: (p: CalibrateParams) => ok(commands.gearSimCalibrate(p)),
+  gearSimProfiles: () => ok(commands.gearSimProfiles()),
+  /** Fits a profile from the aircraft's logs. Writes nothing; answers the digest a save needs. */
+  gearSimFit: (p: SimFitParams) => ok(commands.gearSimFit(p)),
+  /** The fit view's own Save click, after the person saw the fit: the click is the confirm. */
+  gearSimFitSave: (fit: SimFitParams, digest: string) => ok(commands.gearSimFitSave({ fit, digest, confirm: true })),
+  /** The delete dialog's own Delete click: the click is the confirm. */
+  gearSimProfileDelete: (id: string) => ok(commands.gearSimProfileDelete({ id, confirm: true })),
 
   // The sim host (GUI commands only; the answers are narrowed in ipc/types.ts)
   simPresets: (): Promise<SimPreset[]> => commands.simPresets(),
