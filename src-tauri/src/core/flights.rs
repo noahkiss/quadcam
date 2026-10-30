@@ -281,6 +281,19 @@ impl Core {
         Ok((all, sources))
     }
 
+    /// The flights of one aircraft profile: those whose model its EdgeTX models name, as
+    /// `gear_flights` pairs them.
+    pub(super) fn aircraft_flights(&self, aircraft: &str) -> Result<Vec<Flight>> {
+        let (profiles, _) = self.profiles()?;
+        let (all, _) = self.gear_all_flights(None)?;
+        Ok(all
+            .into_iter()
+            .filter(|f| {
+                aircraft_of(&profiles, f.model.as_deref()).is_some_and(|p| p.name == aircraft)
+            })
+            .collect())
+    }
+
     /// `gear_all_flights`, with the logs that failed to read.
     fn gear_all_flights_read(
         &self,

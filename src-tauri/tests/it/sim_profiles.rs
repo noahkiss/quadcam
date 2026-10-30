@@ -1,10 +1,15 @@
 //! Sim profiles fitted from logs (S3) through `Core` and `quadcam-cli`: the fit on the sim
 //! crate's CI fixtures, the save behind confirm and the fit's digest, the list, and the
-//! harness on a fitted profile by its id.
+//! harness on a fitted profile by its id, and the aircraft's radio logs (the synthetic
+//! `gear::flights::synth` sag log) for pack resistance.
 
+use quadcam_lib::api;
 use quadcam_lib::core::{
     Core, NoHooks, SimFitParams, SimFitSaveParams, SimProfileDeleteParams, SimValidateParams,
 };
+use quadcam_lib::gear::flights::synth;
+use quadcam_lib::gear::serial::FakePorts;
+use quadcam_lib::gear::Env;
 use quadcam_lib::photos::Recorder;
 use serde_json::Value;
 use std::path::PathBuf;
@@ -100,6 +105,70 @@ fn a_fit_saves_only_with_confirm_and_its_digest() {
         .unwrap()
         .iter()
         .all(|p| p.kind == "preset"));
+}
+
+#[test]
+fn a_fit_reads_the_aircraft_radio_logs_for_pack_resistance() {
+    let dir = tempfile::tempdir().unwrap();
+    let support = dir.path().join("support");
+    std::fs::create_dir_all(&support).unwrap();
+    std::fs::write(
+        support.join("settings.json"),
+        r#"{"profiles":[{"name":"Sagger","edgetx_models":["Sagger"]},{"name":"Other","edgetx_models":["Whoop"]}]}"#,
+    )
+    .unwrap();
+    let logs = dir.path().join("radio");
+    synth::write_sag(&logs, "Sagger").unwrap();
+    // Another aircraft's log: never paired to Sagger.
+    synth::write_known(&logs).unwrap();
+    let c = core(&dir).with_gear_env(Env::fake(vec![], Arc::new(FakePorts::new(vec![]))));
+    c.gear_flight_folders(&api::FlightFoldersParams {
+        add: Some(logs),
+        remove: None,
+    })
+    .unwrap();
+
+    let mut p = params();
+    p.aircraft = Some("Sagger".into());
+    let f = c.gear_sim_fit(&p).unwrap();
+    let radio: Vec<&String> = f
+        .sources
+        .iter()
+        .filter(|s| s.starts_with("radio log"))
+        .collect();
+    assert_eq!(
+        radio,
+        ["radio log Sagger-2026-10-05-120000.csv (1 flight)"],
+        "{:?}",
+        f.sources
+    );
+    let r = f
+        .report
+        .measured
+        .iter()
+        .find(|m| m.name == "pack_resistance_radio")
+        .expect("a radio-log pack resistance");
+    assert!((r.value - synth::SAG_OHMS).abs() < 0.005, "{}", r.value);
+    // The guard scored the motor and pack group against the base's.
+    let power = f.report.groups.iter().find(|g| g.name == "power").unwrap();
+    assert_eq!(power.kept, power.note.is_none());
+    // The radio logs are fit input: the same fit gives the same digest.
+    assert_eq!(c.gear_sim_fit(&p).unwrap().digest, f.digest);
+
+    // Another aircraft reads only its own log, whose current holds too steady to fit.
+    p.aircraft = Some("Other".into());
+    let f = c.gear_sim_fit(&p).unwrap();
+    assert!(f.sources.iter().all(|s| !s.contains("Sagger")));
+    assert!(
+        f.sources.iter().any(|s| s.contains(synth::FILE)),
+        "{:?}",
+        f.sources
+    );
+    assert!(f
+        .report
+        .measured
+        .iter()
+        .all(|m| m.name != "pack_resistance_radio"));
 }
 
 #[test]

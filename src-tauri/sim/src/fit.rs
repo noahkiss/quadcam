@@ -82,6 +82,21 @@ pub struct ThrustPoint {
     pub tw: f64,
 }
 
+/// One group of fitted values the guard scored against the base profile's on the same logs.
+#[derive(Debug, Clone, PartialEq, Serialize, Type)]
+pub struct FitGroup {
+    /// `power` (motor and pack) or `roll`, `pitch`, `yaw` (that axis's gains).
+    pub name: String,
+    /// The harness's checks of this group: failed with the fitted values, with the base's.
+    pub failed: usize,
+    pub base_failed: usize,
+    /// The fitted values are in the profile; false keeps the base profile's.
+    pub kept: bool,
+    /// The group's fitted values, kept or not.
+    pub values: Vec<FitValue>,
+    pub note: Option<String>,
+}
+
 /// The fit's result: the profile, every value with its source, the measures, the thrust
 /// curve and what is still an estimate.
 #[derive(Debug, Clone, Serialize, Type)]
@@ -93,6 +108,8 @@ pub struct FitReport {
     pub values: Vec<FitValue>,
     /// Measured from the logs, for reference (not profile values).
     pub measured: Vec<FitValue>,
+    /// The guard's groups, each kept or dropped.
+    pub groups: Vec<FitGroup>,
     /// Static thrust against command at 3.9 V per cell (the sim's pack with sag off).
     pub thrust_curve: Vec<ThrustPoint>,
     /// Profile values that stay estimates or the base profile's, and why.
@@ -135,6 +152,16 @@ impl FitReport {
         s.push_str("Measured:\n");
         for v in &self.measured {
             row(&mut s, v);
+        }
+        s.push_str("Groups (checks failed: fitted / base):\n");
+        for g in &self.groups {
+            s.push_str(&format!(
+                "  {:<8} {:>3} / {:<3} {}\n",
+                g.name,
+                g.failed,
+                g.base_failed,
+                if g.kept { "kept" } else { "dropped" }
+            ));
         }
         s.push_str("Thrust at 3.9 V per cell (command, rpm, grams, T/W):\n");
         for p in &self.thrust_curve {
@@ -1045,6 +1072,7 @@ pub fn fit(base: &SimProfile, inputs: &FitInputs, logs: &[LogData]) -> Result<Fi
 
     // ----- the guard: a fitted group the harness scores worse than the base's is not used -----
     let no_worse = |a: (usize, f64), b: (usize, f64)| a.0 < b.0 || (a.0 == b.0 && a.1 <= b.1);
+    let mut groups = Vec::new();
     let mut motor_rise_ms = Some(tau * 1000.0);
     {
         let mut q = p.clone();
@@ -1057,15 +1085,32 @@ pub fn fit(base: &SimProfile, inputs: &FitInputs, logs: &[LogData]) -> Result<Fi
             group_score(&p, logs, Group::Power),
             group_score(&q, logs, Group::Power),
         );
-        if !no_worse(fit_s, base_s) {
+        let kept = no_worse(fit_s, base_s);
+        let group_values: Vec<FitValue> = values
+            .iter()
+            .filter(|v| POWER_VALUES.contains(&v.name.as_str()))
+            .cloned()
+            .collect();
+        let mut note = None;
+        if !kept {
             p = q;
             motor_rise_ms = base.reference.motor_rise_ms;
             values.retain(|v| !POWER_VALUES.contains(&v.name.as_str()));
-            notes.push(format!(
+            let n = format!(
                 "the fitted motor and pack validate worse than {}'s (hover, punch and sag: {} failed, against {}), so {}'s are kept",
                 base.id, fit_s.0, base_s.0, base.id
-            ));
+            );
+            notes.push(n.clone());
+            note = Some(n);
         }
+        groups.push(FitGroup {
+            name: "power".into(),
+            failed: fit_s.0,
+            base_failed: base_s.0,
+            kept,
+            values: group_values,
+            note,
+        });
     }
     for (axis, name) in [(0, "roll"), (1, "pitch"), (2, "yaw")] {
         if p.fc.gains[axis].p.source != ValueSource::Fitted {
@@ -1077,15 +1122,29 @@ pub fn fit(base: &SimProfile, inputs: &FitInputs, logs: &[LogData]) -> Result<Fi
             group_score(&p, logs, Group::Axis(axis)),
             group_score(&q, logs, Group::Axis(axis)),
         );
-        if !no_worse(fit_s, base_s) {
+        let kept = no_worse(fit_s, base_s);
+        let gain = format!("fc.gains.{name}.p");
+        let group_values: Vec<FitValue> =
+            values.iter().filter(|v| v.name == gain).cloned().collect();
+        let mut note = None;
+        if !kept {
             p = q;
-            let n = format!("fc.gains.{name}.p");
-            values.retain(|v| v.name != n);
-            notes.push(format!(
+            values.retain(|v| v.name != gain);
+            let n = format!(
                 "the fitted {name} gains validate worse than {}'s, so {}'s are kept",
                 base.id, base.id
-            ));
+            );
+            notes.push(n.clone());
+            note = Some(n);
         }
+        groups.push(FitGroup {
+            name: name.into(),
+            failed: fit_s.0,
+            base_failed: base_s.0,
+            kept,
+            values: group_values,
+            note,
+        });
     }
 
     // ----- what stays an estimate -----
@@ -1114,6 +1173,7 @@ pub fn fit(base: &SimProfile, inputs: &FitInputs, logs: &[LogData]) -> Result<Fi
         logs: names,
         values,
         measured,
+        groups,
         thrust_curve,
         estimates,
         notes,

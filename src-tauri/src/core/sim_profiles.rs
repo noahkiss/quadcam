@@ -4,8 +4,8 @@
 //! - `gear_sim_profiles` lists both kinds; `sim_profile` resolves an id for the sim and the
 //!   harness.
 //! - `gear_sim_fit` fits a profile from blackbox logs (an aircraft's pulls, or files), the
-//!   quad's `diff all` and its weight, and validates it and its base on the same logs. It
-//!   writes nothing and answers a digest.
+//!   aircraft's EdgeTX radio logs (pack resistance), the quad's `diff all` and its weight,
+//!   and validates it and its base on the same logs. It writes nothing and answers a digest.
 //! - `gear_sim_fit_save` fits again and writes the profile only with `confirm` and that
 //!   digest, so the profile changes only after the person saw the fit.
 
@@ -13,15 +13,17 @@ use super::Core;
 use crate::gear::backup::{blob_of, Snapshots};
 use crate::gear::blackbox::Pulls;
 use crate::gear::blobs::Blobs;
+use crate::gear::flights::Flight;
 use crate::gear::model::DeviceKind;
 use crate::gear::sim_profiles::{self, SavedProfile, SimProfileInfo};
 use anyhow::{bail, Context, Result};
-use quadcam_sim::fit::{fit, FitInputs, FitReport};
+use quadcam_sim::fit::{fit, FitInputs, FitReport, RadioFlight};
 use quadcam_sim::log::{self, LogData, Scales, MIN_FLIGHT_SECONDS};
 use quadcam_sim::validate::{validate, ValidationReport};
 use quadcam_sim::SimProfile;
 use serde::{Deserialize, Serialize};
 use specta::Type;
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 /// `gear_sim_fit`: what the fit reads.
@@ -285,6 +287,12 @@ impl Core {
             },
         };
         sim_profiles::check_id(&id)?;
+
+        // The aircraft's radio logs: pack voltage against current, per flight.
+        let radio = match aircraft {
+            Some(a) => self.sim_radio_flights(a, &mut sources)?,
+            None => Vec::new(),
+        };
         let label = p
             .label
             .clone()
@@ -297,7 +305,7 @@ impl Core {
             mass: p.mass_g.map(|g| g / 1000.0),
             pack_mass: p.pack_g.map(|g| g / 1000.0),
             diff,
-            radio: Vec::new(),
+            radio,
         };
         Ok(Inputs {
             base,
@@ -305,5 +313,49 @@ impl Core {
             logs,
             sources,
         })
+    }
+
+    /// The aircraft's flights in the radio logs (paired as `gear_flights` pairs them), each
+    /// as its `RxBt` and `Curr` readings. Names each log read in `sources`.
+    fn sim_radio_flights(
+        &self,
+        aircraft: &str,
+        sources: &mut Vec<String>,
+    ) -> Result<Vec<RadioFlight>> {
+        let mut by_file: BTreeMap<PathBuf, Vec<Flight>> = BTreeMap::new();
+        for f in self.aircraft_flights(aircraft)? {
+            by_file.entry(f.file.clone()).or_default().push(f);
+        }
+        let mut out = Vec::new();
+        for (file, flights) in by_file {
+            // A log that went away since the index read it (a radio unplugged) is skipped.
+            let Ok(rows) = crate::logs::read_rows(&file) else {
+                continue;
+            };
+            for f in &flights {
+                let mut rf = RadioFlight {
+                    name: f.id.clone(),
+                    ..Default::default()
+                };
+                for r in rows.iter().filter(|r| r.time >= f.start && r.time <= f.end) {
+                    if let (Some(v), Some(a)) = (r.rx_bat, r.current_a) {
+                        rf.t.push((r.time - f.start).num_milliseconds() as f64 / 1000.0);
+                        rf.volts.push(v);
+                        rf.amps.push(a);
+                    }
+                }
+                out.push(rf);
+            }
+            let name = file.file_name().map_or_else(
+                || file.display().to_string(),
+                |n| n.to_string_lossy().into_owned(),
+            );
+            let n = flights.len();
+            sources.push(format!(
+                "radio log {name} ({n} flight{})",
+                if n == 1 { "" } else { "s" }
+            ));
+        }
+        Ok(out)
     }
 }

@@ -3354,6 +3354,20 @@ export type FirmwareView = {
 	mode: string,
 };
 
+/**  One group of fitted values the guard scored against the base profile's on the same logs. */
+export type FitGroup = {
+	/**  `power` (motor and pack) or `roll`, `pitch`, `yaw` (that axis's gains). */
+	name: string,
+	/**  The harness's checks of this group: failed with the fitted values, with the base's. */
+	failed: number,
+	base_failed: number,
+	/**  The fitted values are in the profile; false keeps the base profile's. */
+	kept: boolean,
+	/**  The group's fitted values, kept or not. */
+	values: FitValue[],
+	note: string | null,
+};
+
 /**
  *  The fit's result: the profile, every value with its source, the measures, the thrust
  *  curve and what is still an estimate.
@@ -3366,6 +3380,8 @@ export type FitReport = {
 	values: FitValue[],
 	/**  Measured from the logs, for reference (not profile values). */
 	measured: FitValue[],
+	/**  The guard's groups, each kept or dropped. */
+	groups: FitGroup[],
 	/**  Static thrust against command at 3.9 V per cell (the sim's pack with sag off). */
 	thrust_curve: ThrustPoint[],
 	/**  Profile values that stay estimates or the base profile's, and why. */

@@ -11,6 +11,9 @@
 //!    Then 5 s of disarmed rows at 3.95 V.
 //! 2. 10:03:00, 30 s, never centred, `RxBt` 3.90 V, no rows after disarm.
 //! 3. 10:06:00, 20 s, first reading 4.05 V, silent from 18 s to its end (a failsafe).
+//!
+//! `sag_text` is a second log, for the sim fit: one flight whose `RxBt` follows `Curr`
+//! through a known pack resistance.
 
 use anyhow::Result;
 use std::fmt::Write as _;
@@ -216,5 +219,37 @@ pub fn write_known(dir: &Path) -> Result<PathBuf> {
     std::fs::create_dir_all(dir)?;
     let p = dir.join(FILE);
     std::fs::write(&p, known_text())?;
+    Ok(p)
+}
+
+/// The pack plus wiring resistance in `sag_text`'s log (Ω).
+pub const SAG_OHMS: f64 = 0.05;
+
+/// A second synthetic log, for the sim fit's pack resistance: one 60 s flight of `model` on
+/// 2026-10-05 at 12:00:00, rows every 0.1 s. `Curr` swings 4 ± 3 A; `RxBt` is
+/// 4.10 V less 0.004 V a second less `SAG_OHMS` times the current.
+pub fn sag_text() -> String {
+    let mut out = String::from(HEADER);
+    out.push('\n');
+    let t0 = 12 * 3600;
+    for m in 0..=600i64 {
+        let t = m as f64 / 10.0;
+        let curr = 4.0 + 3.0 * (t * 1.7).sin();
+        let r = Row {
+            curr,
+            rxbt: 4.10 - 0.004 * t - SAG_OHMS * curr,
+            capa: 5 * m / 10,
+            ..Row::default()
+        };
+        push(&mut out, t0, m, &r);
+    }
+    out.replace("2026-10-04,", "2026-10-05,")
+}
+
+/// Writes `sag_text` into `dir` as `<model>-2026-10-05-120000.csv`; returns its path.
+pub fn write_sag(dir: &Path, model: &str) -> Result<PathBuf> {
+    std::fs::create_dir_all(dir)?;
+    let p = dir.join(format!("{model}-2026-10-05-120000.csv"));
+    std::fs::write(&p, sag_text())?;
     Ok(p)
 }
