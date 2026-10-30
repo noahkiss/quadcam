@@ -5,6 +5,9 @@ User-facing changes in each release, newest first. Release notes on
 
 ## Unreleased
 
+- **Fit a sim profile in the app.** **Gear > Sim > Profiles** fits a profile to an aircraft from its logs: pick the aircraft, the built-in profile it starts from and its weight, then **Fit Profile**. The result shows each group (motor and pack, each axis's gains) with its base and fitted values, kept or dropped. **Save…** asks first. Fitted profiles list with **Delete…**. The user guide has a short fit-flight routine.
+- **The fit reads the radio logs.** A fit for an aircraft also reads its EdgeTX radio logs and measures the pack resistance from `RxBt` against `Curr`. It uses that value when the blackbox logs hold no current swings.
+
 - **Old staging folders are deleted.** A new load deletes the replaced import's copies from the cache, unless the new import is the same card. At launch and after each load, QuadCam also deletes staging folders that no session uses and that have not changed for a day. Folders staged by an earlier version stay; delete `~/Library/Caches/app.quadcam/staging` by hand to free them while no import is open.
 
 ## 0.24.0 (2026-10-24)

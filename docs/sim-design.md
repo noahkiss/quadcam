@@ -677,10 +677,19 @@ CI fixtures:
   `gear_sim_validate` take a fitted profile by its id. CLI `gear sim fit` and `gear sim
   profiles`; MCP `sim_profiles`, `sim_fit`, `sim_fit_save`, `sim_profile_delete`.
 - A fit reads an aircraft's FC: each erased pull and the newest pull, and the newest backup's
-  `diff all` (else `dump all`) for rates, throttle curve, modes, idle and pole count. Radio
-  logs are not read yet (the crate's fit takes them for pack resistance).
-- Not built: the Fit and profile views (the Sim page lists fitted profiles on a separate
-  branch for review), the fit flight routine of 12.6.
+  `diff all` (else `dump all`) for rates, throttle curve, modes, idle and pole count. It also
+  reads the aircraft's EdgeTX radio logs, paired as `gear_flights` pairs them (the profile's
+  EdgeTX models name the flight's model): each flight's `RxBt` and `Curr` go to the crate's
+  fit, which uses their pack resistance when the blackbox logs hold no current swings and
+  always reports it (`pack_resistance_radio`). The sources name each radio log read.
+- `FitReport.groups` holds the guard's groups (`power`, `roll`, `pitch`, `yaw`): checks failed
+  with the fitted and the base values, kept or dropped, the group's fitted values (also when
+  dropped) and the note.
+- The app: **Gear > Sim > Profiles** (`ProfilesPage.tsx`, page id `sim-profiles`) takes the
+  aircraft, the base and the weight, runs `gear_sim_fit`, shows the groups, and saves through
+  `gear_sim_fit_save` with the fit's digest after a confirm. The fitted profiles list with
+  Delete (`gear_sim_profile_delete`). The fit flight routine (decision 6 in section 12) is in
+  the user guide (`docs/sim.md`, "Fit flights").
 
 ---
 

@@ -5,9 +5,9 @@ QuadCam is growing a built-in FPV simulator that flies your own quads on your ow
 radio's calibration for the sim, the flight model and its check against your logs, and the
 Sim page, where you fly a plain room.
 
-**Gear > Sim** has three sections: **Fly** (shown while the preview is on), **Radio** and
+**Gear > Sim** has four sections: **Fly** (shown while the preview is on), **Radio**,
 **Rates** (the sims on this Mac against your quad's rates; see
-[Gear](gear.md#sims-page)).
+[Gear](gear.md#sims-page)) and **Profiles** (fit a profile to your quad, below).
 
 ## Radio: calibrating the radio
 
@@ -121,16 +121,28 @@ profile closest to your quad and replaces what the logs measure:
 |---|---|---|
 | Hover | Level, still, 1 g moments | Hover throttle and motor speed; thrust per motor |
 | Motor | Steady flight, throttle steps and punches | Winding resistance, prop torque, rotor inertia, electronics current |
-| Pack | Voltage against current | Pack and wiring resistance (sag) |
+| Pack | Voltage against current: the blackbox, else the radio logs | Pack and wiring resistance (sag) |
 | Rates | Roll, pitch and yaw moves | How fast the quad follows the sticks |
 
 The quad's `diff all` gives its rates, throttle curve, modes, motor idle and pole count. Weigh
 the quad with a pack and pass the weight: the logs give thrust over weight, not weight. Drag
 stays an estimate.
 
+With an aircraft, the fit also reads its EdgeTX radio logs: the flights whose model the
+aircraft's profile names, as the Flights page pairs them. Each flight's `RxBt` against `Curr`
+gives the pack resistance, which the fit uses when the blackbox logs hold no current swings. The
+report lists it as a measure either way, and names each radio log it read.
+
 The fit then checks each group against the same logs and keeps the built-in profile's values
 for any group that does worse, so a fitted profile never flies worse than its base on your
-logs. It changes nothing until you save it:
+logs. It changes nothing until you save it.
+
+In the app, open **Gear > Sim > Profiles**. Pick the **Aircraft**, the profile it **Starts
+from**, and the **Weight with pack** in grams, then click **Fit Profile**. The result lists each
+group (motor and pack, and each axis's gains) with its base and fitted values, the checks each
+failed, and **Kept** or **Dropped** with the reason. **Save…** asks first, then saves the fit
+you saw; it refuses when the logs or settings changed since. **Fitted profiles** lists the saved
+ones; **Delete…** is in each row's menu. From the command line:
 
 ```bash
 quadcam-cli gear sim fit --base meteor75 --aircraft "My Whoop" --mass-g 58 --text
@@ -143,6 +155,27 @@ pass `--logs` (a `.bbl` file, a pulled flash image, or a folder) and `--fc` (a `
 file). The saved profile takes its id from the aircraft's name (`--id` sets another) and
 flies like any other: pick it under **Aircraft** on the Sim page, where fitted profiles come
 first under **Your quads**, or check it with `gear sim validate <id>`.
+
+### Fit flights
+
+A fit is only as good as the moments in the logs. Before a blackbox pull, fly one pack with
+these moments, in a room or field with space to climb. Turn blackbox logging on, with
+bidirectional DShot so the log holds motor speed. Log with a fresh pack, and take the radio
+logs too (EdgeTX logging on, with `RxBt` and `Curr` in the telemetry).
+
+1. **Hover.** Hold a level hover for 5 seconds, sticks still. Do it twice: early and late in
+   the pack.
+2. **Throttle steps.** From the hover, blip the throttle up a little and back, five times,
+   about a second apart.
+3. **Punches.** Level, punch to full throttle for half a second, then back to hover. Do three,
+   with a rest between.
+4. **Flicks.** Roll left and right with full, sharp stick moves, then pitch forward and back,
+   then yaw. Three of each, with a level pause between.
+5. **Coast.** Fly fast and straight, then level out and let the quad coast. Then drop from
+   height and punch out. The fit does not use these yet (blackbox logs hold no ground speed),
+   but the checks below do when a log has it.
+
+Then pull the blackbox (**Gear > FC > Blackbox**), weigh the quad with the pack, and fit.
 
 ## Checking a profile against your logs
 
