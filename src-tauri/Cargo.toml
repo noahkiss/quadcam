@@ -53,17 +53,17 @@ notify = "8.2"
 chrono = { version = "0.4", features = ["serde"] }
 anyhow = "1"
 clap = { version = "4", features = ["derive"] }
-base64 = "0.22"
+base64 = "0.23"
 chrono-tz = "0.10"
-minisign-verify = "0.2"
-specta = { version = "=2.0.0-rc.25", features = ["derive", "chrono", "serde_json"] }
-tauri-specta = { version = "=2.0.0-rc.25", features = ["derive", "typescript"] }
-specta-typescript = "=0.0.12"
+minisign-verify = "0.3"
+specta = { version = "=2.0.0-rc.27", features = ["derive", "chrono", "serde_json"] }
+tauri-specta = { version = "=2.0.0-rc.26", features = ["derive", "typescript"] }
+specta-typescript = "=0.0.14"
 schemars = "1"
 siphasher = "1"
 xxhash-rust = { version = "0.8", features = ["xxh64"] }
 serialport = { version = "4.10.1", default-features = false }
-sha2 = "0.10"
+sha2 = "0.11"
 toml = "1"
 quadcam-sim = { path = "sim" }
 png = "0.18.1"
@@ -73,7 +73,7 @@ semver = "1"
 
 [dev-dependencies]
 tempfile = "3"
-minisign = "0.7"
+minisign = "0.10"
 insta = { version = "1", features = ["json", "redactions"] }
 
 [[test]]
