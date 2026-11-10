@@ -494,10 +494,9 @@ fn record_mock_fixture() {
         }
     }
     strip(&mut out);
-    let text = serde_json::to_string_pretty(&out).unwrap().replace(
-        &dir.path().to_string_lossy().to_string(),
-        "/Users/user/fpv",
-    );
+    let text = serde_json::to_string_pretty(&out)
+        .unwrap()
+        .replace(&dir.path().to_string_lossy().to_string(), "/Users/user/fpv");
     let dest = Path::new(env!("CARGO_MANIFEST_DIR")).join("../app/e2e/fixtures/flights.json");
     std::fs::write(dest, text + "\n").unwrap();
 }
