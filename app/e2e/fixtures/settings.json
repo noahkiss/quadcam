@@ -14,7 +14,7 @@
   "layout": "year_day",
   "log_dir": null,
   "name_date_format": "YYYY-MM-DD",
-  "output_dir": "/Users/pilot/Movies/quadcam",
+  "output_dir": "/Users/user/Movies/quadcam",
   "photos_album": "Drone",
   "place_folders": false,
   "places": [
@@ -65,7 +65,7 @@
    "tolerance_s": 30
   }
  },
- "path": "/Users/pilot/Library/Application Support/app.quadcam/settings.json",
+ "path": "/Users/user/Library/Application Support/app.quadcam/settings.json",
  "values": {
   "defaultProfile": "Whoop",
   "places": [

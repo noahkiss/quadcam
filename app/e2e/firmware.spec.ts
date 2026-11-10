@@ -163,7 +163,7 @@ async function openSplash(app: AppFixture, page: Page) {
 
 test("the splash segment previews a PNG, refuses a colour radio, and plans a flash with it", async ({ app, page }) => {
   await openSplash(app, page);
-  await app.core(`c => { c.dialogAnswers.push(["/Users/me/Pictures/logo.png"]); }`);
+  await app.core(`c => { c.dialogAnswers.push(["/Users/user/Pictures/logo.png"]); }`);
   await page.getByRole("button", { name: "Choose Image…" }).click();
   // The radio is a TX16S: its splash is not supported yet.
   await expect(page.getByText("This radio's splash format is not supported yet (board tx16s).")).toBeVisible();
@@ -173,12 +173,12 @@ test("the splash segment previews a PNG, refuses a colour radio, and plans a fla
   await makePocket(app, "2.12.4");
   await page.getByRole("group", { name: "Sections" }).getByRole("button", { name: "Overview" }).click();
   await page.getByRole("group", { name: "Sections" }).getByRole("button", { name: "Splash" }).click();
-  await app.core(`c => { c.dialogAnswers.push(["/Users/me/Pictures/logo.png"]); }`);
+  await app.core(`c => { c.dialogAnswers.push(["/Users/user/Pictures/logo.png"]); }`);
   await page.getByRole("button", { name: "Choose Image…" }).click();
   await expect(page.getByRole("img", { name: /Splash preview, 128 by 64/ })).toBeVisible();
   await page.getByLabel("Threshold").fill("200");
   await page.getByLabel("Invert").check();
-  await expect.poll(async () => (await app.method("gear_splash")).at(-1)).toMatchObject({ image: "/Users/me/Pictures/logo.png", threshold: 200, invert: true, board: "pocket" });
+  await expect.poll(async () => (await app.method("gear_splash")).at(-1)).toMatchObject({ image: "/Users/user/Pictures/logo.png", threshold: 200, invert: true, board: "pocket" });
 
   await page.getByRole("button", { name: "Flash with Splash…" }).click();
   const sheet = page.getByRole("dialog", { name: "Flash Field radio" });

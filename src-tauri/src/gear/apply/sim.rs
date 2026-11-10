@@ -637,8 +637,8 @@ mod tests {
     fn writes_stay_under_the_temporary_folder_under_cargo() {
         let tmp = tempfile::tempdir().unwrap();
         assert!(writes_allowed(&tmp.path().join("x"), true));
-        assert!(!writes_allowed(Path::new("/Users/someone/Library/x"), true));
-        assert!(writes_allowed(Path::new("/Users/someone/Library/x"), false));
+        assert!(!writes_allowed(Path::new("/Users/other/Library/x"), true));
+        assert!(writes_allowed(Path::new("/Users/other/Library/x"), false));
     }
 
     #[test]

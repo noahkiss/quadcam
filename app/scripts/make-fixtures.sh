@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Records the mock core's data from the real core: runs quadcam-cli on the synthetic corpus
 # with a temporary HOME, then writes its JSON answers and small media to e2e/fixtures/.
-# Paths are rewritten to a neutral home (/Users/pilot). Needs `cargo build --bin quadcam-cli`
+# Paths are rewritten to a neutral home (/Users/user). Needs `cargo build --bin quadcam-cli`
 # and `scripts/make-corpus.sh` first. The parity specs read these files through ipc/mock.ts.
 set -euo pipefail
 
@@ -23,7 +23,7 @@ q() { "$cli" --json "$@" 2>/dev/null; }
 save() { node -e '
   const [home, repo, file] = process.argv.slice(1);
   let t = require("fs").readFileSync(0, "utf8");
-  t = t.split(home).join("/Users/pilot").split(repo).join("/Users/pilot/quadcam");
+  t = t.split(home).join("/Users/user").split(repo).join("/Users/user/quadcam");
   const r = JSON.parse(t);
   if (!r.ok) { console.error(JSON.stringify(r.error)); process.exit(1); }
   require("fs").writeFileSync(file, JSON.stringify(r.result, null, 1) + "\n");

@@ -41,7 +41,7 @@ own plan: [Radio design](radio-design.md).
 | Rule | Where it comes from | What it means for Gear |
 |---|---|---|
 | One `api` method table drives the CLI, the MCP server, the socket and the GUI | `AGENTS.md`, Rules | Every Gear feature is a `Core` method first, then a row in `api/gear.rs` |
-| Keep the MCP surface small | `AGENTS.md`, MCP server | Three new tools, split by risk (section 5.3) |
+| Keep the MCP surface small | `docs/agent-usage.md`, MCP server | Three new tools, split by risk (section 5.3) |
 | Publishable repo | `AGENTS.md` | No personal setup in code or fixtures. A user's switch layout, voice lines, binding phrase, packs and model names are user data at runtime |
 | Every guard runs again right before the destructive call | `AGENTS.md`, Rules (format) | The same pattern for every device write (section 8) |
 | Never touch real devices, settings, Photos or Trash in tests | `AGENTS.md`, Rules | Fail-safes for serial ports, DFU, flash tools, sims folders and TTS (section 9.1) |
@@ -168,7 +168,7 @@ sims and card prep.
 - Tables sort by column. Diffs and CLI lines use the monospace face; nothing else does.
 - No status dots. A state is a word in the secondary text ("Connected", "Applied",
   "Verified") or an SF-style symbol with an accessible name.
-- Labels say what a control does. No help text in the UI (design skill, section 4).
+- Labels say what a control does. No help text in the UI.
 
 ### 2.6 Settings window
 
@@ -595,7 +595,7 @@ MSP serves identity and the live view. It never writes configuration in 1.0. The
 
 ### 6.3 EdgeTX SD card and YAML
 
-Proven by a hand-written card patcher on EdgeTX 2.12 (128x64 B&W radio), revisions 1 to 9.
+Checked on real EdgeTX 2.12 cards (128x64 B&W radio).
 QuadCam implements these rules from the file format; it copies no EdgeTX code.
 
 **Reading and writing**

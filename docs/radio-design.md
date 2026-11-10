@@ -6,10 +6,10 @@ Target: QuadCam sets up and flashes EdgeTX radios with no outside script, in the
 section 6.
 
 The reference radios are a RadioMaster Pocket (EdgeTX 2.12.4) and a RadioMaster GX12 (EdgeTX
-2.12.5, ELRS 4.1.0, flashed by hand on 2026-10-22). Today three scripts outside
-QuadCam do the radio work: a card patcher (the switch layout, sounds, timers, telemetry
-screens), an EdgeTX build-and-flash script (the splash and DFU), and an ELRS flash script. The
-owner wants to set the switches in the app. This doc is the plan for that:
+2.12.5, ELRS 4.1.0, flashed by hand on 2026-10-22). Without QuadCam, three kinds of outside
+tool do this radio work: a card patcher (the switch layout, sounds, timers, telemetry
+screens), an EdgeTX build-and-flash script (the splash and DFU), and an ELRS flash script.
+QuadCam should set the switches in the app. This doc is the plan for that:
 
 1. the board profile: the facts QuadCam holds per radio board, and the traps they guard;
 2. the flash done by hand on 2026-10-22, step by step, as the reference QuadCam must
@@ -96,7 +96,7 @@ store it. "Doc" means people need it but no code branches on it.
 | | Power-on method, what plug-in while off does | Data | Instruction text |
 | Quirks | Known bugs per firmware, each with what QuadCam does | Data | Warnings and guards (2.4) |
 
-### 2.2 The two radios the owner has
+### 2.2 The two reference radios
 
 Values checked on the radios on 2026-10-07 (Pocket) and 2026-10-22 (GX12), and in the EdgeTX
 source at `v2.12.5`.
@@ -261,9 +261,10 @@ the app checks. Where QuadCam already does the step for the Pocket, the table sa
 
 ### 4.1 What the card patcher does, against QuadCam
 
-The card patcher (revision 10) sets up two models from tables: a whoop with an analog DVR, and
-a quad that records on board. The
-table maps each thing it writes to what QuadCam has.
+The reference setup is two models built from tables: a whoop with an analog DVR, and a quad
+that records on board. A card patcher wrote it; the scrubbed result is the fixture
+`src-tauri/tests/fixtures/radio-setup/` (`pocket-rev9`, `pocket-rev11`). The table maps each
+thing that setup holds to what QuadCam has.
 
 | Patcher | What it writes | QuadCam today | Gap |
 |---|---|---|---|
@@ -323,7 +324,7 @@ shows them as 1000 and 2000, and checks ranges with the real values.
 | Sim buttons | CH12-CH15 | 2000 while pressed | none (AUX8 on CH12 unused) | Trims or buttons |
 | Spare | CH16 | +100 always | none | none |
 
-In ELRS Wide mode (the owner's setting) the link sends CH5 and CH6-CH12. A job on CH13-CH16
+In ELRS Wide mode (the reference setting) the link sends CH5 and CH6-CH12. A job on CH13-CH16
 never reaches the quad.
 
 The radio-side effects of each job (callouts per position, the finder screen on SD edges, the
@@ -384,13 +385,13 @@ allow sharing (sim buttons on trims do not share with read-outs on the same trim
 
 ### 5.5 Copy a setup from the Pocket to the GX12
 
-The owner's models live on the Pocket. Moving to the GX12 is one flow:
+A pilot whose models live on a Pocket moves them to a GX12 in one flow:
 
 1. Pick the source radio (Pocket card or its latest backup) and the target (GX12).
 2. QuadCam reads the source's setup back into jobs: each job's control on the Pocket.
 3. It proposes the target's controls from the default GX12 assignment, and lists anything it
    cannot map.
-4. The owner adjusts in the editor.
+4. The pilot adjusts in the editor.
 5. Apply: model copy (stage 2's cross-board copy), then the generated ops for the GX12's
    controls, then sounds and Lua screens. One plan, one confirm, a backup first. The plan's
    estimate uses the GX12's USB speed.
@@ -419,10 +420,10 @@ docs. A stage on real gear ends with a trial in [Device trials](trials.md).
 |---|---|---|---|
 | 1 | Board profiles and the GX12 flash (`feat/gx12-flash`) | The profile table; `gx12` proven for the EdgeTX flash, read and restore at 2.12.5; DFU steps from the profile; the ELRS TX target from the board, `etx` only for the GX12, the LR1121 firmware | Unit tests on the table; the flash plan for `gx12` on fakes names the SG steps and the board binary; the ELRS plan for a GX12 picks `radiomaster.tx_dual.gx12` and refuses `uart`. On glass: Read firmware on the GX12 saves 1 MB and names `edgetx-gx12-2.12.5` |
 | 2 | GX12 card and cross-board copy (`feat/gx12-card`) | GX12 card read and write; switch types read case-insensitively; `customSwitches:` read; `gx12` proven for card writes; model copy Pocket to GX12 with a control map | Round-trip byte-equal on GX12 fixtures (factory 2.11 and a file the radio saved on 2.12.5); each edit op on `gx12`; the cross-board copy lists what it cannot map |
-| 3 | Setup as data | Jobs, assignments, template and overrides (4.2); the generator; radio ops for switch and pot types; `customSwitches:` write; QuadCam's own telemetry Lua screens with the finder control as a setting; post-flash steps (storage pack, `elrs.lua`, volume label) | On a copy of the Pocket card at revision 10, the generated change for the Pocket assignment plans **no files** (QuadCam reproduces the patcher). The GX12 default assignment on a GX12 fixture gives valid YAML by the schema |
+| 3 | Setup as data | Jobs, assignments, template and overrides (4.2); the generator; radio ops for switch and pot types; `customSwitches:` write; QuadCam's own telemetry Lua screens with the finder control as a setting; post-flash steps (storage pack, `elrs.lua`, volume label) | On the scrubbed Pocket fixture (`tests/fixtures/radio-setup/`), the generated change for the Pocket assignment plans **no files** (QuadCam reproduces the reference setup). The GX12 default assignment on a GX12 fixture gives valid YAML by the schema |
 | 4 | The editor | The Setup segment, Learn, Review, Copy from; rows `gear_radio_setup` and `gear_radio_setup_edit`; CLI `gear setup`; MCP `quadcam_gear` `radio_setup` and `quadcam_gear_edit` `radio_setup_edit` | e2e on the mock core; the owner approves the dev build |
 | 5 | GX12 on glass | Both models on the GX12 through QuadCam | Each switch's direction matches the assignment on the Controls page; the switch map matches position by position; with a quad linked, Betaflight's Receiver tab shows the expected values and the Modes tab lights ARM, BEEPER and turtle; callouts play; the finder screen opens on the finder control |
-| 6 | Retire the scripts | Nothing in QuadCam. The fpv notes switch the route to QuadCam once the owner passes stages 1-5 | The owner runs a bench session with no script |
+| 6 | Retire the scripts | Nothing in QuadCam. Stages 1-5 cover what the outside scripts did | A bench session with no outside script |
 | 7 | Other boards | Profiles for the lines in 2.5 as unproven data; the UF2 refusal; the `v12` floor; the F2 cap | Unit tests for each guard; a profile shows on an unknown radio of a listed board |
 
 Stage 3 shipped as: `gear/edgetx/setup/` (the types, the defaults, the generator, QuadCam's

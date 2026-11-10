@@ -9,7 +9,7 @@ const initial = store.getState();
 const S = () => store.getState();
 
 async function load() {
-  S().setSession(await api.loadSource("/Users/pilot/clips"));
+  S().setSession(await api.loadSource("/Users/user/clips"));
 }
 
 describe("a re-import of clips already in the library", () => {

@@ -9,7 +9,7 @@ const patches = async (app: AppFixture) => (await suggests(app)).flat();
 const batches = async (app: AppFixture) => (await suggests(app)).filter((ps) => ps.length > 1);
 
 async function openFolder(app: AppFixture) {
-  await app.core("c => c.dialogAnswers.push('/Users/pilot/clips')");
+  await app.core("c => c.dialogAnswers.push('/Users/user/clips')");
   await app.page.getByRole("button", { name: "Import…" }).first().click();
   await expect(sheet(app.page)).toBeVisible();
   await expect(row(app.page, "PICT0001.AVI")).toBeVisible();
@@ -18,7 +18,7 @@ async function openFolder(app: AppFixture) {
 test("Import… without a card picks a folder and loads its clips", async ({ app, page }) => {
   await app.open();
   await openFolder(app);
-  expect((await app.method("load"))[0]).toEqual({ source: "/Users/pilot/clips" });
+  expect((await app.method("load"))[0]).toEqual({ source: "/Users/user/clips" });
   await expect(rows(page).filter({ has: page.getByRole("checkbox") })).toHaveCount(5);
   await expect(sheet(page).getByText("5 clips · 2:10 flying · 0:00 dead air")).toBeVisible();
 });
@@ -212,9 +212,9 @@ test("an agent's format request waits for the person's click", async ({ app, pag
 
 test("a folder dropped on the window starts an import", async ({ app, page }) => {
   await app.open();
-  await page.evaluate(() => window.__qc!.drop(["/Users/pilot/dropped"]));
+  await page.evaluate(() => window.__qc!.drop(["/Users/user/dropped"]));
   await expect(sheet(page)).toBeVisible();
-  expect((await app.calls("load_dropped"))[0].args).toEqual({ paths: ["/Users/pilot/dropped"] });
+  expect((await app.calls("load_dropped"))[0].args).toEqual({ paths: ["/Users/user/dropped"] });
 });
 
 test("the review panel's trim editor sets session cuts; tabs show flight and file", async ({ app, page }) => {

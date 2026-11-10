@@ -576,7 +576,7 @@ for you. While the app runs, an agent's `volume_label` opens the apply sheet and
 
 **Not yet checked on a real radio:** QuadCam's Lua screens, the switch and pot type ops, the
 storage pack and label steps, and the GX12's switch directions. The generator reproduces the
-card patcher's Pocket models byte for byte on scrubbed copies of real cards.
+reference Pocket models byte for byte on scrubbed copies of real cards.
 
 ## Voices
 

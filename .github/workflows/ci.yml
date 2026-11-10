@@ -40,7 +40,7 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' && !startsWith(github.ref, 'refs/tags/') }}
 
 jobs:
-  # The release steps (AGENTS.md "Release") push main and the tag on the commit that a
+  # The release steps (docs/release.md) push main and the tag on the commit that a
   # rel-* branch's run proved. That run counts for both, so their runs skip the other jobs
   # instead of running the same suite again; Release accepts any green run on the commit.
   # Any other push of main, such as a merge, finds no such run and runs everything.

@@ -213,11 +213,11 @@ describe("toast", () => {
 
 describe("PathText", () => {
   it("shows ~, keeps the last segment apart, and the whole path in the title", () => {
-    useStore.setState({ home: "/Users/me" });
-    const { container } = render(<PathText path="/Users/me/Movies/quadcam" />);
+    useStore.setState({ home: "/Users/user" });
+    const { container } = render(<PathText path="/Users/user/Movies/quadcam" />);
     const el = container.querySelector("[data-component='path']")!;
     expect(el).toHaveTextContent("~/Movies/quadcam");
-    expect(el).toHaveAttribute("title", "/Users/me/Movies/quadcam");
+    expect(el).toHaveAttribute("title", "/Users/user/Movies/quadcam");
     expect(el).toHaveClass("mono", "selectable");
     expect(el.querySelector("[aria-hidden='true']")?.lastElementChild).toHaveTextContent(/^\/quadcam$/);
     expect(el.querySelector("[data-path]")).toHaveAttribute("data-path", "~/Movies/quadcam");

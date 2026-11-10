@@ -15,7 +15,7 @@ async function openRates(app: AppFixture, page: Page) {
   await page.getByRole("group", { name: "Sections" }).getByRole("button", { name: "Rates" }).click();
 }
 
-const DUMP = "/Users/pilot/bench/quad.dump_all.txt";
+const DUMP = "/Users/user/bench/quad.dump_all.txt";
 
 test("shows each profile with its curves, table and throttle", async ({ app, page }) => {
   await openRates(app, page);

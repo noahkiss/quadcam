@@ -55,7 +55,7 @@ export const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n ==
 
 export const base = (p: string | null | undefined) => (p || "").split("/").pop() || "";
 
-/** `/Users/me/Movies/x` -> `~/Movies/x` when `home` is known; `/Users/meg` stays as it is. */
+/** `/Users/u/Movies/x` -> `~/Movies/x` when `home` is known; `/Users/user` stays as it is. */
 export function tilde(p: string | null | undefined, home: string): string {
   const h = home.replace(/\/+$/, "");
   if (!p || !h) return p || "";

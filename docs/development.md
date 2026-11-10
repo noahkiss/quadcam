@@ -286,7 +286,7 @@ HOME="$H" QUADCAM_NO_FOCUS=1 cargo tauri dev
 | `scripts/dev-seed.py` | Fills a temporary `HOME` with a made-up library and gear for a dev build ("Seed a dev HOME with made-up data" above) |
 | `assets/icon.svg` | The icon source. Regenerate the icons with `cargo tauri icon` |
 
-[`AGENTS.md`](../AGENTS.md) holds the full module map and the rules for contributors and coding agents.
+[`layout.md`](layout.md) holds the full module map. [`AGENTS.md`](../AGENTS.md) and [`rules.md`](rules.md) hold the rules for contributors and coding agents.
 
 ## Release
 

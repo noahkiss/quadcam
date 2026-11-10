@@ -487,10 +487,10 @@ test("the voice list scrolls inside its own box under a header that stays", asyn
 test("Import takes… copies a folder of earlier takes, and the voice list counts them", async ({ app, page }) => {
   const studio = await openStudio(app, page);
   await saveKey(studio);
-  await app.core(`c => { c.dialogAnswers.push("/Users/someone/old-takes"); }`);
+  await app.core(`c => { c.dialogAnswers.push("/Users/other/old-takes"); }`);
   await studio.getByRole("button", { name: "Import Takes…" }).click();
   await expect(studio.getByRole("status", { name: "Import" })).toHaveText("161 takes imported, 0 in the cache already, 1 left out.");
-  expect((await app.method("gear_voice_import_takes")).at(-1)).toEqual({ folder: "/Users/someone/old-takes", dry_run: false });
+  expect((await app.method("gear_voice_import_takes")).at(-1)).toEqual({ folder: "/Users/other/old-takes", dry_run: false });
   await studio.getByLabel("Model").selectOption("eleven_turbo_v2_5");
   await expect(studio.getByRole("table", { name: "Voices" }).getByRole("row", { name: /^Callum/ })).toContainText("161");
   await expect(stat(page.getByRole("group", { name: "Summary" }), "Lines rendered")).toHaveText("161");

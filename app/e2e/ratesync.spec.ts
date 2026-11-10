@@ -79,7 +79,7 @@ test("converting to another rate model fits the curve and shows the gap", async 
 test("a dump file is not editable", async ({ app, page }) => {
   await openRates(app, page);
   await expect(page.getByRole("button", { name: "Edit Profile" })).toBeVisible();
-  await app.core(`c => { c.dialogAnswers.push(["/Users/pilot/bench/quad.dump_all.txt"]); }`);
+  await app.core(`c => { c.dialogAnswers.push(["/Users/user/bench/quad.dump_all.txt"]); }`);
   await page.getByRole("button", { name: "Open Dump…" }).click();
   await expect(page.getByText("quad.dump_all.txt")).toBeVisible();
   await expect(page.getByRole("button", { name: "Edit Profile" })).toHaveCount(0);

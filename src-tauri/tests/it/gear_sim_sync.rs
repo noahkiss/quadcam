@@ -828,7 +828,7 @@ fn a_sim_write_outside_the_temporary_folder_is_off_under_cargo() {
     // The guard every write passes: under cargo only the temp folder is writable.
     use quadcam_lib::gear::apply::sim::writes_allowed;
     assert!(!writes_allowed(
-        Path::new("/Users/anyone/Library/Application Support/x"),
+        Path::new("/Users/other/Library/Application Support/x"),
         true
     ));
     assert!(writes_allowed(&std::env::temp_dir().join("x"), true));

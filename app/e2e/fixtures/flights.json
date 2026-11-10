@@ -26,7 +26,7 @@
             }
           ],
           "end": "2026-10-04T10:06:20",
-          "file": "/Users/pilot/fpv/logs/Whoop-2026-10-04-100000.csv",
+          "file": "/Users/user/fpv/logs/Whoop-2026-10-04-100000.csv",
           "hover": {
             "all": null,
             "early": null,
@@ -61,7 +61,7 @@
           "day": "2026-10-04",
           "dropouts": [],
           "end": "2026-10-04T10:03:30",
-          "file": "/Users/pilot/fpv/logs/Whoop-2026-10-04-100000.csv",
+          "file": "/Users/user/fpv/logs/Whoop-2026-10-04-100000.csv",
           "hover": {
             "all": null,
             "early": null,
@@ -112,7 +112,7 @@
             }
           ],
           "end": "2026-10-04T10:01:02",
-          "file": "/Users/pilot/fpv/logs/Whoop-2026-10-04-100000.csv",
+          "file": "/Users/user/fpv/logs/Whoop-2026-10-04-100000.csv",
           "hover": {
             "all": 43.0,
             "early": 40.0,
@@ -164,8 +164,8 @@
       }
     ],
     "sources": [
-      "/Users/pilot/fpv/support/gear/logs",
-      "/Users/pilot/fpv/logs"
+      "/Users/user/fpv/support/gear/logs",
+      "/Users/user/fpv/logs"
     ]
   },
   "packs": {

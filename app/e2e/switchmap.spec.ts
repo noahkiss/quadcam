@@ -5,8 +5,8 @@ import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
 import { axeSchemes, expect, test, type AppFixture } from "./fixtures";
 
-const CARD = "/Users/pilot/bench/RADIO-COPY";
-const DUMP = "/Users/pilot/bench/quad.diff_all.txt";
+const CARD = "/Users/user/bench/RADIO-COPY";
+const DUMP = "/Users/user/bench/quad.diff_all.txt";
 /** SA down (armed), SB mid, SC down, SD up; sticks centred, throttle low. */
 const ARMED = [1024, 1024, 0, 1024, 2048, 1024, 2048, 0];
 

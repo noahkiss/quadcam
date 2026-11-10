@@ -30,24 +30,24 @@ describe("format", () => {
 
 describe("paths", () => {
   it("puts ~ for the home folder, whole segments only", () => {
-    expect(tilde("/Users/me/Movies/quadcam", "/Users/me")).toBe("~/Movies/quadcam");
-    expect(tilde("/Users/me", "/Users/me")).toBe("~");
-    expect(tilde("/Users/me/x", "/Users/me/")).toBe("~/x");
-    expect(tilde("/Users/meg/x", "/Users/me")).toBe("/Users/meg/x");
+    expect(tilde("/Users/u/Movies/quadcam", "/Users/u")).toBe("~/Movies/quadcam");
+    expect(tilde("/Users/u", "/Users/u")).toBe("~");
+    expect(tilde("/Users/u/x", "/Users/u/")).toBe("~/x");
+    expect(tilde("/Users/user/x", "/Users/u")).toBe("/Users/user/x");
     expect(tilde("/Volumes/CARD", "")).toBe("/Volumes/CARD");
-    expect(tilde(null, "/Users/me")).toBe("");
+    expect(tilde(null, "/Users/u")).toBe("");
   });
 
   it("splits a path before its last segment", () => {
-    expect(splitPath("/Users/me/Movies/quadcam", "/Users/me")).toEqual({ head: "~/Movies", tail: "/quadcam" });
-    expect(splitPath("/var/folders/zs/abc/T/tmp.x/Movies/quadcam", "/Users/me")).toEqual({ head: "/var/folders/zs/abc/T/tmp.x/Movies", tail: "/quadcam" });
-    expect(splitPath("/Users/me/Movies", "/Users/me")).toEqual({ head: "~", tail: "/Movies" });
+    expect(splitPath("/Users/u/Movies/quadcam", "/Users/u")).toEqual({ head: "~/Movies", tail: "/quadcam" });
+    expect(splitPath("/var/folders/zs/abc/T/tmp.x/Movies/quadcam", "/Users/u")).toEqual({ head: "/var/folders/zs/abc/T/tmp.x/Movies", tail: "/quadcam" });
+    expect(splitPath("/Users/u/Movies", "/Users/u")).toEqual({ head: "~", tail: "/Movies" });
     expect(splitPath("/Volumes", "")).toEqual({ head: "", tail: "/Volumes" });
     expect(splitPath("/Volumes/CARD/", "")).toEqual({ head: "/Volumes", tail: "/CARD/" });
     expect(splitPath("SOUNDS/en/armed.wav", "")).toEqual({ head: "SOUNDS/en", tail: "/armed.wav" });
     expect(splitPath("armed.wav", "")).toEqual({ head: "", tail: "armed.wav" });
-    expect(splitPath("/Users/me", "/Users/me")).toEqual({ head: "", tail: "~" });
-    expect(splitPath("", "/Users/me")).toEqual({ head: "", tail: "" });
+    expect(splitPath("/Users/u", "/Users/u")).toEqual({ head: "", tail: "~" });
+    expect(splitPath("", "/Users/u")).toEqual({ head: "", tail: "" });
   });
 });
 

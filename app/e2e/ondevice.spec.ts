@@ -59,10 +59,10 @@ test("the session report's Summarize day adds the model's paragraph", async ({ a
   await expect(page.getByLabel("Summary of the day")).toContainText("A calm morning at the field");
   expect((await app.method("gear_session_report")).at(-1)).toEqual({ day: null, summarize: true });
   await expect(page.getByRole("button", { name: "Summarize Day" })).toHaveCount(0);
-  await app.core(`c => c.dialogAnswers.push("/Users/pilot/report.md")`);
+  await app.core(`c => c.dialogAnswers.push("/Users/user/report.md")`);
   await page.getByRole("button", { name: "Save…" }).click();
   await expect(page.getByRole("status")).toContainText("Saved the report");
-  expect(await app.method("gear_session_report_save")).toEqual([{ day: null, path: "/Users/pilot/report.md", overwrite: true, summarize: true }]);
+  expect(await app.method("gear_session_report_save")).toEqual([{ day: null, path: "/Users/user/report.md", overwrite: true, summarize: true }]);
 });
 
 for (const scheme of axeSchemes) {

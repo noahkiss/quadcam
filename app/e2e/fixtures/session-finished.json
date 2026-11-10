@@ -4,7 +4,7 @@
  "card_volume": null,
  "clips": [
   {
-   "card_path": "/Users/pilot/quadcam/test-clips/synthetic/PICT0001.AVI",
+   "card_path": "/Users/user/quadcam/test-clips/synthetic/PICT0001.AVI",
    "clock": null,
    "detail": "150 frames",
    "duration": 5,
@@ -39,12 +39,12 @@
    },
    "size": 3074396,
    "stage_error": null,
-   "staged": "/Users/pilot/Library/Caches/app.quadcam/staging/20261006-173855/PICT0001.AVI",
+   "staged": "/Users/user/Library/Caches/app.quadcam/staging/20261006-173855/PICT0001.AVI",
    "status": "ok",
-   "thumb": "/Users/pilot/Library/Caches/app.quadcam/thumbs/PICT0001-x07fee4b870d01a6f.jpg"
+   "thumb": "/Users/user/Library/Caches/app.quadcam/thumbs/PICT0001-x07fee4b870d01a6f.jpg"
   },
   {
-   "card_path": "/Users/pilot/quadcam/test-clips/synthetic/PICT0002.AVI",
+   "card_path": "/Users/user/quadcam/test-clips/synthetic/PICT0002.AVI",
    "clock": null,
    "detail": "3600 frames",
    "duration": 120,
@@ -79,12 +79,12 @@
    },
    "size": 78131276,
    "stage_error": null,
-   "staged": "/Users/pilot/Library/Caches/app.quadcam/staging/20261006-173855/PICT0002.AVI",
+   "staged": "/Users/user/Library/Caches/app.quadcam/staging/20261006-173855/PICT0002.AVI",
    "status": "ok",
-   "thumb": "/Users/pilot/Library/Caches/app.quadcam/thumbs/PICT0002-xd0d144c9ce319e86.jpg"
+   "thumb": "/Users/user/Library/Caches/app.quadcam/thumbs/PICT0002-xd0d144c9ce319e86.jpg"
   },
   {
-   "card_path": "/Users/pilot/quadcam/test-clips/synthetic/PICT0003.AVI",
+   "card_path": "/Users/user/quadcam/test-clips/synthetic/PICT0003.AVI",
    "clock": null,
    "detail": "90 frames",
    "duration": 3,
@@ -119,12 +119,12 @@
    },
    "size": 1651322,
    "stage_error": null,
-   "staged": "/Users/pilot/Library/Caches/app.quadcam/staging/20261006-173855/PICT0003.AVI",
+   "staged": "/Users/user/Library/Caches/app.quadcam/staging/20261006-173855/PICT0003.AVI",
    "status": "ok",
-   "thumb": "/Users/pilot/Library/Caches/app.quadcam/thumbs/PICT0003-x1108525f0a2b87e8.jpg"
+   "thumb": "/Users/user/Library/Caches/app.quadcam/thumbs/PICT0003-x1108525f0a2b87e8.jpg"
   },
   {
-   "card_path": "/Users/pilot/quadcam/test-clips/synthetic/PICT0004.AVI",
+   "card_path": "/Users/user/quadcam/test-clips/synthetic/PICT0004.AVI",
    "clock": null,
    "detail": "incomplete, recovered 0:02",
    "duration": 2,
@@ -148,7 +148,7 @@
     "video_streams": 1,
     "width": 720
    },
-   "recovered": "/Users/pilot/Library/Caches/app.quadcam/staging/20261006-173855/PICT0004.recovered.avi",
+   "recovered": "/Users/user/Library/Caches/app.quadcam/staging/20261006-173855/PICT0004.recovered.avi",
    "rel": "PICT0004.AVI",
    "sidecars": [],
    "signal": {
@@ -159,12 +159,12 @@
    },
    "size": 1231251,
    "stage_error": null,
-   "staged": "/Users/pilot/Library/Caches/app.quadcam/staging/20261006-173855/PICT0004.AVI",
+   "staged": "/Users/user/Library/Caches/app.quadcam/staging/20261006-173855/PICT0004.AVI",
    "status": "incomplete",
-   "thumb": "/Users/pilot/Library/Caches/app.quadcam/thumbs/PICT0004-xe9d02942ab9d5f86.jpg"
+   "thumb": "/Users/user/Library/Caches/app.quadcam/thumbs/PICT0004-xe9d02942ab9d5f86.jpg"
   },
   {
-   "card_path": "/Users/pilot/quadcam/test-clips/synthetic/PICT0005.AVI",
+   "card_path": "/Users/user/quadcam/test-clips/synthetic/PICT0005.AVI",
    "clock": null,
    "detail": "zero bytes",
    "duration": 0,
@@ -182,7 +182,7 @@
    "signal": null,
    "size": 0,
    "stage_error": null,
-   "staged": "/Users/pilot/Library/Caches/app.quadcam/staging/20261006-173855/PICT0005.AVI",
+   "staged": "/Users/user/Library/Caches/app.quadcam/staging/20261006-173855/PICT0005.AVI",
    "status": "empty",
    "thumb": null
   }
@@ -194,7 +194,7 @@
  "log_day": null,
  "log_days": [],
  "log_dir": null,
- "output_dir": "/Users/pilot/Movies/quadcam",
+ "output_dir": "/Users/user/Movies/quadcam",
  "plans": [
   {
    "badge": "unmatched",
@@ -398,7 +398,7 @@
    },
    "original": null,
    "outcome": "verified",
-   "output": "/Users/pilot/Movies/quadcam/2026/2026-09-27/2026-09-27_backyard-loops.mp4",
+   "output": "/Users/user/Movies/quadcam/2026/2026-09-27/2026-09-27_backyard-loops.mp4",
    "qt": [
     [
      "com.apple.quicktime.location.ISO6709",
@@ -469,7 +469,7 @@
      "end": 25,
      "error": null,
      "outcome": "verified",
-     "output": "/Users/pilot/Movies/quadcam/2026/2026-09-27/2026-09-27_gap-run_cut1.mp4",
+     "output": "/Users/user/Movies/quadcam/2026/2026-09-27/2026-09-27_gap-run_cut1.mp4",
      "size": 691044,
      "start": 10
     }
@@ -486,7 +486,7 @@
    },
    "original": null,
    "outcome": "verified",
-   "output": "/Users/pilot/Movies/quadcam/2026/2026-09-27/2026-09-27_gap-run.mp4",
+   "output": "/Users/user/Movies/quadcam/2026/2026-09-27/2026-09-27_gap-run.mp4",
    "qt": [
     [
      "com.apple.quicktime.location.ISO6709",
@@ -569,7 +569,7 @@
    },
    "original": null,
    "outcome": "verified",
-   "output": "/Users/pilot/Movies/quadcam/2026/2026-09-28/2026-09-28_river-dive.mp4",
+   "output": "/Users/user/Movies/quadcam/2026/2026-09-28/2026-09-28_river-dive.mp4",
    "qt": [
     [
      "com.apple.quicktime.location.ISO6709",
@@ -659,8 +659,8 @@
    "size": 0
   }
  ],
- "source": "/Users/pilot/quadcam/test-clips/synthetic",
- "staging": "/Users/pilot/Library/Caches/app.quadcam/staging/20261006-173855",
+ "source": "/Users/user/quadcam/test-clips/synthetic",
+ "staging": "/Users/user/Library/Caches/app.quadcam/staging/20261006-173855",
  "version": 1,
  "warnings": []
 }

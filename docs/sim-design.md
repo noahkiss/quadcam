@@ -73,7 +73,7 @@ borrowed idea, the work packages and the releases.
 |---|---|---|
 | Look at GPL code; never copy it | `AGENTS.md`, Rules | WebFPV, Betaflight, SimITL and `blackbox_decode` are idea-only. Formulas come from public docs and physics (section 10) |
 | One `api` method table | `AGENTS.md`, Rules | Sim features are `Core` methods first, then rows in `api`, then CLI and MCP (2.6) |
-| Keep the MCP surface small | `AGENTS.md`, MCP server | Sim actions join `quadcam_gear` and `quadcam_gear_edit`. No new tool |
+| Keep the MCP surface small | `docs/agent-usage.md`, MCP server | Sim actions join `quadcam_gear` and `quadcam_gear_edit`. No new tool |
 | Publishable repo | `AGENTS.md` | Profiles, calibrations and rooms built from a user's home are user data in the gear folder. Test fixtures are scrubbed log excerpts |
 | Never touch real devices in tests | `AGENTS.md`, Rules | The sim uses `radio_hid`'s `NoHid` and `FakeHid` under cargo. No real HID, audio or window in CI |
 | Never take focus while testing | `AGENTS.md`, Rules | Prototypes and harnesses run headless or offscreen. The owner flies by hand |
@@ -930,7 +930,7 @@ The spike's settings panel grew by accretion. The sim's settings are few and gro
   switch off and on again" and hides the cause (for example throttle up). The OSD should keep
   showing the cause.
 - Measuring (3.3): the page shows frame-to-frame time and a radio-to-picture proxy (the radio
-  sample's arrival to the draw). Real-window numbers need the owner's Mac; see the S5 report.
+  sample's arrival to the draw). Real-window numbers need a Mac with a display; headless CI cannot give them. See the S5 report.
 
 ---
 
@@ -1016,7 +1016,7 @@ presets with the example fits (6.3) entered by hand.
 | S4 | Against `FakeHid`: every report reaches the physics ring with its time; the calibration flow (move, let go, arm switch, review) produces the right map, ends and centres; per-side coverage refuses a one-sided sweep; deadzone rescales with no jump; edited ends survive and Recalibrate clears them; calibrations save by radio id and the resolve step asks when two radios share a product name. Link model: packet rate, jitter and loss are seeded and replay exactly |
 | S5 | Headless (no window focus): the window loads, flies a recorded flight, the pose interpolates, FPV is the default view, the stick display does not overlap the OSD at 16:10 and 16:9. The owner flies it with the radio |
 | S6 | All four prototypes run the same recording; the report holds every measure in 3.3 for each, and the decision rule's result |
-| S7 | The chosen host meets the 3.3 bar on the owner's Mac. The sim process is signed and notarized in the release build. A renderer crash leaves QuadCam running and the Sim page reports it |
+| S7 | The chosen host meets the 3.3 bar on a release build on Apple silicon. The sim process is signed and notarized in the release build. A renderer crash leaves QuadCam running and the Sim page reports it |
 | S8 | Every world passes its scale checks. `notices.mjs --check` fails on an asset with no manifest row. A world module installs and removes like the ffmpeg module |
 | S9 | The synth covers 5k to 60k rpm with no aliasing (golden spectra in tests); no audio node runs when the motors are stopped and the quad is still (no constant noise); latency at most 15 ms on the default device |
 | S10 | Settings match 9.3; a click outside closes the popover; MCP schema snapshot updated; `docs/sim.md` covers every screen |

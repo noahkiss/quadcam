@@ -88,7 +88,7 @@ test("Storage: sizes per device, prune after a confirm, import a folder after a 
   await expect(page.getByText("Pruned 1 backup.")).toBeVisible();
   expect((await app.method("gear_prune")).map((p) => p.dry_run)).toEqual([true, false]);
 
-  await app.core(`c => { c.dialogAnswers = ["/Users/someone/old-backups"]; }`);
+  await app.core(`c => { c.dialogAnswers = ["/Users/other/old-backups"]; }`);
   await page.getByRole("button", { name: "Import Backups…" }).click();
   const imp = dialog(page, "Import these backups?");
   await expect(imp).toContainText("2 new backups");

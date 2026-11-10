@@ -11,7 +11,7 @@ import simsFixture from "../../../e2e/fixtures/sims.json";
 import switchMapFixture from "../../../e2e/fixtures/switchmap.json";
 import type { LibClip, LibraryView, ModulePin, ModuleStatus, OsdView, RatesView, Session, SettingsView, SimRates, SwitchMap, Volume } from "../types";
 
-export const HOME = "/Users/pilot";
+export const HOME = "/Users/user";
 export const CACHE = `${HOME}/Library/Caches/app.quadcam`;
 export const LIBRARY_ROOT = `${HOME}/Movies/quadcam`;
 export const PREVIEW = `${CACHE}/previews/preview.mp4`;

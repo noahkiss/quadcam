@@ -101,13 +101,13 @@ const MADE = "2026-10-01T18:30:00Z";
 function packs(v: MockVoice): VoicePack[] {
   const out: VoicePack[] = [];
   const radios = (id: string) => Object.keys(v.chosen).filter((r) => v.chosen[r] === id);
-  const mine = (id: string, k: Partial<VoicePack>): VoicePack => ({ ...AVAILABLE, id, license: "Rendered by you; yours to use.", attribution: "", version: "", installed: true, local: true, bytes: 412_000, dir: `/Users/pilot/gear/voices/${id}`, sets: ["quadcam"], made: MADE, radios: radios(id), retakes: v.retakes[id] ?? [], heard: v.heard[id] ?? [], flags: v.packFlags[id] ?? [], ...k });
+  const mine = (id: string, k: Partial<VoicePack>): VoicePack => ({ ...AVAILABLE, id, license: "Rendered by you; yours to use.", attribution: "", version: "", installed: true, local: true, bytes: 412_000, dir: `/Users/user/gear/voices/${id}`, sets: ["quadcam"], made: MADE, radios: radios(id), retakes: v.retakes[id] ?? [], heard: v.heard[id] ?? [], flags: v.packFlags[id] ?? [], ...k });
   if (v.installed.includes(LOCAL_ID)) out.push(mine(LOCAL_ID, { voice: "Samantha", provider: "say" }));
   for (const id of v.installed.filter((x) => x.startsWith("local-elevenlabs-"))) {
     const [, name = "voice", model = ""] = /^local-elevenlabs-voice-([a-z]+)-(.*)$/.exec(id) ?? [];
     out.push(mine(id, { voice: name.charAt(0).toUpperCase() + name.slice(1), provider: "elevenlabs", model: model.replace(/-/g, "_"), sets: ["quad"], bytes: 2_300_000 }));
   }
-  if (v.installed.includes(AVAILABLE.id)) out.push({ ...AVAILABLE, preview: [], zip_bytes: 0, installed: true, dir: `/Users/pilot/gear/voices/${AVAILABLE.id}`, sets: ["quadcam"], made: MADE, radios: radios(AVAILABLE.id), heard: v.heard[AVAILABLE.id] ?? [], flags: v.packFlags[AVAILABLE.id] ?? [] });
+  if (v.installed.includes(AVAILABLE.id)) out.push({ ...AVAILABLE, preview: [], zip_bytes: 0, installed: true, dir: `/Users/user/gear/voices/${AVAILABLE.id}`, sets: ["quadcam"], made: MADE, radios: radios(AVAILABLE.id), heard: v.heard[AVAILABLE.id] ?? [], flags: v.packFlags[AVAILABLE.id] ?? [] });
   else if (v.index) out.push({ ...AVAILABLE });
   return out;
 }
@@ -311,9 +311,9 @@ export function preview(g: MockGear, p: { line: string; pack?: string | null; ra
   const stem = p.line.replace(/^SOUNDS\//, "").replace(/\.wav$/, "").replace(/[^A-Za-z0-9]+/g, "-");
   if (p.pack) {
     if (!g.voice.installed.includes(p.pack)) throw `Pack "${p.pack}" is not installed.`;
-    return `/Users/pilot/Library/Caches/app.quadcam/voice/preview/${p.pack}-${stem}.wav`;
+    return `/Users/user/Library/Caches/app.quadcam/voice/preview/${p.pack}-${stem}.wav`;
   }
-  if (p.radio && g.voice.overrides[p.radio]?.[p.line]) return `/Users/pilot/Library/Caches/app.quadcam/voice/preview/own-${stem}.wav`;
+  if (p.radio && g.voice.overrides[p.radio]?.[p.line]) return `/Users/user/Library/Caches/app.quadcam/voice/preview/own-${stem}.wav`;
   throw `${p.line} has no override on this radio.`;
 }
 
@@ -569,7 +569,7 @@ export function sample(g: MockGear, p: { voices: string[]; models: string[]; dry
 
 // ----- the sample gallery and flags (`core/voice_samples.rs`) -----
 
-const SAMPLE_ROOT = "/Users/pilot/Library/Application Support/app.quadcam/gear/voice-samples";
+const SAMPLE_ROOT = "/Users/user/Library/Application Support/app.quadcam/gear/voice-samples";
 const sampleId = (voice: string, model: string) => `${voice.replace(/^voice-/, "")}-${model.replace(/_/g, "-")}`;
 
 /** A sample run's takes into the gallery, by voice and model; a new take drops its flag. */
@@ -847,7 +847,7 @@ export function add(g: MockGear, p: { voice: string; name?: string; confirm?: bo
 /** `gear_voice_library_preview`: a made-up cache path the dev server serves as a broken URL. */
 export function libraryPreview(p: { url: string }): string {
   if (!p.url.startsWith("https://")) throw "A preview is fetched only from an https:// address.";
-  return `/Users/pilot/Library/Caches/app.quadcam/voice/library-previews/${p.url.split("/").pop()}`;
+  return `/Users/user/Library/Caches/app.quadcam/voice/library-previews/${p.url.split("/").pop()}`;
 }
 
 /** `gear_voice_pack_preview`: the index pack's preview lines, "fetched" into the cache. */

@@ -146,7 +146,7 @@ mod tests {
 
     #[test]
     fn cargo_may_not_use_the_account_home() {
-        let me = Path::new("/Users/someone");
+        let me = Path::new("/Users/other");
         assert!(!support_allowed(None, true, me, Some(me)));
         assert!(!support_allowed(Some("1"), true, me, Some(me)));
         assert!(!support_allowed(None, true, me, None));

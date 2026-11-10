@@ -13,7 +13,7 @@ async function openOsd(app: AppFixture, page: Page) {
   await page.getByRole("group", { name: "Sections" }).getByRole("button", { name: "OSD" }).click();
 }
 
-const DUMP = "/Users/pilot/bench/quad.dump_all.txt";
+const DUMP = "/Users/user/bench/quad.dump_all.txt";
 
 test("opens a dump and shows each profile with its check", async ({ app, page }) => {
   await openOsd(app, page);
