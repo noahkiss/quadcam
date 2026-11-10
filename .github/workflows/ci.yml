@@ -1,7 +1,8 @@
 name: CI
 
 # Format, clippy, tests and a release build of the app on every push to any branch or
-# `v*` tag, and on every pull request from a fork. The app is macOS-only, so the Rust job
+# `v*` tag, and on every pull request from a fork. A branch push or pull request that touches
+# only Markdown, docs/ or LICENSE runs nothing. The app is macOS-only, so the Rust job
 # runs on an Apple Silicon runner. The repository is public, so macOS minutes are free.
 # The UI jobs need no macOS (the Playwright specs run on the mocked core), so they run on
 # Linux, where runners start at once.
@@ -24,7 +25,11 @@ on:
   push:
     branches: ['**']
     tags: ['v*']
+    # A push or pull request that touches only docs runs nothing. A tag push ignores
+    # path filters, so a release still gets its run.
+    paths-ignore: ['**/*.md', 'docs/**', 'LICENSE']
   pull_request:
+    paths-ignore: ['**/*.md', 'docs/**', 'LICENSE']
   workflow_dispatch:
 
 permissions:

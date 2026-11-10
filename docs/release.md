@@ -89,7 +89,9 @@ GitHub (`noahkiss/quadcam`, public) is the only remote. Users install the cask
 - `.github/workflows/ci.yml` runs fmt, clippy, tests (`cargo nextest run --profile ci`) and a
   release build on every push to a branch or `v*` tag and on pull requests from forks, a
   `ui` job for `app/` (typecheck, lint, Vitest, build), and an `e2e` job that splits the
-  Playwright specs across four Linux runners (`--shard`). On a branch or pull request,
+  Playwright specs across four Linux runners (`--shard`). A branch push or pull request that
+  touches only Markdown, `docs/` or `LICENSE` starts no run (`paths-ignore`); a tag push always
+  runs. On a branch or pull request,
   a path filter (`dorny/paths-filter`, against the merge base with main) picks `ci` only when
   the change touches what the slow tests cover (import, disk, card, prep, join, media, scan,
   session, sources, the CLI's `main.rs`, the MCP server's non-Gear files, `tests/it/common`, those
