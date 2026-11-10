@@ -325,7 +325,7 @@ tests green before merge. Rollback is `git revert` of that PR unless the table s
 |---|---|---|:-:|---|
 | R0 Safety net | Snapshot `mcp::tools()` JSON, the `dispatch` method list, CLI `--help`, and JSON of `Session` and `LibraryView` from the test corpus. Add a `fingerprint` test vector | New snapshots (insta) | S | First |
 | R1 Paths and settings | Add `paths.rs`; move `Defaults` to `settings.rs`; `geocode` stops importing `core` | Existing suite | S | With R2 |
-| R2 One cut writer | `core/cuts.rs`: one `write_cut()` for session and library, one `format_for_ext`, one `ExportedCut` builder. Library cuts gain `verify_qt` (owner decision, Q2) | Existing cut tests; new library cut test that checks QuickTime keys | M | With R1 |
+| R2 One cut writer | `core/cuts.rs`: one `write_cut()` for session and library, one `format_for_ext`, one `ExportedCut` builder. Library cuts gain `verify_qt` (maintainer decision, Q2) | Existing cut tests; new library cut test that checks QuickTime keys | M | With R1 |
 | R3 One proxy, one Photos path | One proxy fn with the lock; one `share_files` helper | Existing; new concurrent-preview test | S | After R2 |
 | R4 Split god modules | Pure moves: `core/` dir, `session.rs` loses `run_import` to `pipeline/import.rs`, `mcp.rs` into `server/tools/render` | Existing suite; no snapshot diff | M | After R1-R3 |
 | R5 `api` table + specta | Param/result types into `api/`; macro generates `dispatch` and Tauri commands; tauri-specta writes `bindings.ts` (debug build and a test); typed `Event` enum | Snapshots unchanged; `bindings.ts` check in CI | M | After R4 |
@@ -358,7 +358,7 @@ Recommendation: **build the new UI side by side, then cut over once.**
 | U5 ClipDetail + TrimTimeline | Port trim.js behaviour, Inspector, Details/Flight tabs, prev/next | Parity specs; Vitest on trim math | L | After U4 |
 | U6 ImportSheet | Load, Review, Add to Library, Finish; agent suggestion badges; format card dialog and `agent-format-request` | Parity specs incl. agent-suggest and removed-cuts flows | L | After U5 or with it |
 | U7 Settings | Six panes; saves only changed keys; places search; profile editor | Parity specs | M | With U5/U6 |
-| U8 Flip default | `next` becomes default; legacy stays one release behind the switch | Full suites; manual smoke by the owner | S | Last |
+| U8 Flip default | `next` becomes default; legacy stays one release behind the switch | Full suites; manual smoke by the maintainer | S | Last |
 | U9 Remove legacy | Delete `ui/`, the switch and `withGlobalTauri` | Suites | S | One release after U8 |
 
 U8 and U9 shipped together in 0.5.0: the new UI is the only UI (decision 7, changed).
@@ -415,7 +415,7 @@ U0 ─ U1 ─ U2 ─────────── U3(R5) ─ U4 ─ U5 ─ U6 �
 - Playwright against the Vite dev server (port 4719) with `ipc/mock.ts` injected before page
   scripts. Mock data comes from the R0 snapshots, so mocks track real core shapes.
 - Playwright drives a headless browser it owns. Never real mouse or keyboard events on the
-  owner's Mac, never focus-taking windows. An end-to-end run of the real app keeps the existing
+  maintainer's Mac, never focus-taking windows. An end-to-end run of the real app keeps the existing
   `QUADCAM_NO_FOCUS=1` + `QUADCAM_DEV_EVAL` path with `HOME=<temp>`.
 - No test touches the real settings, library, Trash or Photos (existing rules stand).
 - CI runs `tsc --noEmit`, lint, Vitest, Playwright, and a check that `bindings.ts` is current.
@@ -436,7 +436,7 @@ U0 ─ U1 ─ U2 ─────────── U3(R5) ─ U4 ─ U5 ─ U6 �
 | `DefaultHasher` ids change on a toolchain bump | R0 test vector now; Q1 decides the fix |
 | Digital cards are exFAT and large | `CardPolicy` per source; format stays analog-only until decided (Q5) |
 
-### Questions for the owner
+### Questions for the maintainer
 
 1. **Identity hash.** Replace `DefaultHasher` with a specified hash (for example xxHash64 or
    BLAKE3 over the same head and tail bytes)? That needs a one-time migration: read the old id,
@@ -455,7 +455,7 @@ U0 ─ U1 ─ U2 ─────────── U3(R5) ─ U4 ─ U5 ─ U6 �
 
 ## 7. Decisions (2026-10-01)
 
-The owner approved the plan and answered the questions:
+The maintainer approved the plan and answered the questions:
 
 1. **Identity hash:** replace `DefaultHasher` with a specified, stable hash. Ship a migration for
    existing libraries; it must work on a real library that already has an index, and a test
@@ -468,7 +468,7 @@ The owner approved the plan and answered the questions:
    The `Source` trait declares whether a source offers formatting.
 6. **Workspace split:** no. R9 is skipped.
 7. **Legacy lifetime:** `ui/` stays for one release after U8, then goes. *Changed
-   2026-10-01:* the owner dropped the extra release. 0.5.0 ships the new UI as the only UI,
+   2026-10-01:* the maintainer dropped the extra release. 0.5.0 ships the new UI as the only UI,
    so U8 and U9 land together: `ui/`, the `ui` setting, `QUADCAM_UI`, `withGlobalTauri`, the
    deprecated legacy commands, `core_call` and the legacy `eject`/`format_plan` handler are
    gone. A settings file with `ui` still loads; reads drop the key and the next write

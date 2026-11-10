@@ -25,7 +25,7 @@ fetch, and the voice pack publish (prepare, review, **Approve and Publish**,
 6. [From reported to proven](#6-from-reported-to-proven)
 7. [How QuadCam gets the updated tables](#7-how-quadcam-gets-the-updated-tables)
 8. [Recommendation and stages](#8-recommendation-and-stages)
-9. [Decisions for the owner](#9-decisions-for-the-owner)
+9. [Decisions for the maintainer](#9-decisions-for-the-maintainer)
 
 ---
 
@@ -52,7 +52,7 @@ fetch, and the voice pack publish (prepare, review, **Approve and Publish**,
 |---|---|---|---|---|
 | Radio board profiles | `gear/radios/boards.rs`, about 50 rows, read-only unless proven | Board, firmware version, USB product string, VID and PID, the DFU device's descriptor (flash size, sector layout), the bootloader entry that worked, card layout facts (`radio.yml` schema version, sound pack folder), the switch and pot slots the radio reports | The next owner of that radio sees a profile checked on a real unit, not one written from EdgeTX source. It is the path for a board toward proven | Detection (`Connected.radio`), **Read Firmware** (DFU, read-only), the card read |
 | Measured USB speeds | `RadioProfile.usb_speed`, 2 of 50 measured | Board, direction (read, write), bytes, seconds, route (DFU, mass storage) | Honest time estimates for a flash, a firmware read and a card write | A read or write job already times itself |
-| Compat rows | `gear/compat.rs` `PROVEN` | Product, board, version, the job, the result, and the verify step's result (read-back equal or not) | Shows which versions other pilots ran a job on with success. It is evidence for the owner's promotion to proven, not a promotion | The apply and flash reports, after their read-back |
+| Compat rows | `gear/compat.rs` `PROVEN` | Product, board, version, the job, the result, and the verify step's result (read-back equal or not) | Shows which versions other pilots ran a job on with success. It is evidence for the maintainer's promotion to proven, not a promotion | The apply and flash reports, after their read-back |
 | FC board notes | `gear/bf/boards.rs` `BoardNote` | Board, build version, when it applies (after a USB session, always), and the person's text | A known issue reaches every owner of that board before they meet it | Free text, typed by the person on the FC page |
 | FC USB time limit | `bf/boards.rs` `usb_minutes` | Board, minutes on USB before the symptom, the symptom | A safer default for the USB limit cue | Free text plus a number |
 | Vendor firmware feeds | `bf/boards.rs` `VENDOR_SOURCES` | Board, maker, product, the feed's address, the file prefix | Owners of other boards get their maker's own builds | Typed by the person; the address is checked later by a reviewer |
@@ -143,7 +143,7 @@ Three options. Each one ends in the same reviewed data repo (a new public repo,
 
 QuadCam opens `github.com/noahkiss/quadcam-data/issues/new?template=<kind>.yml` with the record
 in the body as a fenced JSON block. The person sees it again in GitHub and clicks **Submit new
-issue**. A GitHub Action checks the JSON against the schema and labels the issue. The owner
+issue**. A GitHub Action checks the JSON against the schema and labels the issue. The maintainer
 reads it and adds an `accept` label, and a second Action opens a pull request that adds the
 record to the data.
 
@@ -180,18 +180,18 @@ Each community row has a status. The app shows it on the row.
 |---|---|---|---|
 | Built in | Written from docs or source, no unit seen | The table as it ships now | Nothing new |
 | Reported | One person sent this | One accepted report | Shown with "reported by 1 pilot". Estimates use it, labelled |
-| Confirmed | Several independent people agree | N accepted reports from distinct GitHub accounts, no report against it, or one report from the owner's bench | Shown as "confirmed by N pilots". Replaces a built-in value in estimates and notes |
+| Confirmed | Several independent people agree | N accepted reports from distinct GitHub accounts, no report against it, or one report from the maintainer's bench | Shown as "confirmed by N pilots". Replaces a built-in value in estimates and notes |
 | Proven | QuadCam tested a write on it | A test passes on that board and version, and a release adds the row to `compat::PROVEN` | Unlocks the write. Unchanged from today |
 
 Rules:
 
-- **Confirmed never becomes proven by count.** Proven needs a test the owner runs or a fixture
+- **Confirmed never becomes proven by count.** Proven needs a test the maintainer runs or a fixture
   in the test suite: for example, a contributed DFU descriptor plus a firmware read on a board
-  the owner can borrow. Confirmed rows make a good queue for that work: the most-confirmed
+  the maintainer can borrow. Confirmed rows make a good queue for that work: the most-confirmed
   unproven boards first.
 - **A conflicting report** (a different flash size for the same board, a failed result for a
-  pair) holds the row at its current status and flags it for the owner.
-- **Independence** is one per GitHub account per row. The owner's reports count as confirmed
+  pair) holds the row at its current status and flags it for the maintainer.
+- **Independence** is one per GitHub account per row. The maintainer's reports count as confirmed
   at once, since that bench is the reference.
 - **A suggested N is 3.** A small number fits a small community; a wrong value only affects an
   estimate or a note, never a write.
@@ -236,16 +236,16 @@ issue count shows that the account is the barrier.
 
 | Stage | Ships | Acceptance |
 |---|---|---|
-| 0. Data repo | `quadcam-data` with the schema, an issue form per kind, the check Action, the `accept` Action, and the owner's own reports as the first rows | An issue with a bad record gets a label and a comment; an accepted one opens a pull request that passes CI |
+| 0. Data repo | `quadcam-data` with the schema, an issue form per kind, the check Action, the `accept` Action, and the maintainer's own reports as the first rows | An issue with a bad record gets a label and a comment; an accepted one opens a pull request that passes CI |
 | 1. Contribute, two kinds | The `contributions` setting, the record builder, the free-text scan, the preview sheet, channel A. Kinds: radio board facts and USB speeds | Unit tests: each source with a serial, names, a path and a UID gives a record without them. The preview's digest matches the sent bytes. MCP prepares and never sends |
 | 2. Fetch | `community.json`, the signature check, the overlay, statuses shown on board rows | A bundle with a bad signature, an old sequence, or a row that touches a guard value is refused or dropped, in tests on fixtures |
 | 3. More kinds | FC board notes, USB time limits, compat results, sim profiles, voice structures and risky lines; channel B | Each kind has a strip test and a schema in the data repo |
-| 4. Promotion work | A page in the data repo that ranks unproven boards by confirmations; releases fold confirmed rows in | The owner picks the next board to prove from it |
+| 4. Promotion work | A page in the data repo that ranks unproven boards by confirmations; releases fold confirmed rows in | The maintainer picks the next board to prove from it |
 
-## 9. Decisions for the owner
+## 9. Decisions for the maintainer
 
 1. **Channel.** A alone, A plus B (recommended), or C as well.
-2. **N for confirmed.** 3 is suggested. Do the owner's own reports count as confirmed at once?
+2. **N for confirmed.** 3 is suggested. Do the maintainer's own reports count as confirmed at once?
 3. **The fetch default.** `community_data` on by default (recommended: it sends only a request)
    or off.
 4. **The data repo.** A new public `quadcam-data` (recommended), or a folder in

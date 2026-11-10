@@ -32,7 +32,7 @@ own plan: [Radio design](radio-design.md).
 10. [Build plan: work packages](#10-build-plan-work-packages)
 11. [Release plan](#11-release-plan)
 12. [Licensing](#12-licensing)
-13. [Open questions for the owner](#13-open-questions-for-the-owner)
+13. [Open questions for the maintainer](#13-open-questions-for-the-maintainer)
 
 ---
 
@@ -46,7 +46,7 @@ own plan: [Radio design](radio-design.md).
 | Every guard runs again right before the destructive call | `AGENTS.md`, Rules (format) | The same pattern for every device write (section 8) |
 | Never touch real devices, settings, Photos or Trash in tests | `AGENTS.md`, Rules | Fail-safes for serial ports, DFU, flash tools, sims folders and TTS (section 9.1) |
 | Docs change in the same change | `AGENTS.md` | Each work package updates `docs/` and `README.md` for what it ships |
-| Native Mac look | Owner preference | Sidebar, toolbar, sheets, inspector, context menus, standard keys |
+| Native Mac look | Maintainer preference | Sidebar, toolbar, sheets, inspector, context menus, standard keys |
 
 ## 2. Information architecture and screens
 
@@ -1982,7 +1982,7 @@ job or another program holds. The Blackbox segment reads it while the FC is plug
 for a kind to pull on plug-in (off by default). `gearEraseBlackbox` (off by default) allows the
 erase. A call can only turn the erase off for its run (`keep`); nothing on the CLI or in MCP turns
 it on. A manual erase (`gear_blackbox_erase`, `confirm=true`) needs a stored pull whose used size
-equals the flash's now (the flash only grows) and whose blob reads back. The owner's request was an
+equals the flash's now (the flash only grows) and whose blob reads back. The maintainer's request was an
 automatic pull then wipe. The setting defaults to off because the request names the
 `delete_clips_after_import` pattern, which is off, and a wipe cannot be undone. Turn it on in
 Settings > Gear to get the request as asked.
@@ -2236,7 +2236,7 @@ Refusals are exit code 3 on the CLI and an error with the code and the reason ov
 
 ### 9.3 By hand, on real gear
 
-Each release in section 11 lists what the owner tests. Nothing in CI needs a device.
+Each release in section 11 lists what the maintainer tests. Nothing in CI needs a device.
 
 ## 10. Build plan: work packages
 
@@ -2288,10 +2288,10 @@ split: their read-only halves run early; their write halves wait for WP5.
 
 ## 11. Release plan
 
-Each release is tagged after its packages merge and CI is green. The owner tests on real
+Each release is tagged after its packages merge and CI is green. The maintainer tests on real
 gear before the next release starts.
 
-| Release | Packages | Owner tests on real gear |
+| Release | Packages | Maintainer tests on real gear |
 |---|---|---|
 | 0.7.0 Read-only gear | WP1, WP2, WP3, WP4, WP12, WP13, WP14 | Install the ffmpeg module in Settings > Modules and import a card with it; switch back to Homebrew. Import the old backup folders; check the Storage view's sizes. Plug the radio in (USB Storage): a backup appears, a second plug-in adds none. Plug the FC in: backup appears, the FC reboots normally, the dump reads right. Browse and diff backups. Flights for a recent day match the hand analysis (hover, sag, resting, mAh, dropouts) |
 | 0.8.0 Map, OSD, rates, sims | WP6, WP7 (read), WP8 | Switch map matches the radio and the quad, position by position; live highlight while moving switches. OSD render matches the goggles for each profile. Sim sync to every installed sim; fly each and compare feel |
@@ -2330,7 +2330,7 @@ talks to them from the outside and copies none of their code.
 | DFU | Native, from the USB DFU specification | Could port dfu-util |
 | Splash patch | Own (marker search, bit packing) | No change |
 
-## 13. Open questions for the owner
+## 13. Open questions for the maintainer
 
 Each has a default the build uses until you decide.
 

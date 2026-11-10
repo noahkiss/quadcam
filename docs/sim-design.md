@@ -1,8 +1,8 @@
 # Sim: design
 
-Status: approved 2026-10-07. The owner accepted every default in section 12; the engine (question 1) is decided by the S6 measurements.
+Status: approved 2026-10-07. The maintainer accepted every default in section 12; the engine (question 1) is decided by the S6 measurements.
 Baseline: `main` at release 0.6.4, with WP6 (switch map, radio joystick reader) on its branch.
-Target: a built-in FPV simulator, built in work packages (section 11). No code before the owner
+Target: a built-in FPV simulator, built in work packages (section 11). No code before the maintainer
 reviews this doc.
 
 QuadCam knows the pilot's real gear: the radio, the quad's `diff all`, its blackbox logs and its
@@ -37,7 +37,7 @@ borrowed idea, the work packages and the releases.
 9. [Audio and UI](#9-audio-and-ui)
 10. [Licensing](#10-licensing)
 11. [Build plan: work packages and releases](#11-build-plan-work-packages-and-releases)
-12. [Open questions for the owner](#12-open-questions-for-the-owner)
+12. [Decisions (were open questions)](#12-decisions-were-open-questions)
 
 ---
 
@@ -76,8 +76,8 @@ borrowed idea, the work packages and the releases.
 | Keep the MCP surface small | `docs/agent-usage.md`, MCP server | Sim actions join `quadcam_gear` and `quadcam_gear_edit`. No new tool |
 | Publishable repo | `AGENTS.md` | Profiles, calibrations and rooms built from a user's home are user data in the gear folder. Test fixtures are scrubbed log excerpts |
 | Never touch real devices in tests | `AGENTS.md`, Rules | The sim uses `radio_hid`'s `NoHid` and `FakeHid` under cargo. No real HID, audio or window in CI |
-| Never take focus while testing | `AGENTS.md`, Rules | Prototypes and harnesses run headless or offscreen. The owner flies by hand |
-| Native Mac look | Owner preference | The sim's settings, calibration and launch screens are QuadCam's own React UI, with native patterns |
+| Never take focus while testing | `AGENTS.md`, Rules | Prototypes and harnesses run headless or offscreen. The maintainer flies by hand |
+| Native Mac look | Maintainer preference | The sim's settings, calibration and launch screens are QuadCam's own React UI, with native patterns |
 
 ---
 
@@ -225,7 +225,7 @@ Each prototype is the same small program, so the numbers compare:
   baked environment map, and one whoop model.
 - Fed by the `quadcam-sim` crate (S1). A recorded 120 s flight replays through the physics
   thread at 2 kHz, so every engine draws the same motion. A live-radio mode is there for the
-  owner to fly.
+  maintainer to fly.
 - FPV camera, 4:3 and 16:9, the stick display and three OSD text elements.
 - Instrumented: each frame's present time (Metal `presentedTime` where the engine exposes it,
   the rAF timestamp in a web view), the newest input sample time in that frame, the physics
@@ -236,7 +236,7 @@ Each prototype is the same small program, so the numbers compare:
 ### 3.3 Measurements and the bar
 
 Run on an Apple Silicon Mac with a 120 Hz ProMotion display, full screen, at the display's
-native resolution. Headless runs collect the timing; the owner flies once in each for feel and
+native resolution. Headless runs collect the timing; the maintainer flies once in each for feel and
 films one latency test.
 
 | Measure | How | Bar |
@@ -245,7 +245,7 @@ films one latency test.
 | Frame pacing at 60 Hz | Same, display set to 60 Hz | p99 ≤ 17.5 ms; same miss and gap rules |
 | Physics real time | Dropped-step count over a 10 min replay while rendering | Zero drops after the first second |
 | Input-to-present, proxy | Present time minus the newest input sample's arrival time | p50 ≤ 20 ms, p95 ≤ 30 ms |
-| Input-to-photon, filmed | The owner films stick and screen at 240 fps, 20 stick flicks per engine | Reported, compared across engines; no fixed bar |
+| Input-to-photon, filmed | The maintainer films stick and screen at 240 fps, 20 stick flicks per engine | Reported, compared across engines; no fixed bar |
 | Cost | CPU % per thread and GPU % at 120 Hz | Reported; the sim must leave headroom for a screen recorder |
 | Cold start | Launch to first frame | ≤ 3 s |
 | Build | Clean build time, incremental rebuild after touching one sim file, target directory size, CI minutes added | Incremental ≤ 30 s; CI ≤ +10 min |
@@ -257,7 +257,7 @@ films one latency test.
 1. An engine that misses the 120 Hz pacing bar or the latency bar is out.
 2. Among those left, prefer the lowest build, size and maintenance cost, unless the worlds work
    (S8) needs tooling only one of them has.
-3. The owner decides from the report.
+3. The maintainer decides from the report.
 
 ### 3.4 Recommendation, conditional
 
@@ -695,7 +695,7 @@ CI fixtures:
 
 ## 7. Input and calibration
 
-Everything here was tried in the spike with a real radio. The owner judged the calibration the
+Everything here was tried in the spike with a real radio. The maintainer judged the calibration the
 best they had used in any sim; this design keeps its behaviour and fixes what it got wrong.
 
 ### 7.1 Reading the radio
@@ -865,7 +865,7 @@ baked lighting where the engine supports it, and one real-time light for shadows
   - Harmonics and the beat between four motors at slightly different speeds.
   - Loudness from thrust. Prop-wash events add short noise bursts tied to their severity.
 - **No constant wind noise.** The spike removed two constant noise layers (a wash rumble and an
-  airspeed rush), and the owner asked for none. An optional "Airflow swish" (a short burst on a
+  airspeed rush), and the maintainer asked for none. An optional "Airflow swish" (a short burst on a
   hard flip or punch) exists, off by default.
 - ESC start-up tones, arming beeps, the lost-model beeper after a disarm.
 - **Engine**: own synth in Rust on an audio thread (`cpal`, Apache-2.0), independent of the
@@ -1003,7 +1003,7 @@ its rows in `api`, CLI and MCP.
 
 **Phase 1** (fly through a minimal renderer): S1, S2, S4, S5. Profiles start from the built-in
 presets with the example fits (6.3) entered by hand.
-**Phase 2**: S3, S6, S9, BB. The owner picks the engine from S6's report.
+**Phase 2**: S3, S6, S9, BB. The maintainer picks the engine from S6's report.
 **Phase 3**: S7, S8, S10.
 
 ### 11.2 Acceptance criteria
@@ -1014,7 +1014,7 @@ presets with the example fits (6.3) entered by hand.
 | S2 | Every check in 6.4 runs on the CI fixtures and the 75 mm and 65 mm example profiles pass their bands. The fixture scrub test fails on a planted UID. The harness runs on a folder of decoded logs from the CLI |
 | S3 | The Rust fit reproduces the spike's Python fit on the same windows (hover command ±0.005, speed ±2 %, rise time ±2 ms, resistance ±0.005 Ω, lag ±1 ms). The report lists every value's source and residual. A fit changes the profile only after confirm |
 | S4 | Against `FakeHid`: every report reaches the physics ring with its time; the calibration flow (move, let go, arm switch, review) produces the right map, ends and centres; per-side coverage refuses a one-sided sweep; deadzone rescales with no jump; edited ends survive and Recalibrate clears them; calibrations save by radio id and the resolve step asks when two radios share a product name. Link model: packet rate, jitter and loss are seeded and replay exactly |
-| S5 | Headless (no window focus): the window loads, flies a recorded flight, the pose interpolates, FPV is the default view, the stick display does not overlap the OSD at 16:10 and 16:9. The owner flies it with the radio |
+| S5 | Headless (no window focus): the window loads, flies a recorded flight, the pose interpolates, FPV is the default view, the stick display does not overlap the OSD at 16:10 and 16:9. The maintainer flies it with the radio |
 | S6 | All four prototypes run the same recording; the report holds every measure in 3.3 for each, and the decision rule's result |
 | S7 | The chosen host meets the 3.3 bar on a release build on Apple silicon. The sim process is signed and notarized in the release build. A renderer crash leaves QuadCam running and the Sim page reports it |
 | S8 | Every world passes its scale checks. `notices.mjs --check` fails on an asset with no manifest row. A world module installs and removes like the ffmpeg module |
@@ -1026,7 +1026,7 @@ presets with the example fits (6.3) entered by hand.
 
 Gear's release line (gear-design, section 11) stays as it is. The sim rides along it:
 
-| Release | Sim packages | Owner tests on real gear |
+| Release | Sim packages | Maintainer tests on real gear |
 |---|---|---|
 | 0.8.0 (with WP6, WP8) | S1, S2, S4, S5: **Sim preview** behind a setting | Calibrate the radio once; quit and relaunch: no calibration screen. Fly the 75 mm and 65 mm presets in the plain room: hover near the real hover throttle, punch, flips, turtle on its switch. Drop a frame on purpose (open another heavy app): no slow motion |
 | 0.9.0 | S3, S6, S9, BB | Plug a whoop in: blackbox pulled and erased (setting on). Fit its profile; validate it. Fly the fitted profile against the preset. Fly each engine prototype and film the latency test. Choose the engine |
@@ -1039,7 +1039,7 @@ Whether the sim gates 1.0 is open question 7.
 
 ## 12. Decisions (were open questions)
 
-The owner accepted every default below on 2026-10-07. Question 1 stays open until the S6 measurements, then follows the bar in 3.4.
+The maintainer accepted every default below on 2026-10-07. Question 1 stays open until the S6 measurements, then follows the bar in 3.4.
 
 | # | Question | Default |
 |---|---|---|
@@ -1052,6 +1052,6 @@ The owner accepted every default below on 2026-10-07. Question 1 stays open unti
 | 7 | Does the sim gate 1.0, or ship as a preview alongside it? | A preview; not a 1.0 gate |
 | 8 | Which worlds first after the plain room? | Living room, gym, backyard |
 | 9 | World assets: CC0 only, or CC BY with credits too? | CC0 and CC BY; never NC, ND or SA |
-| 10 | Reset: which radio control resets the quad? The sim needs a free switch or button | Owner: always offer a radio reset. Setup asks for a reset control (a free button or trim) and suggests one; changeable in settings. Turtle mode follows the quad's own turtle switch from its aux lines |
+| 10 | Reset: which radio control resets the quad? The sim needs a free switch or button | Maintainer: always offer a radio reset. Setup asks for a reset control (a free button or trim) and suggests one; changeable in settings. Turtle mode follows the quad's own turtle switch from its aux lines |
 | 11 | Video latency default: 0 ms, or the profile's video system (about 12-25 ms digital, about 10 ms analog)? | The profile's video system |
 | 12 | Window: full screen by default, or a window? | Full screen on QuadCam's display |

@@ -32,7 +32,7 @@ write (8.1), a plan and a digest before a write, a backup first, a read-back aft
 4. [In-app radio setup](#4-in-app-radio-setup)
 5. [The switch-assignment editor](#5-the-switch-assignment-editor)
 6. [Stages](#6-stages)
-7. [Open questions for the owner](#7-open-questions-for-the-owner)
+7. [Open questions for the maintainer](#7-open-questions-for-the-maintainer)
 
 ---
 
@@ -154,7 +154,7 @@ Each trap names the guard. A guard refuses before any download or write.
 
 | Trap | Guard |
 |---|---|
-| The GX12 does not enter ROM DFU on plug-in while off. Two waits of 10 and 30 minutes saw no DFU device until the owner held SG and tapped power | The DFU steps come from the profile, never from shared text (`dfu.steps`, `radios::dfu_hint`). A board whose way in no source gives has `DfuStart::Unknown`: no steps, and the hint says QuadCam does not know |
+| The GX12 does not enter ROM DFU on plug-in while off. Two waits of 10 and 30 minutes saw no DFU device until the maintainer held SG and tapped power | The DFU steps come from the profile, never from shared text (`dfu.steps`, `radios::dfu_hint`). A board whose way in no source gives has `DfuStart::Unknown`: no steps, and the hint says QuadCam does not know |
 | A `.uf2` board (every H7: TX15, GX15, TX16S MK3, Jumper T15 Pro, T15-H7, T18 H7 and T22, HelloRadioSky V12 and V15, iFlight Commando 14, Flysky PA01 and ST16) cannot be flashed with a plain DFU tool. Its firmware lives in external QSPI flash; ST's tools cannot recover it | `firmware_format: Uf2` refuses the flash and names the UF2 route: start the EdgeTX bootloader (the profile's entry), copy the board's `.uf2` to the `EDGETX_UF2` drive, or use EdgeTX Buddy or Companion 2.12+ |
 | STM32F2 boards stop at EdgeTX 2.11 (RadioMaster TX12 MK1, Jumper T12, T-Lite, T-Pro V1, BetaFPV LR3 Pro, FrSky X9D, X9D+, X-Lite, X-Lite S) | `edgetx_series: "2.11"` on every F2 row (a test ties it to the MCU): a 2.12 release refuses |
 | EdgeTX reused the target `v12`. Before 2.12.3 it named an F407 B&W radio that was never built; from 2.12.3 it is HelloRadioSky's H7 colour V12. The old firmware bricked a V12 Max | `target_history` (`until: 2.12.3`): `v12` below 2.12.3 refuses before any other check, and the profile's warnings say why |
@@ -226,10 +226,10 @@ the app checks. Where QuadCam already does the step for the Pocket, the table sa
 | 3 | Took `gx12-<hash>.bin` from the zip | One file matches the board's names. The image names `edgetx-gx12-2.12.5` | Pocket only: `BOARDS` lists `pocket` |
 | 4 | Patched the splash: found `SPS\0` once, 0x80 0x40, 1,024 bytes, `SPE`; decoded it back | The same marker checks as the Pocket. The `Splash` pair (`gx12`, 2.12.5) proven | Pocket 2.12.4 only |
 | 5 | Updated the storage pack from 2.10 to the 2.12.3 `bw128x64` pack, and put a spare copy of the bin in `FIRMWARE/` | Offer the storage-pack update when `edgetx.sdcard.version` is older than the firmware needs. Write only changed files. Optional: a fallback bin in `FIRMWARE/` for the bootloader route | Missing |
-| 6 | Asked the owner to enter DFU: radio off, USB in, hold SG, tap power, release SG. Plain plug-in did not work | The profile's DFU steps. Wait for exactly one `0483:df11` device with Stop. Say that the screen stays dark | Pocket text |
+| 6 | Asked the maintainer to enter DFU: radio off, USB in, hold SG, tap power, release SG. Plain plug-in did not work | The profile's DFU steps. Wait for exactly one `0483:df11` device with Stop. Say that the screen stays dark | Pocket text |
 | 7 | Read the full 1 MB flash (`dfu-util -a 0 -s 0x08000000:1048576 -U`) | `dfu::read_verified`: two equal reads, not all zeros, saved and read back from disk. The current image names `gx12` | Done for any board in `BOARDS` |
 | 8 | Wrote the image at `0x08000000` and left DFU (`-s 0x08000000:leave -D`) | The layout string gives 1 MB. 2,048-byte transfers. Segment read-back, full read-back, leave | Done for any board in `BOARDS` |
-| 9 | The radio restarted. The owner chose USB Storage | Ask the owner to power-cycle if the screen stays dark | Done (text) |
+| 9 | The radio restarted. The maintainer chose USB Storage | Ask the person to power-cycle if the screen stays dark | Done (text) |
 | 10 | Read `radio.yml`: `semver: 2.12.5`, `board: gx12` | Read the version in Storage mode and record it on the saved radio. Link the DFU serial to the radio | Done: the flash waits up to 3 minutes for the storage and reports **Read the version** (gear-design 8.4); a verified flash links the DFU serial |
 | 11 | Copied `elrs.lua` into `SCRIPTS/TOOLS/` and deleted `elrsV3.lua` and `elrsV3.luac` | A post-flash step, staged as a card change: the Lua that matches the module's ELRS major | Missing |
 | 12 | Renamed the volume from `NO NAME` to a short label for the radio | Offer a volume label from the radio's saved name (`diskutil rename`). Labels help a person; QuadCam's identity stays the card markers | Missing |
@@ -239,13 +239,13 @@ the app checks. Where QuadCam already does the step for the Pocket, the table sa
 | # | Step by hand | What the app must check or do | QuadCam today (preview) |
 |---|---|---|---|
 | 1 | The radio's `serialPort: VCP: mode: CLI` was already set at the factory | Read it from the backup's `radio.yml`. If it is not `CLI`, stage that `radio.yml` change first | Missing as a check |
-| 2 | The owner replugged with the radio on and chose USB Serial (VCP) | Wait for one `0483:5740` port whose product names the radio | Done |
+| 2 | The maintainer replugged with the radio on and chose USB Serial (VCP) | Wait for one `0483:5740` port whose product names the radio | Done |
 | 3 | Picked the target `radiomaster.tx_dual.gx12` from the release's `hardware/targets.json` | Target from the profile; product `RadioMaster GX12 2.4/900 TX`; firmware `Unified_ESP32_LR1121_TX`; upload methods include `etx` | Done: `elrs/flash.rs` lists `Unified_ESP32_LR1121_TX`; the profile picks the target |
 | 4 | Built the image with the binding phrase and auto-WiFi 60 s; read the options block back: UID = MD5 of the phrase, first 6 bytes | `elrs/image.rs` writes and reads the block. Check that the LR1121 target's layout has no `logo_file` (a logo refuses today) | Done. The 4.1.0 GX12 target has no `logo_file` |
 | 5 | The script did not check the board | `ver` names `gx12` before the pulses stop | Done |
 | 6 | Sent `serialpassthrough rfmod 0 460800` | The module path at 460800 | Done |
 | 7 | esptool with `--before no-reset` wrote four segments (bootloader, partitions, boot_app0, firmware) to the ESP32-PICO-D4, each hash-verified. The old flash was not read | Read the chip's 4 MB first and keep it. Every segment verified | Done for the 2.4 GHz TX target |
-| 8 | The owner unplugged and restarted the radio. The factory ELRS version was not read | Read the version first (CRSF device info) so the report names before and after | Open (gear-design open question 9) |
+| 8 | The maintainer unplugged and restarted the radio. The factory ELRS version was not read | Read the version first (CRSF device info) so the report names before and after | Open (gear-design open question 9) |
 | 9 | The Lua (`elrs.lua`) went on in 3.1 step 11 | Order: EdgeTX, Lua, then ELRS | Missing |
 
 ### 3.3 Where the GX12 differs from the Pocket
@@ -342,14 +342,14 @@ only if its kind fits (5.1).
 | `gx12` | SA, SD | SB, SC, SE, SF | SG, SH | none | SW1-SW6: per model, 2-pos or toggle, grouped, start off, on or as before, LED colours | P1, P2 (detent), SL1, SL2 | 4 |
 
 Default GX12 assignment, the same jobs as the Pocket: arm SA, OSD layout SB, rates SC, finder
-SD, turtle SH, VTX power P1. SE, SF, SG, SW1-SW6, P2 and the sliders stay free. The owner sets
+SD, turtle SH, VTX power P1. SE, SF, SG, SW1-SW6, P2 and the sliders stay free. The pilot sets
 the final map in the editor.
 
-**Direction.** On the Pocket the top-edge toggles read +100 in the owner's "up", so CH6 and CH7
+**Direction.** On the Pocket the top-edge toggles read +100 in the maintainer's "up", so CH6 and CH7
 use weight -100. The GX12's front toggles probably read -100 in "up" (position 0), so the same
 jobs would use weight +100. The source does not prove the physical direction. The editor
 therefore stores the direction per assignment, and stage 5 checks it on the radio with the
-live joystick view: move the switch to the owner's "up", read the channel.
+live joystick view: move the switch to the maintainer's "up", read the channel.
 
 ### 5.3 What the editor writes
 
@@ -409,7 +409,7 @@ Native macOS, as the rest of Gear (`docs/development.md`):
 - **Review…** opens the apply sheet with the diff per file.
 - **Copy From…** runs 5.5.
 
-Every UI change goes to the owner in a dev build first. The owner approves it before it ships.
+Every UI change goes to the maintainer in a dev build first. The maintainer approves it before it ships.
 
 ## 6. Stages
 
@@ -421,7 +421,7 @@ docs. A stage on real gear ends with a trial in [Device trials](trials.md).
 | 1 | Board profiles and the GX12 flash (`feat/gx12-flash`) | The profile table; `gx12` proven for the EdgeTX flash, read and restore at 2.12.5; DFU steps from the profile; the ELRS TX target from the board, `etx` only for the GX12, the LR1121 firmware | Unit tests on the table; the flash plan for `gx12` on fakes names the SG steps and the board binary; the ELRS plan for a GX12 picks `radiomaster.tx_dual.gx12` and refuses `uart`. On glass: Read firmware on the GX12 saves 1 MB and names `edgetx-gx12-2.12.5` |
 | 2 | GX12 card and cross-board copy (`feat/gx12-card`) | GX12 card read and write; switch types read case-insensitively; `customSwitches:` read; `gx12` proven for card writes; model copy Pocket to GX12 with a control map | Round-trip byte-equal on GX12 fixtures (factory 2.11 and a file the radio saved on 2.12.5); each edit op on `gx12`; the cross-board copy lists what it cannot map |
 | 3 | Setup as data | Jobs, assignments, template and overrides (4.2); the generator; radio ops for switch and pot types; `customSwitches:` write; QuadCam's own telemetry Lua screens with the finder control as a setting; post-flash steps (storage pack, `elrs.lua`, volume label) | On the scrubbed Pocket fixture (`tests/fixtures/radio-setup/`), the generated change for the Pocket assignment plans **no files** (QuadCam reproduces the reference setup). The GX12 default assignment on a GX12 fixture gives valid YAML by the schema |
-| 4 | The editor | The Setup segment, Learn, Review, Copy from; rows `gear_radio_setup` and `gear_radio_setup_edit`; CLI `gear setup`; MCP `quadcam_gear` `radio_setup` and `quadcam_gear_edit` `radio_setup_edit` | e2e on the mock core; the owner approves the dev build |
+| 4 | The editor | The Setup segment, Learn, Review, Copy from; rows `gear_radio_setup` and `gear_radio_setup_edit`; CLI `gear setup`; MCP `quadcam_gear` `radio_setup` and `quadcam_gear_edit` `radio_setup_edit` | e2e on the mock core; the maintainer approves the dev build |
 | 5 | GX12 on glass | Both models on the GX12 through QuadCam | Each switch's direction matches the assignment on the Controls page; the switch map matches position by position; with a quad linked, Betaflight's Receiver tab shows the expected values and the Modes tab lights ARM, BEEPER and turtle; callouts play; the finder screen opens on the finder control |
 | 6 | Retire the scripts | Nothing in QuadCam. Stages 1-5 cover what the outside scripts did | A bench session with no outside script |
 | 7 | Other boards | Profiles for the lines in 2.5 as unproven data; the UF2 refusal; the `v12` floor; the F2 cap | Unit tests for each guard; a profile shows on an unknown radio of a listed board |
@@ -461,14 +461,14 @@ on CH1-CH8 (the joystick's axes); the rest are picked from the pop-up. CLI `--fi
 Stage 1 is the existing task "QuadCam Gear: per-radio profile table and prove board gx12".
 Stages 1 and 2 run now. Stage 3 needs both. Stage 4 needs 3. Stage 5 needs 4 and the radio.
 
-## 7. Open questions for the owner
+## 7. Open questions for the maintainer
 
-Each has a default the build uses until the owner decides.
+Each has a default the build uses until the maintainer decides.
 
 | # | Question | Default |
 |---|---|---|
 | 1 | The GX12 control map: arm SA, OSD SB, rates SC, finder SD, turtle SH, VTX power P1? Anything for SE, SF, SG, SW1-SW6, P2 and the sliders? | That map; the rest free |
-| 2 | Is "up" on the GX12's front toggles the owner's "up" in the same sense as the Pocket's top-edge toggles (rate and OSD profile 1)? | Yes; checked on glass in stage 5 |
+| 2 | Is "up" on the GX12's front toggles the maintainer's "up" in the same sense as the Pocket's top-edge toggles (rate and OSD profile 1)? | Yes; checked on glass in stage 5 |
 | 3 | Should the Pocket keep both models and stay in sync with the GX12, or become a backup that QuadCam updates only on request? | Backup, updated on request |
 | 4 | Install a fallback firmware bin in `FIRMWARE/` on each flash (bootloader recovery without the Mac)? | Yes on chip radios, where it costs no card swap |
 | 5 | Rename the radio's volume to a label from its saved name? | Yes, offered in the post-flash steps |
